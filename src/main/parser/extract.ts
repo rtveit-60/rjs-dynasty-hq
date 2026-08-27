@@ -37,7 +37,8 @@ const PLAYER_FIELDS = [
   'ProspectStarRating',
   'PLYR_PORTRAIT',
   'HomePipeline',
-  'PlayerType'
+  'PlayerType',
+  'PLYR_HOME_TOWN'
 ];
 
 function rgbHex(r: unknown, g: unknown, b: unknown): string | null {
@@ -272,6 +273,7 @@ function playerFromRecord(rec: any, row: number): RosterPlayer {
     devTrait: String(val(rec, 'TraitDevelopment') ?? ''),
     archetype: String(val(rec, 'PlayerType') ?? ''),
     homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
+    homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? ''),
     portraitId: Number(val(rec, 'PLYR_PORTRAIT') ?? 0)
   };
 }

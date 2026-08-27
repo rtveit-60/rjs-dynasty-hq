@@ -72,7 +72,10 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
         case 'weight':
           return dir * (a.weightLb - b.weightLb) || b.overall - a.overall;
         case 'home':
-          return dir * a.homeState.localeCompare(b.homeState) || b.overall - a.overall;
+          return (
+            dir * (a.homeState.localeCompare(b.homeState) || a.homeTown.localeCompare(b.homeTown)) ||
+            b.overall - a.overall
+          );
         default:
           return dir * (a.overall - b.overall);
       }
@@ -123,7 +126,7 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
               {th('Archetype', 'archetype', { defaultAsc: true })}
               {th('Ht', 'height', { num: true })}
               {th('Wt', 'weight', { num: true })}
-              {th('Home', 'home', { defaultAsc: true })}
+              {th('Hometown', 'home', { defaultAsc: true })}
             </tr>
           </thead>
           <tbody>
@@ -151,7 +154,10 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
                 <td style={{ color: 'var(--ink-2)' }}>{archetypeLabel(p.archetype)}</td>
                 <td className="num">{heightFt(p.heightIn)}</td>
                 <td className="num">{p.weightLb}</td>
-                <td style={{ color: 'var(--ink-2)' }}>{spaceOut(p.homeState)}</td>
+                <td style={{ color: 'var(--ink-2)' }}>
+                  {p.homeTown ? `${p.homeTown}, ` : ''}
+                  {spaceOut(p.homeState)}
+                </td>
               </tr>
             ))}
           </tbody>

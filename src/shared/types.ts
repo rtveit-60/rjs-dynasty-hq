@@ -69,6 +69,7 @@ export interface RosterPlayer {
   devTrait: string;
   archetype: string;
   homeState: string;
+  homeTown: string;
   portraitId: number;
 }
 
