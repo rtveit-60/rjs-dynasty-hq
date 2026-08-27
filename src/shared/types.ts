@@ -157,7 +157,8 @@ export interface RecruitTargetEntry {
   influence: number;
   hoursSpent: number;
   isFavorite: boolean;
-  hasVisit: boolean;
+  visitWeek: number | null;
+  visitActivity: string | null;
   nationalRank: number;
   stateRank: number;
   positionRank: number;

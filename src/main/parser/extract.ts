@@ -434,6 +434,30 @@ async function extractPursuitDeltas(
   return deltas;
 }
 
+/** ScheduledVisit → ActiveVisitInfo: the week (and activity) of a planned or completed visit. */
+async function resolveVisit(
+  franchise: any,
+  targetRec: any
+): Promise<{ visitWeek: number | null; visitActivity: string | null }> {
+  try {
+    const visitRef = refFromRecord(targetRec, 'ScheduledVisit');
+    if (!isNullRef(visitRef)) {
+      const visitTable = await tableById(franchise, visitRef.tableId);
+      const rec = visitTable?.records?.[visitRef.row];
+      if (rec) {
+        const week = Number(val(rec, 'WeekNumber'));
+        return {
+          visitWeek: Number.isFinite(week) ? week : null,
+          visitActivity: String(val(rec, 'Activity') ?? '') || null
+        };
+      }
+    }
+  } catch {
+    // visits are decoration
+  }
+  return { visitWeek: null, visitActivity: null };
+}
+
 async function extractBoard(
   franchise: any,
   teamRec: any,
@@ -509,7 +533,7 @@ async function extractBoard(
           influence: Number(val(targetRec, 'ProspectInfluenceTotal') ?? 0),
           hoursSpent: Number(val(targetRec, 'ProspectHoursSpentCurrent') ?? 0),
           isFavorite: val(targetRec, 'IsFavorite') === true,
-          hasVisit: !isNullRef(refFromRecord(targetRec, 'ScheduledVisit')),
+          ...(await resolveVisit(franchise, targetRec)),
           nationalRank: Number(val(recruitRec, 'NationalRank') ?? 0),
           stateRank: Number(val(recruitRec, 'StateRank') ?? 0),
           positionRank: Number(val(recruitRec, 'PositionRank') ?? 0),
