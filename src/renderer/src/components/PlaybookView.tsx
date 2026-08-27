@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { PlaybookBook, Snapshot } from '../../../shared/types.ts';
 import { prestigeLabel, schemeLabel } from '../lib/format.ts';
-import PlayArt from './PlayArt.tsx';
+import PlayArt, { personnelLabel } from './PlayArt.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -79,7 +79,6 @@ export default function PlaybookView({ school }: { school: School }) {
   ];
 
   const activeBook = books[side];
-  const color = team.colors.primary;
 
   return (
     <>
@@ -126,7 +125,7 @@ export default function PlaybookView({ school }: { school: School }) {
         })}
       </div>
 
-      <PlaybookBrowser book={activeBook} side={side} onSide={setSide} color={color} loaded={loaded} />
+      <PlaybookBrowser book={activeBook} side={side} onSide={setSide} loaded={loaded} />
 
       <p className="foot-note">
         Scheme and playbook selections are read live from the save; every formation and play here is
@@ -141,13 +140,11 @@ function PlaybookBrowser({
   book,
   side,
   onSide,
-  color,
   loaded
 }: {
   book: PlaybookBook | null;
   side: Side;
   onSide: (s: Side) => void;
-  color: string;
   loaded: boolean;
 }) {
   const [formIdx, setFormIdx] = useState(0);
@@ -161,17 +158,20 @@ function PlaybookBrowser({
 
   const families = useMemo(() => {
     if (!book) return [];
-    const groups: { family: string; items: { idx: number; name: string; plays: number }[] }[] = [];
+    const groups: {
+      family: string;
+      items: { idx: number; name: string; plays: number; personnel: string | null }[];
+    }[] = [];
     book.formations.forEach((f, idx) => {
       let g = groups.find((x) => x.family === f.family);
       if (!g) {
         g = { family: f.family, items: [] };
         groups.push(g);
       }
-      g.items.push({ idx, name: f.name, plays: f.plays.length });
+      g.items.push({ idx, name: f.name, plays: f.plays.length, personnel: personnelLabel(f, side) });
     });
     return groups;
-  }, [book]);
+  }, [book, side]);
 
   const formation = book?.formations[formIdx] ?? null;
   const play = formation?.plays[playIdx] ?? null;
@@ -209,7 +209,9 @@ function PlaybookBrowser({
           <div className="pb-forms">
             {families.map((g) => (
               <div key={g.family}>
-                <div className="pb-fam">{g.family}</div>
+                <div className="pb-fam">
+                  {g.family} <span style={{ color: 'var(--ink-3)', opacity: 0.7 }}>· {g.items.length}</span>
+                </div>
                 {g.items.map((it) => (
                   <button
                     key={it.idx}
@@ -219,7 +221,16 @@ function PlaybookBrowser({
                       setPlayIdx(0);
                     }}
                   >
-                    <span>{it.name}</span>
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {it.name}
+                      </span>
+                      {it.personnel && (
+                        <span style={{ fontSize: 10, color: 'var(--ink-3)', letterSpacing: '0.02em' }}>
+                          {it.personnel}
+                        </span>
+                      )}
+                    </span>
                     <span className="pb-count">{it.plays}</span>
                   </button>
                 ))}
@@ -251,6 +262,24 @@ function PlaybookBrowser({
                   {play?.name}
                 </div>
               </div>
+              {personnelLabel(formation, side) && (
+                <span
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    letterSpacing: '0.04em',
+                    color: 'var(--ink-2)',
+                    background: 'var(--sunken)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 999,
+                    padding: '3px 11px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {personnelLabel(formation, side)}
+                </span>
+              )}
             </div>
             {formation.personnel.length > 0 && (
               <div className="pb-personnel">
@@ -261,7 +290,7 @@ function PlaybookBrowser({
                 ))}
               </div>
             )}
-            {play && <PlayArt formation={formation} play={play} color={color} />}
+            {play && <PlayArt formation={formation} play={play} side={side} />}
           </div>
         </div>
       )}
