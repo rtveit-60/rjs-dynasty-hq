@@ -1,6 +1,7 @@
 import type {
   DepthChartSlot,
   RosterPlayer,
+  SeasonRecord,
   SeasonState,
   Snapshot,
   TeamInfo
@@ -875,8 +876,56 @@ async function extractSeason(franchise: any): Promise<SeasonState | null> {
     seasonYear: Number(val(rec, 'CurrentSeasonYear') ?? 0),
     dynastyYear: Number(val(rec, 'CurrentYear') ?? 0) + 1,
     week: Number(val(rec, 'CurrentWeek') ?? 0),
-    weekType: String(val(rec, 'CurrentWeekType') ?? '')
+    weekType: String(val(rec, 'CurrentWeekType') ?? ''),
+    stage: String(val(rec, 'CurrentStage') ?? '')
   };
+}
+
+/**
+ * Team.TeamSeasonStats is a rolling five-season window of TeamStats totals,
+ * ordered newest-first: index 0 is the season underway (final once the save
+ * reaches the offseason), and index i is CurrentSeasonYear - i. Verified across
+ * two snapshots three seasons apart — the same years carry the same records.
+ * Returned oldest-first; unplayed seasons (0-0) are dropped.
+ */
+async function extractSeasonHistory(
+  franchise: any,
+  teamRec: any,
+  season: SeasonState | null
+): Promise<SeasonRecord[]> {
+  try {
+    const baseYear = season?.seasonYear ?? 0;
+    if (!baseYear) return [];
+    const ref = refFromRecord(teamRec, 'TeamSeasonStats');
+    if (isNullRef(ref)) return [];
+    const arrTable = await tableById(franchise, ref.tableId);
+    const arrRec = arrTable?.records?.[ref.row];
+    if (!arrRec) return [];
+    const inSeason = season?.stage !== 'OffSeason';
+    const out: SeasonRecord[] = [];
+    const refs = refsFromArrayRecord(arrRec);
+    for (let i = 0; i < refs.length; i++) {
+      const statsTable = await tableById(franchise, refs[i].tableId);
+      const rec = statsTable?.records?.[refs[i].row];
+      if (!rec) continue;
+      const wins = Number(val(rec, 'WINS') ?? 0);
+      const losses = Number(val(rec, 'LOSSES') ?? 0);
+      if (wins + losses === 0) continue;
+      out.push({
+        year: baseYear - i,
+        wins,
+        losses,
+        confChamp: Number(val(rec, 'CONFCHAMPSWON') ?? 0) > 0,
+        natlChamp: Number(val(rec, 'NATCHAMPSWON') ?? 0) > 0,
+        cfpMade: Number(val(rec, 'CFPSMADE') ?? 0) > 0,
+        bowlWon: Number(val(rec, 'BOWLSWON') ?? 0) > 0,
+        inProgress: i === 0 && inSeason
+      });
+    }
+    return out.reverse();
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -1005,6 +1054,7 @@ export async function extractSnapshot(
       pursuitDeltas
     );
     const schoolAssets = await extractSchoolAssets(franchise, teamTable, rowToTeamIndex);
+    const seasonHistory = await extractSeasonHistory(franchise, teamRec, season);
     const recruiting = await extractRecruiting(
       franchise,
       teamRec,
@@ -1025,7 +1075,8 @@ export async function extractSnapshot(
       splits,
       staff,
       board: boardResult?.info ?? null,
-      recruiting
+      recruiting,
+      seasonHistory
     };
   }
 

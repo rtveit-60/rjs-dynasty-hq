@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { MediaEvent, Snapshot, WatchStatus } from '../shared/types.ts';
+import { mergeSeasonHistory } from './history.ts';
 import { generateMedia, sortEvents, type MediaState } from './media/engine.ts';
 import { extractSnapshot } from './parser/extract.ts';
 import { loadFranchise } from './parser/franchise.ts';
@@ -67,6 +68,7 @@ export class Pipeline {
         schoolTeamRow,
         fileName: basename(savePath)
       });
+      this.bankHistory(snapshot);
       this.events.onSnapshot(snapshot);
       this.updateMedia(snapshot);
       this.events.onStatus({ kind: 'watching', lastUpdate: this.lastUpdate });
@@ -94,9 +96,19 @@ export class Pipeline {
       schoolTeamRow,
       fileName: basename(savePath)
     });
+    this.bankHistory(snapshot);
     this.events.onSnapshot(snapshot);
     this.updateMedia(snapshot);
     this.events.onStatus({ kind: 'watching', lastUpdate: this.lastUpdate });
+  }
+
+  /** Fold banked seasons into the save's five-season window (see history.ts). */
+  private bankHistory(snapshot: Snapshot): void {
+    if (!snapshot.school) return;
+    snapshot.school.seasonHistory = mergeSeasonHistory(
+      snapshot.school.team.row,
+      snapshot.school.seasonHistory
+    );
   }
 
   /** Diff against the stored per-school media state, append fresh stories, push the feed. */

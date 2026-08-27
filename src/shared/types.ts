@@ -83,6 +83,20 @@ export interface SeasonState {
   dynastyYear: number;
   week: number;
   weekType: string;
+  stage: string;
+}
+
+/** One season's bottom line, from the save's rolling five-season stat window. */
+export interface SeasonRecord {
+  year: number;
+  wins: number;
+  losses: number;
+  confChamp: boolean;
+  natlChamp: boolean;
+  cfpMade: boolean;
+  bowlWon: boolean;
+  /** Season still being played — the record is a running total, not final. */
+  inProgress: boolean;
 }
 
 export interface BudgetPillar {
@@ -259,6 +273,7 @@ export interface Snapshot {
     staff: StaffTendency[];
     board: BoardInfo | null;
     recruiting: RecruitingData | null;
+    seasonHistory: SeasonRecord[];
   } | null;
 }
 

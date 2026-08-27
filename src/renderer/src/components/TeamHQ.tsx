@@ -87,7 +87,7 @@ export default function TeamHQ() {
         ))}
       </div>
 
-      {tab === 'program' && <ProgramDashboard school={school} />}
+      {tab === 'program' && <ProgramDashboard school={school} season={snapshot?.season ?? null} />}
       {tab === 'roster' && <RosterTable roster={roster} />}
       {tab === 'depth' && <DepthChartView school={school} />}
       {tab === 'targets' && <TargetsView school={school} />}
