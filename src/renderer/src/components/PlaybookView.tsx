@@ -281,15 +281,6 @@ function PlaybookBrowser({
                 </span>
               )}
             </div>
-            {formation.personnel.length > 0 && (
-              <div className="pb-personnel">
-                {formation.personnel.slice(0, 8).map((p) => (
-                  <span key={p} className="pb-chip">
-                    {p}
-                  </span>
-                ))}
-              </div>
-            )}
             {play && <PlayArt formation={formation} play={play} side={side} />}
           </div>
         </div>

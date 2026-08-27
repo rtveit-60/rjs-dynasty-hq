@@ -136,11 +136,21 @@ Air Raid offense + Multiple defense, both offense & defense identical):
   - field `13` = **alignment variants keyed by motion** `{1:name "Normal"/"M1left"…"M5right", 4: player[×11]}`.
     Each player `4` = `{ 1:{1:x, 2:y}, 2:{mirror x,y}, 3/4: facing° (90 = straight upfield), 5: slot/pos id,
     6: side, 7: position-type, 8: z-order, 13: index }`. **x,y are yards; LOS at y=0; +x right, −y behind LOS.**
-- **Play** `{1:name "Y Cross"/"Mesh"…, 2:hash id, 3:sort, 5:personnel idx, 9/10:…, 28: assignment[×11]}`.
+- **Play** `{1:name "Y Cross"/"Mesh"…, 2:hash id, 3:sort, 5:personnel idx, 9/10:…, 24: receiver icons,
+  28: assignment[×11]}`.
   - field `28` = per-player route assignment `{1:route-lib id, 2:?, 3: step[]}`. Each step `3` =
     `{1:stepType, <one of>: geometry}`; geometry sub-msg carries `{1:distance, 2:angle°, 3:speed% (100),
     5:0}` (a `run<angle>for<dist>` segment — matches the standalone `runroute/wr_run90for08…` asset names
     and their EBX float arrays). Assignment i ↔ alignment player i (both ×11).
+  - field `24` = **controller passing-icon assignment** (offense only; absent on defense). One entry per
+    eligible receiver, in the game's read order; each entry's field-1 is the receiver's **player index**
+    (a permutation of the ~5 receiver slots). It is formation-level (identical across a formation's plays).
+    The app maps read order → Xbox buttons: non-back receivers take the face buttons **X, Y, A, B**, backs
+    the bumpers **RB, LB** — verified against the reference (Gun Bunch: P3=X, P5=Y, P4=A, P2=B, back P1=RB).
+  - **Motion** is not per-play: it's a formation capability (the field-13 alignment variants M1left…M5right
+    are the motioned alignments), chosen interactively in-game, so play art shows the base "Normal" set.
+    Defensive coverage type (man/zone) isn't decoded; the app approximates zones from where each non-rushing
+    defender's assignment ends.
 
 ### Which book a team runs — coach ref, not the scheme default (SOLVED 2026-08-27)
 

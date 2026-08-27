@@ -314,6 +314,8 @@ export interface PlaybookPlay {
   name: string;
   id: number;
   routes: PlaybookRoute[];
+  /** Controller passing icon per player slot (e.g. 'X','Y','A','B','RB'); null = not a target. */
+  buttons: (string | null)[];
 }
 
 export interface PlaybookFormation {

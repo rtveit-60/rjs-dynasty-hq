@@ -97,6 +97,7 @@ export interface Play {
   name: string;
   id: number;
   routes: PlayRoute[]; // one per player slot, aligned to formation.alignment order
+  buttons: (string | null)[]; // controller passing icon per player slot (null = not a target)
 }
 
 export interface Formation {
@@ -154,6 +155,27 @@ export function walkRoute(start: PlayerAlign, assignment: PbField[]): PlayRoute 
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
+// Controller passing icons: outside/slot receivers take the face buttons in read order,
+// backfield receivers the bumpers/triggers — the convention the reference sites mirror.
+const FACE_BUTTONS = ['X', 'Y', 'A', 'B'];
+const BUMPER_BUTTONS = ['RB', 'LB', 'RT', 'LT'];
+
+/** Map field-24 read order (player indices) to controller buttons per player slot. */
+function assignButtons(alignment: PlayerAlign[], order: number[]): (string | null)[] {
+  const buttons: (string | null)[] = new Array(alignment.length).fill(null);
+  let fi = 0;
+  let bi = 0;
+  for (const pidx of order) {
+    const p = alignment[pidx];
+    if (!p) continue;
+    const isBack = p.y <= -3.5; // set in the backfield
+    buttons[pidx] = isBack
+      ? BUMPER_BUTTONS[bi++] ?? BUMPER_BUTTONS[BUMPER_BUTTONS.length - 1]
+      : FACE_BUTTONS[fi++] ?? BUMPER_BUTTONS[bi++] ?? 'A';
+  }
+  return buttons;
+}
+
 // ---- model builder -----------------------------------------------------------
 
 export function buildPlaybook(masterEbx: Buffer): PlaybookModel {
@@ -201,7 +223,17 @@ export function buildPlaybook(masterEbx: Buffer): PlaybookModel {
         const routes = assignments.map((asn, i) =>
           walkRoute(alignment[i] ?? { x: 0, y: 0 }, asn),
         );
-        return { name: str(first(pm, 1)), id: num(first(pm, 2)) ?? 0, routes };
+        // field 24 lists the eligible receivers by player index in the game's read order —
+        // the passing-icon (controller-button) assignment. See docs/RESEARCH.md.
+        const order = all(pm, 24)
+          .map((e) => num(first(pbMessage(e.sub!), 1)))
+          .filter((n): n is number => n !== undefined);
+        return {
+          name: str(first(pm, 1)),
+          id: num(first(pm, 2)) ?? 0,
+          routes,
+          buttons: assignButtons(alignment, order),
+        };
       });
       playCount += plays.length;
 
