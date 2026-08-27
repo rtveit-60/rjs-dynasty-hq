@@ -10,7 +10,8 @@ const DEFAULTS: Settings = {
   schoolTeamRow: null,
   theme: 'system',
   brandPack: 'real',
-  portraitsDir: null
+  portraitsDir: null,
+  autoUpdate: true
 };
 
 let current: Settings | null = null;

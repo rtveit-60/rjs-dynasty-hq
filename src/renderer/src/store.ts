@@ -17,6 +17,7 @@ interface HQStore {
   status: WatchStatus;
   snapshot: Snapshot | null;
   media: MediaEvent[];
+  updateReady: string | null;
   systemDark: boolean;
   nav: NavKey;
   detectedSaves: DetectedSave[];
@@ -29,6 +30,7 @@ interface HQStore {
   setSchool: (row: number | null) => Promise<void>;
   setTheme: (theme: ThemeMode) => Promise<void>;
   setBrandPack: (pack: BrandPack) => Promise<void>;
+  setAutoUpdate: (enabled: boolean) => Promise<void>;
   applySettings: (settings: Settings) => void;
 }
 
@@ -40,6 +42,7 @@ export const useHQ = create<HQStore>((set, get) => ({
   status: { kind: 'idle' },
   snapshot: null,
   media: [],
+  updateReady: null,
   systemDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
   nav: 'team',
   detectedSaves: [],
@@ -50,6 +53,7 @@ export const useHQ = create<HQStore>((set, get) => ({
     window.hq.onSnapshot((snapshot) => set({ snapshot }));
     window.hq.onStatus((status) => set({ status }));
     window.hq.onMedia((media) => set({ media }));
+    window.hq.onUpdateReady((updateReady) => set({ updateReady }));
     window.hq.onSystemTheme((t) => set({ systemDark: t === 'dark' }));
     const state = await window.hq.getState();
     set({ ...state, ready: true });
@@ -84,6 +88,11 @@ export const useHQ = create<HQStore>((set, get) => ({
 
   setBrandPack: async (pack) => {
     const settings = await window.hq.setBrandPack(pack);
+    set({ settings });
+  },
+
+  setAutoUpdate: async (enabled) => {
+    const settings = await window.hq.setAutoUpdate(enabled);
     set({ settings });
   },
 

@@ -9,6 +9,16 @@ const ITEMS: { key: NavKey; label: string; soon?: boolean }[] = [
   { key: 'setup', label: 'SETUP' }
 ];
 
+function UpdateBanner() {
+  const updateReady = useHQ((s) => s.updateReady);
+  if (!updateReady) return null;
+  return (
+    <button className="btn primary" style={{ width: '100%' }} onClick={() => void window.hq.installUpdate()}>
+      v{updateReady} ready — Restart to update
+    </button>
+  );
+}
+
 export default function SideNav() {
   const nav = useHQ((s) => s.nav);
   const setNav = useHQ((s) => s.setNav);
@@ -44,6 +54,7 @@ export default function SideNav() {
         ))}
       </nav>
       <div className="rail-foot">
+        <UpdateBanner />
         <ThemeToggle />
         <span>Read-only — your save file is never modified.</span>
       </div>

@@ -8,6 +8,7 @@ export interface Settings {
   theme: ThemeMode;
   brandPack: BrandPack;
   portraitsDir: string | null;
+  autoUpdate: boolean;
   windowBounds?: { x: number; y: number; width: number; height: number };
 }
 
@@ -261,6 +262,7 @@ export interface AppState {
   status: WatchStatus;
   snapshot: Snapshot | null;
   media: MediaEvent[];
+  updateReady: string | null;
 }
 
 export interface DetectedSave {

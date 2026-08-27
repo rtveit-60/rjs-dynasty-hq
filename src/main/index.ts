@@ -13,6 +13,7 @@ import type {
 } from '../shared/types.ts';
 import { Pipeline } from './pipeline.ts';
 import { getSettings, updateSettings } from './settings.ts';
+import { checkForUpdates, installUpdate } from './updater.ts';
 import { watchSaveFile } from './watcher.ts';
 
 let win: BrowserWindow | null = null;
@@ -21,6 +22,14 @@ let stopWatch: (() => void) | null = null;
 let status: WatchStatus = { kind: 'idle' };
 let snapshot: Snapshot | null = null;
 let media: MediaEvent[] = [];
+let updateReady: string | null = null;
+
+function startUpdateCheck(): void {
+  checkForUpdates(getSettings().autoUpdate, (version) => {
+    updateReady = version;
+    win?.webContents.send('update:ready', version);
+  });
+}
 
 const pipeline = new Pipeline({
   onSnapshot: (s) => {
@@ -92,11 +101,19 @@ function useSave(savePath: string): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle('state:get', (): AppState => ({ settings: getSettings(), status, snapshot, media }));
+  ipcMain.handle('state:get', (): AppState => ({ settings: getSettings(), status, snapshot, media, updateReady }));
 
   ipcMain.handle('brand:set', (_e, pack: BrandPack) => {
     return updateSettings({ brandPack: pack === 'parody' ? 'parody' : 'real' });
   });
+
+  ipcMain.handle('autoupdate:set', (_e, enabled: boolean) => {
+    const settings = updateSettings({ autoUpdate: enabled === true });
+    if (settings.autoUpdate) startUpdateCheck(); // turning it on checks right away
+    return settings;
+  });
+
+  ipcMain.handle('update:install', () => installUpdate());
 
   ipcMain.handle('saves:scan', () => scanSaves());
 
@@ -295,6 +312,7 @@ if (!gotLock) {
     registerPortraitProtocol();
     registerIpc();
     createWindow();
+    startUpdateCheck();
     const { savePath, schoolTeamRow } = getSettings();
     if (savePath && existsSync(savePath)) {
       startWatching(savePath);

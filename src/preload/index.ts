@@ -29,6 +29,9 @@ export interface HQBridge {
   pickPortraits: () => Promise<{ settings: Settings; count: number }>;
   clearPortraits: () => Promise<{ settings: Settings; count: number }>;
   countPortraits: () => Promise<number>;
+  setAutoUpdate: (enabled: boolean) => Promise<Settings>;
+  installUpdate: () => Promise<void>;
+  onUpdateReady: (cb: (version: string) => void) => () => void;
   revealSave: () => Promise<void>;
   onSnapshot: (cb: (s: Snapshot) => void) => () => void;
   onStatus: (cb: (s: WatchStatus) => void) => () => void;
@@ -47,6 +50,9 @@ const bridge: HQBridge = {
   pickPortraits: () => ipcRenderer.invoke('portraits:pick'),
   clearPortraits: () => ipcRenderer.invoke('portraits:clear'),
   countPortraits: () => ipcRenderer.invoke('portraits:count'),
+  setAutoUpdate: (enabled) => ipcRenderer.invoke('autoupdate:set', enabled),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdateReady: subscribe<string>('update:ready'),
   revealSave: () => ipcRenderer.invoke('save:reveal'),
   onSnapshot: subscribe<Snapshot>('snapshot'),
   onStatus: subscribe<WatchStatus>('status'),

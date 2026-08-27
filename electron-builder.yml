@@ -1,5 +1,9 @@
 appId: com.rjdynastyhq.app
 productName: "RJ's Dynasty HQ"
+publish:
+  provider: github
+  owner: rtveit-60
+  repo: rjs-dynasty-hq
 directories:
   output: release
 files:

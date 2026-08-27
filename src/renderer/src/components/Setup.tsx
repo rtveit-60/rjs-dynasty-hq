@@ -69,6 +69,32 @@ export default function Setup() {
         Real network branding is rendered typographically inside the app. Switch to the fictional pack
         any time — existing stories re-label instantly.
       </p>
+
+      <div className="section-h">
+        <h3>App updates</h3>
+        <div className="rule" />
+      </div>
+      <AutoUpdateToggle />
+      <p className="foot-note">
+        With automatic updates on, the app checks GitHub Releases once at launch — its only network
+        call. Updates download in the background and never install until you click "Restart to
+        update". Turn it off and the app makes no network requests at all.
+      </p>
+    </div>
+  );
+}
+
+function AutoUpdateToggle() {
+  const enabled = useHQ((s) => s.settings?.autoUpdate ?? true);
+  const setAutoUpdate = useHQ((s) => s.setAutoUpdate);
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      <button className={`filter ${enabled ? 'active' : ''}`} onClick={() => void setAutoUpdate(true)}>
+        Automatic
+      </button>
+      <button className={`filter ${!enabled ? 'active' : ''}`} onClick={() => void setAutoUpdate(false)}>
+        Off
+      </button>
     </div>
   );
 }
