@@ -11,6 +11,8 @@ files:
 extraResources:
   - from: resources/logos
     to: logos
+  - from: resources/bowl-logos
+    to: bowl-logos
   - from: resources/playbooks
     to: playbooks
 win:

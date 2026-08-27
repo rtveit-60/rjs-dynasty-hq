@@ -5,9 +5,10 @@ type School = NonNullable<Snapshot['school']>;
 
 const SLOT_W = 46;
 const BAR_W = 22;
-const CHART_H = 140;
-const BASE_Y = 118;
-const BAR_MAX = 90;
+const CHART_H = 150;
+const BASE_Y = 128;
+// Leaves headroom above the tallest bar for the record line and the bowl logo.
+const BAR_MAX = 86;
 
 function badge(s: SeasonRecord): { text: string; fill: string; size: number } | null {
   if (s.natlChamp || s.bowl) return null;
@@ -27,7 +28,7 @@ function BowlCrest({ cx, bottom, bowl }: { cx: number; bottom: number; bowl: Bow
         secondary={bowl.secondary}
         cx={cx}
         bottom={bottom}
-        size={18}
+        size={22}
       />
     </g>
   );
@@ -133,7 +134,7 @@ export default function ProgramDashboard({
                     name={s.bowl!.name}
                     primary={s.bowl!.primary}
                     secondary={s.bowl!.secondary}
-                    size={17}
+                    size={22}
                     title={s.bowl!.name}
                   />
                 </span>

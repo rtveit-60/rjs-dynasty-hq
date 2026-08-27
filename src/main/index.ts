@@ -204,6 +204,36 @@ function registerLogoProtocol(): void {
   });
 }
 
+/** Bundled bowl logos: resources/bowl-logos, alongside the team logo set. */
+function bundledBowlLogoDir(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'bowl-logos')
+    : join(app.getAppPath(), 'resources', 'bowl-logos');
+}
+
+/**
+ * bowl://<assetName> — the bowl's logo from the bundled set. The host is the
+ * save's AssetName (e.g. "Rose_Bowl"), so it survives sponsor renames.
+ */
+function registerBowlProtocol(): void {
+  protocol.handle('bowl', (request) => {
+    try {
+      const raw = decodeURIComponent(new URL(request.url).hostname);
+      // Host only, no separators — never let a URL walk out of the bundle.
+      if (!/^[A-Za-z0-9_.-]+$/.test(raw) || raw.includes('..')) {
+        return new Response('', { status: 404 });
+      }
+      for (const ext of ['png', 'svg', 'webp']) {
+        const file = join(bundledBowlLogoDir(), `${raw}.${ext}`);
+        if (existsSync(file)) return net.fetch(pathToFileURL(file).toString());
+      }
+    } catch {
+      // fall through to 404
+    }
+    return new Response('', { status: 404 });
+  });
+}
+
 /** portrait://<id> serves <portraitsDir>/<id>.(png|jpg|jpeg|webp), read-only. */
 function registerPortraitProtocol(): void {
   protocol.handle('portrait', (request) => {
@@ -333,6 +363,7 @@ if (!gotLock) {
   void app.whenReady().then(() => {
     registerPortraitProtocol();
     registerLogoProtocol();
+    registerBowlProtocol();
     registerIpc();
     createWindow();
     startUpdateCheck();

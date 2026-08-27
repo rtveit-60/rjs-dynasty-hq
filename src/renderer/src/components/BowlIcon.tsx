@@ -1,5 +1,20 @@
 import { BOWL_ART, bowlArtKey, readable, type BowlShape } from '../lib/bowl-art.ts';
+import { BOWL_LOGOS } from '../lib/bowl-logos.ts';
 import { CFP_BALL, CFP_GOLD_STOPS, CFP_LACES, CFP_LETTERS, isPlayoffRound } from '../lib/cfp-mark.ts';
+
+/**
+ * Draw the hand-built marks in `bowl-art.ts` for bowls with no bundled logo.
+ * Off for now — bowls without real art simply show nothing. Flip to true to
+ * bring the generated set back.
+ */
+const USE_GENERATED_MARKS = false;
+
+/** The bundled logo key for a bowl, or null when we have no real art for it. */
+export function bowlLogoKey(assetName: string, name: string): string | null {
+  if (assetName && BOWL_LOGOS.has(assetName)) return assetName;
+  const slug = name.replace(/[^A-Za-z0-9]+/g, '_');
+  return BOWL_LOGOS.has(slug) ? slug : null;
+}
 
 /** Render one 24x24 shape primitive in the bowl's primary/secondary colors. */
 export function bowlShapeNode(s: BowlShape, i: number, primary: string, secondary: string) {
@@ -60,6 +75,22 @@ export function BowlMarkGroup({
   size: number;
 }) {
   if (isPlayoffRound(name)) return <CfpMarkGroup cx={cx} bottom={bottom} h={size * 0.78} />;
+
+  const logo = bowlLogoKey(assetName, name);
+  if (logo) {
+    return (
+      <image
+        href={`bowl://${logo}`}
+        x={cx - size / 2}
+        y={bottom - size}
+        width={size}
+        height={size}
+        preserveAspectRatio="xMidYMid meet"
+      />
+    );
+  }
+  if (!USE_GENERATED_MARKS) return null;
+
   const key = bowlArtKey(assetName, name);
   const shapes = key ? BOWL_ART[key] : null;
   if (!shapes?.length) return null;
@@ -97,8 +128,8 @@ export function CfpMarkGroup({ cx, bottom, h }: { cx: number; bottom: number; h:
 }
 
 /**
- * An original mark evoking the bowl's namesake, painted in the bowl's own brand
- * colors from the save. Falls back to a football when the bowl has no mark.
+ * The bowl's bundled logo. Playoff rounds wear the CFP mark; bowls with no
+ * bundled art render nothing (see USE_GENERATED_MARKS).
  */
 export default function BowlIcon({
   assetName,
@@ -143,6 +174,21 @@ export default function BowlIcon({
       </svg>
     );
   }
+
+  const logo = bowlLogoKey(assetName, name);
+  if (logo) {
+    return (
+      <img
+        src={`bowl://${logo}`}
+        alt={title ?? name}
+        title={title}
+        width={size}
+        height={size}
+        style={{ display: 'inline-block', verticalAlign: 'middle', objectFit: 'contain', flex: 'none' }}
+      />
+    );
+  }
+  if (!USE_GENERATED_MARKS) return null;
 
   const key = bowlArtKey(assetName, name);
   const shapes = key ? BOWL_ART[key] : null;
