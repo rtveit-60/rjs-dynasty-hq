@@ -1,0 +1,15 @@
+AlternatePosition1
+AlternatePosition2
+Class
+CommitScore
+NationalRank
+Player
+PositionRank
+ProductionGrade
+QualityModifier
+RecruitStage
+RecruitStageAdvance
+StateRank
+SurnameAudioID
+TopSchoolsList
+TotalScholarshipOffers

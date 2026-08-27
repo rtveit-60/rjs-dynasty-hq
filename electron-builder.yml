@@ -1,0 +1,16 @@
+appId: com.rjdynastyhq.app
+productName: "RJ's Dynasty HQ"
+directories:
+  output: release
+files:
+  - out/**
+win:
+  target:
+    - nsis
+  executableName: RJs Dynasty HQ
+nsis:
+  oneClick: true
+  perMachine: false
+  artifactName: RJs-Dynasty-HQ-Setup-${version}.${ext}
+  shortcutName: "RJ's Dynasty HQ"
+  deleteAppDataOnUninstall: false

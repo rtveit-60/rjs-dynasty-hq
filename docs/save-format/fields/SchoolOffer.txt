@@ -1,0 +1,7 @@
+AdjustedOVR
+EstimatedPlayerDepth
+HasOffer
+InterestLevel
+OfferInterestLevel
+OfferType
+Team

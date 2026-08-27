@@ -1,0 +1,21 @@
+# Dependencies & build output
+node_modules/
+dist/
+out/
+release/
+*.tsbuildinfo
+*.log
+
+# Local-only tooling config & instructions (keep the repo free of assistant references)
+CLAUDE.md
+.claude/
+
+# Personal game data — never commit save files or extracted assets
+samples/
+portrait-packs/
+*.db
+*.sqlite
+
+# OS noise
+Thumbs.db
+.DS_Store

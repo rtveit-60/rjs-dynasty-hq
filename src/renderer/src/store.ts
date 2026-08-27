@@ -1,0 +1,98 @@
+import { create } from 'zustand';
+import type {
+  BrandPack,
+  DetectedSave,
+  MediaEvent,
+  Settings,
+  Snapshot,
+  ThemeMode,
+  WatchStatus
+} from '../../shared/types.ts';
+
+export type NavKey = 'team' | 'recruiting' | 'media' | 'setup';
+
+interface HQStore {
+  ready: boolean;
+  settings: Settings | null;
+  status: WatchStatus;
+  snapshot: Snapshot | null;
+  media: MediaEvent[];
+  systemDark: boolean;
+  nav: NavKey;
+  detectedSaves: DetectedSave[];
+
+  init: () => Promise<void>;
+  setNav: (nav: NavKey) => void;
+  pickSave: () => Promise<void>;
+  useSave: (path: string) => Promise<void>;
+  refreshDetected: () => Promise<void>;
+  setSchool: (row: number | null) => Promise<void>;
+  setTheme: (theme: ThemeMode) => Promise<void>;
+  setBrandPack: (pack: BrandPack) => Promise<void>;
+  applySettings: (settings: Settings) => void;
+}
+
+let initialized = false;
+
+export const useHQ = create<HQStore>((set, get) => ({
+  ready: false,
+  settings: null,
+  status: { kind: 'idle' },
+  snapshot: null,
+  media: [],
+  systemDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
+  nav: 'team',
+  detectedSaves: [],
+
+  init: async () => {
+    if (initialized) return;
+    initialized = true;
+    window.hq.onSnapshot((snapshot) => set({ snapshot }));
+    window.hq.onStatus((status) => set({ status }));
+    window.hq.onMedia((media) => set({ media }));
+    window.hq.onSystemTheme((t) => set({ systemDark: t === 'dark' }));
+    const state = await window.hq.getState();
+    set({ ...state, ready: true });
+    if (!state.settings.savePath) void get().refreshDetected();
+  },
+
+  setNav: (nav) => set({ nav }),
+
+  pickSave: async () => {
+    const settings = await window.hq.pickSave();
+    set({ settings });
+  },
+
+  useSave: async (path) => {
+    const settings = await window.hq.useSave(path);
+    set({ settings });
+  },
+
+  refreshDetected: async () => {
+    set({ detectedSaves: await window.hq.scanSaves() });
+  },
+
+  setSchool: async (row) => {
+    const settings = await window.hq.setSchool(row);
+    set({ settings });
+  },
+
+  setTheme: async (theme) => {
+    const settings = await window.hq.setTheme(theme);
+    set({ settings });
+  },
+
+  setBrandPack: async (pack) => {
+    const settings = await window.hq.setBrandPack(pack);
+    set({ settings });
+  },
+
+  applySettings: (settings) => set({ settings })
+}));
+
+export function useEffectiveTheme(): 'light' | 'dark' {
+  const mode = useHQ((s) => s.settings?.theme ?? 'system');
+  const systemDark = useHQ((s) => s.systemDark);
+  if (mode === 'system') return systemDark ? 'dark' : 'light';
+  return mode;
+}

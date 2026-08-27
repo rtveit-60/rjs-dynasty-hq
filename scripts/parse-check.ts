@@ -1,0 +1,99 @@
+/**
+ * Developer sanity check: parses a dynasty save and prints what the app will show.
+ * Usage: node scripts/parse-check.ts [path-to-save] [school name filter]
+ */
+import { loadFranchise } from '../src/main/parser/franchise.ts';
+import { extractSnapshot } from '../src/main/parser/extract.ts';
+
+const savePath = process.argv[2] ?? 'samples/DYNASTY-DUKETOND-AUTOSAVE';
+const schoolFilter = (process.argv[3] ?? 'duke').toLowerCase();
+
+const t0 = Date.now();
+const franchise = await loadFranchise(savePath);
+console.log(`loaded in ${Date.now() - t0}ms`);
+
+let snap = await extractSnapshot(franchise, { schoolTeamRow: null, fileName: savePath });
+console.log(`teams: ${snap.teams.length}`);
+console.log('sample teams:', snap.teams.slice(0, 6).map((t) => `${t.longName} ${t.nickName} ${t.colors.primary}`).join(' | '));
+console.log('season:', JSON.stringify(snap.season));
+
+const userTeams = snap.teams.filter((t) => t.isUserTeam);
+console.log('user-controlled programs:', userTeams.map((t) => `${t.longName} (HC ${t.headCoach})`).join(', ') || '(none)');
+const withCoach = snap.teams.filter((t) => t.headCoach).length;
+console.log(`teams with a head coach resolved: ${withCoach}/${snap.teams.length}`);
+
+const school = snap.teams.find((t) => t.longName.toLowerCase().includes(schoolFilter) || t.displayName.toLowerCase().includes(schoolFilter) || (t.headCoach ?? '').toLowerCase().includes(schoolFilter));
+if (!school) {
+  console.log(`No team matching "${schoolFilter}" — first 20:`, snap.teams.slice(0, 20).map((t) => t.longName).join(', '));
+  process.exit(1);
+}
+console.log(`\n== ${school.longName} ${school.nickName} (row ${school.row}) ==`);
+console.log('colors:', school.colors, 'offScheme:', school.offScheme, 'defScheme:', school.defScheme);
+console.log('head coach:', school.headCoach, '| OC:', school.offCoordinator, '| DC:', school.defCoordinator, '| user team:', school.isUserTeam);
+console.log('location:', school.city && school.state ? `${school.city}, ${school.state}` : '(unknown)');
+const located = snap.teams.filter((t) => t.city).length;
+console.log(`teams with a location: ${located}/${snap.teams.length}`);
+
+const t1 = Date.now();
+snap = await extractSnapshot(franchise, { schoolTeamRow: school.row, fileName: savePath });
+console.log(`school extract in ${Date.now() - t1}ms`);
+
+const roster = snap.school?.roster ?? [];
+console.log(`\nroster: ${roster.length} players`);
+for (const p of roster.slice(0, 12)) {
+  console.log(
+    `  #${String(p.jersey).padStart(2)} ${p.position.padEnd(4)} ${p.overall} OVR  ${p.firstName} ${p.lastName}  ${p.schoolYear}/${p.redshirt}  ${Math.floor(p.heightIn / 12)}'${p.heightIn % 12}" ${p.weightLb}lb  spd ${p.speed}  dev:${p.devTrait}  ${p.homeState}  portrait:${p.portraitId}`
+  );
+}
+const distinct = (key: (p: any) => string) => [...new Set(roster.map(key))].join(', ');
+console.log('\ndistinct devTrait:', distinct((p) => p.devTrait));
+console.log('distinct schoolYear:', distinct((p) => p.schoolYear));
+console.log('distinct redshirt:', distinct((p) => p.redshirt));
+console.log('weight range:', Math.min(...roster.map((p) => p.weightLb)), '-', Math.max(...roster.map((p) => p.weightLb)));
+console.log('height range:', Math.min(...roster.map((p) => p.heightIn)), '-', Math.max(...roster.map((p) => p.heightIn)));
+
+console.log('\n== budget ==');
+console.log(JSON.stringify(snap.school?.budget));
+console.log('\n== splits ==');
+console.log(JSON.stringify(snap.school?.splits));
+console.log('\n== staff tendencies ==');
+for (const s of snap.school?.staff ?? []) console.log(' ', JSON.stringify(s));
+console.log('\n== board ==');
+const board = snap.school?.board;
+console.log(`hours ${board?.hoursAssigned}/${board?.hoursTotal}, targets: ${board?.targets.length}`);
+for (const t of (board?.targets ?? []).slice(0, 5)) {
+  console.log(
+    `  ${t.stars}★ ${t.name} ${t.position} ${t.quality} ${t.stage} NIL ${t.nilOffer}/${t.nilExpectation} infl ${t.influence} fav:${t.isFavorite} | ${t.pursuing.slice(0, 3).map((s) => `${s.name}${s.isUser ? '*' : ''}:${s.influence}`).join(', ')}`
+  );
+}
+
+console.log('\n== recruiting ==');
+const rc = snap.school?.recruiting;
+if (rc) {
+  console.log(`class of ${rc.classYear}: ${rc.total} prospects`);
+  console.log('pipelines:', rc.pipelines.slice(0, 6).map((p) => `${p.label} ${p.level} (${p.value})`).join(' | '));
+  console.log('report card:', rc.reportCard.map((g) => `${g.label} ${g.grade}`).join(', '));
+  console.log('pro potential:', rc.proPotential.map((g) => `${g.label}:${g.grade}`).join(' '));
+  const withEdges = rc.recruits.filter((r) => r.edges.length);
+  const edgeCounts: Record<string, number> = {};
+  for (const r of withEdges) for (const e of r.edges) edgeCounts[e] = (edgeCounts[e] ?? 0) + 1;
+  console.log(`recruits with an edge: ${withEdges.length} —`, JSON.stringify(edgeCounts));
+  console.log('sample edge recruits:');
+  for (const r of withEdges.filter((x) => x.edges.length >= 2).slice(0, 5)) {
+    console.log(
+      `  ${r.stars}★ ${r.name} ${r.position} ${r.quality} pipe=${r.pipeline} [${r.edges.join(', ')}] race: ${r.race.map((s) => `${s.name}${s.isUser ? '*' : ''}:${s.influence}`).join(', ')}`
+    );
+  }
+  const committed = rc.recruits.filter((r) => r.committedTo).length;
+  console.log(`committed anywhere: ${committed} | on user board: ${rc.recruits.filter((r) => r.onBoard).length}`);
+}
+
+const byRow = new Map(roster.map((p) => [p.row, p]));
+console.log(`\ndepth chart slots: ${snap.school?.depthChart.length ?? 0}`);
+for (const slot of (snap.school?.depthChart ?? []).slice(0, 30)) {
+  const names = slot.playerRows.map((r) => {
+    const p = byRow.get(r);
+    return p ? `${p.firstName[0]}. ${p.lastName} (${p.overall})` : `row ${r}?`;
+  });
+  console.log(`  ${slot.position.padEnd(5)} ${names.slice(0, 4).join('  →  ')}`);
+}
