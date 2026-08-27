@@ -1638,3 +1638,20 @@ table.tbl {
   color: var(--ink-3);
   font-size: 13px;
 }
+
+/* Bowl logos whose art is dark ink on transparency read fine on the light
+   paper but disappear on the dark panel — back only those with a plaque. */
+.bowl-plaque {
+  display: inline-flex;
+  border-radius: 3px;
+  padding: 1px;
+}
+[data-theme='dark'] .bowl-plaque {
+  background: #f2f1ee;
+}
+.bowl-plaque-rect {
+  fill: none;
+}
+[data-theme='dark'] .bowl-plaque-rect {
+  fill: #f2f1ee;
+}

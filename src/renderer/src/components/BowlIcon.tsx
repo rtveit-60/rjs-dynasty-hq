@@ -9,6 +9,14 @@ import { CFP_BALL, CFP_GOLD_STOPS, CFP_LACES, CFP_LETTERS, isPlayoffRound } from
  */
 const USE_GENERATED_MARKS = false;
 
+/**
+ * Logos drawn as dark ink on transparency. They read fine on the light paper
+ * but vanish against the dark panel, so they get a light plaque behind them.
+ * Eyeballed against the bundled set — add to this list if a new logo disappears
+ * in dark mode (see `node scripts/fetch-bowl-logos.ts`).
+ */
+const DARK_INK_LOGOS = new Set(['Rose_Bowl', 'First_Responder_Bowl']);
+
 /** The bundled logo key for a bowl, or null when we have no real art for it. */
 export function bowlLogoKey(assetName: string, name: string): string | null {
   if (assetName && BOWL_LOGOS.has(assetName)) return assetName;
@@ -79,14 +87,26 @@ export function BowlMarkGroup({
   const logo = bowlLogoKey(assetName, name);
   if (logo) {
     return (
-      <image
-        href={`bowl://${logo}`}
-        x={cx - size / 2}
-        y={bottom - size}
-        width={size}
-        height={size}
-        preserveAspectRatio="xMidYMid meet"
-      />
+      <>
+        {DARK_INK_LOGOS.has(logo) && (
+          <rect
+            className="bowl-plaque-rect"
+            x={cx - size / 2 - 1}
+            y={bottom - size - 1}
+            width={size + 2}
+            height={size + 2}
+            rx={2}
+          />
+        )}
+        <image
+          href={`bowl://${logo}`}
+          x={cx - size / 2}
+          y={bottom - size}
+          width={size}
+          height={size}
+          preserveAspectRatio="xMidYMid meet"
+        />
+      </>
     );
   }
   if (!USE_GENERATED_MARKS) return null;
@@ -177,15 +197,22 @@ export default function BowlIcon({
 
   const logo = bowlLogoKey(assetName, name);
   if (logo) {
-    return (
+    const img = (
       <img
         src={`bowl://${logo}`}
         alt={title ?? name}
         title={title}
         width={size}
         height={size}
-        style={{ display: 'inline-block', verticalAlign: 'middle', objectFit: 'contain', flex: 'none' }}
+        style={{ display: 'block', objectFit: 'contain', flex: 'none' }}
       />
+    );
+    return DARK_INK_LOGOS.has(logo) ? (
+      <span className="bowl-plaque" style={{ verticalAlign: 'middle' }}>
+        {img}
+      </span>
+    ) : (
+      <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>{img}</span>
     );
   }
   if (!USE_GENERATED_MARKS) return null;
