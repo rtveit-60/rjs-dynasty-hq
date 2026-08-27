@@ -29,6 +29,7 @@ export interface HQBridge {
   installUpdate: () => Promise<void>;
   onUpdateReady: (cb: (version: string) => void) => () => void;
   revealSave: () => Promise<void>;
+  openExternal: (url: string) => Promise<void>;
   onSnapshot: (cb: (s: Snapshot) => void) => () => void;
   onStatus: (cb: (s: WatchStatus) => void) => () => void;
   onMedia: (cb: (events: MediaEvent[]) => void) => () => void;
@@ -46,6 +47,7 @@ const bridge: HQBridge = {
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateReady: subscribe<string>('update:ready'),
   revealSave: () => ipcRenderer.invoke('save:reveal'),
+  openExternal: (url) => ipcRenderer.invoke('open:external', url),
   onSnapshot: subscribe<Snapshot>('snapshot'),
   onStatus: subscribe<WatchStatus>('status'),
   onMedia: subscribe<MediaEvent[]>('media'),

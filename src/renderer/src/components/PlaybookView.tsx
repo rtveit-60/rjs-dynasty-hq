@@ -3,6 +3,29 @@ import { prestigeLabel, schemeLabel } from '../lib/format.ts';
 
 type School = NonNullable<Snapshot['school']>;
 
+/** Civil.GG team slugs, where they differ from a plain slug of the school name. */
+const CIVIL_SLUGS: Record<string, string> = {
+  California: 'cal',
+  'Miami University': 'miami-oh',
+  'UL Monroe': 'louisiana-monroe',
+  "Hawai'i": 'hawaii',
+  'Florida International': 'fiu',
+  USF: 'south-florida',
+  'Southern Mississippi': 'southern-miss'
+};
+
+function civilSlug(longName: string): string {
+  return (
+    CIVIL_SLUGS[longName] ??
+    longName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+  );
+}
+
 export default function PlaybookView({ school }: { school: School }) {
   const { team, staff } = school;
   const oc = staff.find((s) => s.role === 'OC');
@@ -51,12 +74,24 @@ export default function PlaybookView({ school }: { school: School }) {
                 {prestigeLabel(side.caller.prestige)} prestige)
               </p>
             )}
+            <button
+              className="btn"
+              style={{ marginTop: 12 }}
+              onClick={() =>
+                void window.hq.openExternal(
+                  `https://www.civil.gg/playbooks/team/college/${side.key === 'OFFENSE' ? 'offense' : 'defense'}/${civilSlug(team.longName)}`
+                )
+              }
+            >
+              Formations &amp; play art on Civil.GG ↗
+            </button>
           </div>
         ))}
       </div>
       <p className="foot-note">
-        Scheme selections are read live from the save. Playbook art and play lists live in the game's
-        asset files rather than the dynasty save, so this view sticks to what's authoritative.
+        Scheme and playbook selections are read live from the save. Formation lists and play diagrams
+        are game content the save doesn't carry — the Civil.GG links open your school's full book,
+        with every formation and play drawn out, in your browser.
       </p>
     </>
   );

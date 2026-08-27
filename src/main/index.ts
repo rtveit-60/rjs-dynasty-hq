@@ -147,6 +147,18 @@ function registerIpc(): void {
     if (savePath) shell.showItemInFolder(savePath);
   });
 
+  // Opens a link in the user's own browser. Allowlisted hosts only.
+  ipcMain.handle('open:external', (_e, url: string) => {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'https:' && ['www.civil.gg', 'civil.gg'].includes(parsed.hostname)) {
+        void shell.openExternal(parsed.toString());
+      }
+    } catch {
+      // ignore malformed URLs
+    }
+  });
+
 }
 
 /** Bundled logo set: resources/logos in dev, resources/logos next to the asar when packaged. */
