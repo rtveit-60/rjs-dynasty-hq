@@ -92,6 +92,8 @@ export interface SeasonState {
  */
 export interface BowlAppearance {
   name: string;
+  /** Stable art key from the save (e.g. "Rose_Bowl"); survives sponsor renames. */
+  assetName: string;
   won: boolean;
   playoff: boolean;
   primary: string;

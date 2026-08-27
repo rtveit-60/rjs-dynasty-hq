@@ -944,6 +944,7 @@ async function extractSeasonBowl(
     const status = String(val(best.rec, 'GameStatus'));
     return {
       name,
+      assetName: String(val(bowlRec, 'AssetName') ?? '').trim(),
       won: (status === 'HomeWon') === best.isHome,
       playoff: val(bowlRec, 'IsPlayoffBowl') === true,
       primary:
