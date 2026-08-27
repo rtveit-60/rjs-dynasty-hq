@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { Snapshot } from '../../../shared/types.ts';
-import { DEPTH_LABELS, DEPTH_SECTIONS, ovrTier } from '../lib/format.ts';
+import { DEPTH_LABELS, DEPTH_SECTIONS, ovrTier, yearAbbrev } from '../lib/format.ts';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -45,7 +45,8 @@ export default function DepthChartView({ school }: { school: School }) {
                         <div key={`${row}-${i}`} className={`dc-row ${i === 0 ? 'starter' : ''}`}>
                           <span className="dc-depth">{i + 1}</span>
                           <span className="nm">
-                            {p.firstName} {p.lastName}
+                            {p.firstName} {p.lastName}{' '}
+                            <span className="dc-year">{yearAbbrev(p.schoolYear, p.redshirt)}</span>
                           </span>
                           <span className={ovrTier(p.overall)}>{p.overall}</span>
                         </div>

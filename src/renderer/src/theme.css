@@ -834,6 +834,13 @@ table.tbl {
   font-weight: 600;
 }
 
+.dc-year {
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+}
+
 /* ——— Cards / onboarding ——— */
 
 .hero {
