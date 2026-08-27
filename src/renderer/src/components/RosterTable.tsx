@@ -11,9 +11,25 @@ import {
   yearAbbrev
 } from '../lib/format.ts';
 
-type SortKey = 'overall' | 'name' | 'position' | 'year' | 'speed' | 'jersey';
+type SortKey =
+  | 'overall'
+  | 'name'
+  | 'position'
+  | 'year'
+  | 'speed'
+  | 'jersey'
+  | 'dev'
+  | 'height'
+  | 'weight'
+  | 'home';
 
 const YEAR_ORDER: Record<string, number> = { Freshman: 0, Sophomore: 1, Junior: 2, Senior: 3 };
+const DEV_ORDER: Record<string, number> = {
+  Normal: 0,
+  College_Impact: 1,
+  College_Star: 2,
+  College_Elite: 3
+};
 
 function Portrait({ id }: { id: number }) {
   const [failed, setFailed] = useState(false);
@@ -45,6 +61,14 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
           return dir * (a.speed - b.speed);
         case 'jersey':
           return dir * (a.jersey - b.jersey);
+        case 'dev':
+          return dir * ((DEV_ORDER[a.devTrait] ?? 0) - (DEV_ORDER[b.devTrait] ?? 0)) || b.overall - a.overall;
+        case 'height':
+          return dir * (a.heightIn - b.heightIn) || b.overall - a.overall;
+        case 'weight':
+          return dir * (a.weightLb - b.weightLb) || b.overall - a.overall;
+        case 'home':
+          return dir * a.homeState.localeCompare(b.homeState) || b.overall - a.overall;
         default:
           return dir * (a.overall - b.overall);
       }
@@ -90,11 +114,11 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
               {th('Pos', 'position', { defaultAsc: true })}
               {th('Yr', 'year', { defaultAsc: true })}
               {th('OVR', 'overall')}
-              <th>Dev</th>
-              <th className="num">Ht</th>
-              <th className="num">Wt</th>
+              {th('Dev', 'dev')}
+              {th('Ht', 'height', { num: true })}
+              {th('Wt', 'weight', { num: true })}
               {th('Spd', 'speed', { num: true })}
-              <th>Home</th>
+              {th('Home', 'home', { defaultAsc: true })}
             </tr>
           </thead>
           <tbody>
