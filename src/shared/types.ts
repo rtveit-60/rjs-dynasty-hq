@@ -35,6 +35,10 @@ export interface TeamInfo {
   founded: number | null;
   offPlaybook: string;
   defPlaybook: string;
+  /** Head coach's selected playbook rows (Coach.Offensive/DefensivePlaybook); resolves the
+   * actual book the team runs, which can differ from the scheme default. Null if unread. */
+  offPlaybookRow: number | null;
+  defPlaybookRow: number | null;
   isUserTeam: boolean;
   rank: number;
   lastWeekRank: number;
@@ -322,10 +326,9 @@ export interface PlaybookFormation {
 }
 
 export interface PlaybookBook {
-  enum: string; // save scheme enum, e.g. "OFF_AIR_RAID"
-  slug: string;
+  slug: string; // book asset slug, e.g. "ohio_state"
   side: 'offense' | 'defense';
-  name: string; // display name, e.g. "Air Raid"
+  name: string; // display name, e.g. "Ohio State"
   formationCount: number;
   playCount: number;
   formations: PlaybookFormation[];

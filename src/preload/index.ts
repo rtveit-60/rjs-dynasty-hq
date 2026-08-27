@@ -4,6 +4,7 @@ import type {
   BrandPack,
   DetectedSave,
   MediaEvent,
+  PlaybookBook,
   Settings,
   Snapshot,
   ThemeMode,
@@ -30,6 +31,11 @@ export interface HQBridge {
   onUpdateReady: (cb: (version: string) => void) => () => void;
   revealSave: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
+  getPlaybook: (
+    side: 'offense' | 'defense',
+    coachRow: number | null,
+    schemeEnum: string
+  ) => Promise<PlaybookBook | null>;
   onSnapshot: (cb: (s: Snapshot) => void) => () => void;
   onStatus: (cb: (s: WatchStatus) => void) => () => void;
   onMedia: (cb: (events: MediaEvent[]) => void) => () => void;
@@ -48,6 +54,8 @@ const bridge: HQBridge = {
   onUpdateReady: subscribe<string>('update:ready'),
   revealSave: () => ipcRenderer.invoke('save:reveal'),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
+  getPlaybook: (side, coachRow, schemeEnum) =>
+    ipcRenderer.invoke('playbook:get', side, coachRow, schemeEnum),
   onSnapshot: subscribe<Snapshot>('snapshot'),
   onStatus: subscribe<WatchStatus>('status'),
   onMedia: subscribe<MediaEvent[]>('media'),

@@ -10,6 +10,7 @@ import type {
 import { SCHOOL_LOCATIONS } from '../data/school-locations.ts';
 import { ensureCoachSchema } from './coach-schema.ts';
 import {
+  decodePlaybookRow,
   isNullRef,
   mainTable,
   readTable,
@@ -59,6 +60,9 @@ interface StaffEntry {
   oc: StaffMember | null;
   dc: StaffMember | null;
   anyUser: boolean;
+  /** Head coach's selected playbook rows (Coach.Offensive/DefensivePlaybook, low 17 bits). */
+  offPlaybookRow: number | null;
+  defPlaybookRow: number | null;
 }
 
 const COACH_FIELDS = [
@@ -73,7 +77,9 @@ const COACH_FIELDS = [
   'COACH_DEFTENDENCYRUNPASS',
   'COACH_OFFTENDENCYAGGRESSCONSERV',
   'COACH_DEFTENDENCYAGGRESSCONSERV',
-  'CareerStats'
+  'CareerStats',
+  'OffensivePlaybook',
+  'DefensivePlaybook'
 ];
 
 const STAFF_ROLE: Record<string, keyof Pick<StaffEntry, 'hc' | 'oc' | 'dc'>> = {
@@ -97,9 +103,16 @@ async function extractStaff(franchise: any): Promise<Map<number, StaffEntry>> {
       if (!Number.isInteger(teamIndex) || teamIndex < 0 || teamIndex >= 250) return;
       const name = `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
       if (!name) return;
-      const entry = map.get(teamIndex) ?? { hc: null, oc: null, dc: null, anyUser: false };
+      const entry =
+        map.get(teamIndex) ??
+        { hc: null, oc: null, dc: null, anyUser: false, offPlaybookRow: null, defPlaybookRow: null };
       entry[role] = { name, row };
       if (val(rec, 'IsUserControlled') === true) entry.anyUser = true;
+      // The team's playbook selection lives on the head coach's record.
+      if (role === 'hc') {
+        entry.offPlaybookRow = decodePlaybookRow(val(rec, 'OffensivePlaybook'));
+        entry.defPlaybookRow = decodePlaybookRow(val(rec, 'DefensivePlaybook'));
+      }
       map.set(teamIndex, entry);
     });
   } catch {
@@ -188,6 +201,8 @@ function teamFromRecord(rec: any, row: number): TeamInfo | null {
     defScheme: String(val(rec, 'CurrentDefensiveScheme') ?? ''),
     offPlaybook: String(val(rec, 'DefaultOffensiveScheme') ?? ''),
     defPlaybook: String(val(rec, 'DefaultDefensiveScheme') ?? ''),
+    offPlaybookRow: null,
+    defPlaybookRow: null,
     headCoach: null,
     offCoordinator: null,
     defCoordinator: null,
@@ -1064,6 +1079,8 @@ export async function extractSnapshot(
       info.headCoach = staff.hc?.name ?? null;
       info.offCoordinator = staff.oc?.name ?? null;
       info.defCoordinator = staff.dc?.name ?? null;
+      info.offPlaybookRow = staff.offPlaybookRow;
+      info.defPlaybookRow = staff.defPlaybookRow;
       info.isUserTeam = staff.anyUser;
     }
     teams.push(info);

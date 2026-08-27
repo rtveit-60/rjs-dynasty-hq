@@ -11,6 +11,7 @@ import type {
   WatchStatus
 } from '../shared/types.ts';
 import { slugName } from './logos.ts';
+import { resolvePlaybook } from './playbooks.ts';
 import { Pipeline } from './pipeline.ts';
 import { getSettings, updateSettings } from './settings.ts';
 import { checkForUpdates, installUpdate } from './updater.ts';
@@ -146,6 +147,17 @@ function registerIpc(): void {
     const { savePath } = getSettings();
     if (savePath) shell.showItemInFolder(savePath);
   });
+
+  // Returns the pre-extracted playbook the team runs (formations, plays, alignments,
+  // routes): the coach's selected book by its playbook row, falling back to the scheme
+  // archetype. null if nothing matches.
+  ipcMain.handle(
+    'playbook:get',
+    (_e, side: 'offense' | 'defense', coachRow: number | null, schemeEnum: string) =>
+      side === 'offense' || side === 'defense'
+        ? resolvePlaybook(side, typeof coachRow === 'number' ? coachRow : null, String(schemeEnum ?? ''))
+        : null,
+  );
 
   // Opens a link in the user's own browser. Allowlisted hosts only.
   ipcMain.handle('open:external', (_e, url: string) => {

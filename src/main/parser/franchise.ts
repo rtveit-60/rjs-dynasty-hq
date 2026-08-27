@@ -69,6 +69,17 @@ function refFromBinary(bin: unknown): Ref | null {
   return { tableId: parseInt(bin.slice(0, 15), 2), row: parseInt(bin.slice(15), 2) };
 }
 
+/**
+ * Decode a Coach.OffensivePlaybook / DefensivePlaybook value into the low-17-bit row that
+ * identifies the selected playbook (the top 15 bits are a game asset-table id). Returns null
+ * for empty/malformed values.
+ */
+export function decodePlaybookRow(ref: unknown): number | null {
+  if (typeof ref === 'number' && Number.isInteger(ref)) return ref & 0x1ffff;
+  const r = refFromBinary(ref);
+  return r ? r.row : null;
+}
+
 function refFromFieldObject(f: any): Ref | null {
   if (!f) return null;
   const rd = f.referenceData;

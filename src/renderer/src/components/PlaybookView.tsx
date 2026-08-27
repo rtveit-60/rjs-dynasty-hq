@@ -1,5 +1,7 @@
-import type { Snapshot } from '../../../shared/types.ts';
+import { useEffect, useMemo, useState } from 'react';
+import type { PlaybookBook, Snapshot } from '../../../shared/types.ts';
 import { prestigeLabel, schemeLabel } from '../lib/format.ts';
+import PlayArt from './PlayArt.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -26,35 +28,67 @@ function civilSlug(longName: string): string {
   );
 }
 
+type Side = 'offense' | 'defense';
+
 export default function PlaybookView({ school }: { school: School }) {
   const { team, staff } = school;
   const oc = staff.find((s) => s.role === 'OC');
   const dc = staff.find((s) => s.role === 'DC');
   const hc = staff.find((s) => s.role === 'HC');
 
+  const [books, setBooks] = useState<{ offense: PlaybookBook | null; defense: PlaybookBook | null }>({
+    offense: null,
+    defense: null
+  });
+  const [loaded, setLoaded] = useState(false);
+  const [side, setSide] = useState<Side>('offense');
+
+  useEffect(() => {
+    let live = true;
+    setLoaded(false);
+    Promise.all([
+      window.hq.getPlaybook('offense', team.offPlaybookRow, team.offPlaybook),
+      window.hq.getPlaybook('defense', team.defPlaybookRow, team.defPlaybook)
+    ]).then(([offense, defense]) => {
+      if (!live) return;
+      setBooks({ offense, defense });
+      setLoaded(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [team.offPlaybookRow, team.defPlaybookRow, team.offPlaybook, team.defPlaybook]);
+
   const sides = [
     {
-      key: 'OFFENSE',
+      key: 'offense' as Side,
+      label: 'OFFENSE',
       scheme: schemeLabel(team.offScheme),
-      raw: team.offScheme,
+      playbook: schemeLabel(team.offPlaybook),
       caller: oc ?? hc,
       callerRole: oc ? 'Offensive Coordinator' : 'Head Coach'
     },
     {
-      key: 'DEFENSE',
+      key: 'defense' as Side,
+      label: 'DEFENSE',
       scheme: schemeLabel(team.defScheme),
-      raw: team.defScheme,
+      playbook: schemeLabel(team.defPlaybook),
       caller: dc ?? hc,
       callerRole: dc ? 'Defensive Coordinator' : 'Head Coach'
     }
   ];
 
+  const activeBook = books[side];
+  const color = team.colors.primary;
+
   return (
     <>
       <div className="two-col" style={{ marginTop: 16 }}>
-        {sides.map((side) => (
-          <div key={side.key} className="panel">
-            <div className="panel-title">{side.key}</div>
+        {sides.map((s) => {
+          const book = books[s.key];
+          return (
+          <div key={s.key} className="panel">
+            <div className="panel-title">{s.label}</div>
             <div
               style={{
                 fontFamily: 'var(--font-display)',
@@ -65,34 +99,172 @@ export default function PlaybookView({ school }: { school: School }) {
                 margin: '6px 0 2px'
               }}
             >
-              {side.scheme}
+              {book?.name ?? s.playbook}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{side.raw}</div>
-            {side.caller && (
-              <p style={{ marginTop: 14, fontSize: 12.5, color: 'var(--ink-2)' }}>
-                Run by <b style={{ color: 'var(--ink)' }}>{side.caller.name}</b> ({side.callerRole},{' '}
-                {prestigeLabel(side.caller.prestige)} prestige)
+            <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+              {s.scheme} scheme{book ? ` · ${book.formationCount} formations · ${book.playCount} plays` : ''}
+            </div>
+            {s.caller && (
+              <p style={{ marginTop: 12, fontSize: 12.5, color: 'var(--ink-2)' }}>
+                Run by <b style={{ color: 'var(--ink)' }}>{s.caller.name}</b> ({s.callerRole},{' '}
+                {prestigeLabel(s.caller.prestige)} prestige)
               </p>
             )}
             <button
               className="btn"
-              style={{ marginTop: 12 }}
+              style={{ marginTop: 10 }}
               onClick={() =>
                 void window.hq.openExternal(
-                  `https://www.civil.gg/playbooks/team/college/${side.key === 'OFFENSE' ? 'offense' : 'defense'}/${civilSlug(team.longName)}`
+                  `https://www.civil.gg/playbooks/team/college/${s.key}/${civilSlug(team.longName)}`
                 )
               }
             >
-              Formations &amp; play art on Civil.GG ↗
+              Open on Civil.GG ↗
             </button>
           </div>
-        ))}
+          );
+        })}
       </div>
+
+      <PlaybookBrowser book={activeBook} side={side} onSide={setSide} color={color} loaded={loaded} />
+
       <p className="foot-note">
-        Scheme and playbook selections are read live from the save. Formation lists and play diagrams
-        are game content the save doesn't carry — the Civil.GG links open your school's full book,
-        with every formation and play drawn out, in your browser.
+        Scheme and playbook selections are read live from the save; every formation and play here is
+        drawn from your book's own data, fully offline. The Civil.GG links open the same books in your
+        browser for cross-reference.
       </p>
     </>
+  );
+}
+
+function PlaybookBrowser({
+  book,
+  side,
+  onSide,
+  color,
+  loaded
+}: {
+  book: PlaybookBook | null;
+  side: Side;
+  onSide: (s: Side) => void;
+  color: string;
+  loaded: boolean;
+}) {
+  const [formIdx, setFormIdx] = useState(0);
+  const [playIdx, setPlayIdx] = useState(0);
+
+  // Reset selection when the book changes.
+  useEffect(() => {
+    setFormIdx(0);
+    setPlayIdx(0);
+  }, [book?.slug]);
+
+  const families = useMemo(() => {
+    if (!book) return [];
+    const groups: { family: string; items: { idx: number; name: string; plays: number }[] }[] = [];
+    book.formations.forEach((f, idx) => {
+      let g = groups.find((x) => x.family === f.family);
+      if (!g) {
+        g = { family: f.family, items: [] };
+        groups.push(g);
+      }
+      g.items.push({ idx, name: f.name, plays: f.plays.length });
+    });
+    return groups;
+  }, [book]);
+
+  const formation = book?.formations[formIdx] ?? null;
+  const play = formation?.plays[playIdx] ?? null;
+
+  return (
+    <div className="panel" style={{ marginTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div className="panel-title" style={{ margin: 0 }}>
+          Playbook Browser
+        </div>
+        <div className="seg-toggle">
+          {(['offense', 'defense'] as Side[]).map((s) => (
+            <button
+              key={s}
+              className={`seg ${side === s ? 'active' : ''}`}
+              onClick={() => onSide(s)}
+            >
+              {s === 'offense' ? 'Offense' : 'Defense'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!loaded && <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '24px 0' }}>Loading book…</div>}
+
+      {loaded && !book && (
+        <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '24px 0' }}>
+          This {side} book isn't bundled yet. Use the Civil.GG link above to view it.
+        </div>
+      )}
+
+      {book && formation && (
+        <div className="pb-grid">
+          {/* formation list */}
+          <div className="pb-forms">
+            {families.map((g) => (
+              <div key={g.family}>
+                <div className="pb-fam">{g.family}</div>
+                {g.items.map((it) => (
+                  <button
+                    key={it.idx}
+                    className={`pb-form ${it.idx === formIdx ? 'active' : ''}`}
+                    onClick={() => {
+                      setFormIdx(it.idx);
+                      setPlayIdx(0);
+                    }}
+                  >
+                    <span>{it.name}</span>
+                    <span className="pb-count">{it.plays}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* play list */}
+          <div className="pb-plays">
+            {formation.plays.map((p, i) => (
+              <button
+                key={`${p.id}-${i}`}
+                className={`pb-play ${i === playIdx ? 'active' : ''}`}
+                onClick={() => setPlayIdx(i)}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+
+          {/* play art */}
+          <div className="pb-art">
+            <div className="pb-art-head">
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {formation.family} · {formation.name}
+                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, lineHeight: 1.05 }}>
+                  {play?.name}
+                </div>
+              </div>
+            </div>
+            {formation.personnel.length > 0 && (
+              <div className="pb-personnel">
+                {formation.personnel.slice(0, 8).map((p) => (
+                  <span key={p} className="pb-chip">
+                    {p}
+                  </span>
+                ))}
+              </div>
+            )}
+            {play && <PlayArt formation={formation} play={play} color={color} />}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

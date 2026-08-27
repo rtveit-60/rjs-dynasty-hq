@@ -141,26 +141,40 @@ Air Raid offense + Multiple defense, both offense & defense identical):
     5:0}` (a `run<angle>for<dist>` segment — matches the standalone `runroute/wr_run90for08…` asset names
     and their EBX float arrays). Assignment i ↔ alignment player i (both ×11).
 
-### Save scheme enum → playbook slug (verified against sample save's 143 teams)
+### Which book a team runs — coach ref, not the scheme default (SOLVED 2026-08-27)
 
-`Team.DefaultOffensiveScheme` / `DefaultDefensiveScheme` are archetype enums (a superset of team-specific
-books, which the app maps to the shared archetype gamesheet). Books use `&`, and mixed `-`/`_` separators:
+Three save fields describe a team's playbook; only one is the actual selection:
 
-| Offense enum | slug | Defense enum | slug |
-|---|---|---|---|
-| OFF_AIR_RAID | air_raid | DEF_3_2_6 | 3-2-6 |
-| OFF_MULTIPLE_OFFENSE | multiple | DEF_3_3_5 | 3-3-5 |
-| OFF_OPTION | option | DEF_3_3_5_TITE | 3-3-5_tite |
-| OFF_PISTOL | pistol | DEF_3_4_MULTIPLE | 3-4_multiple |
-| OFF_POWER_SPREAD | power_spread | DEF_4_2_5 | 4-2-5 |
-| OFF_PRO_STYLE | pro_style | DEF_4_3_MULTIPLE | 4-3_multiple |
-| OFF_RUN_AND_SHOOT | run_&_shoot | DEF_BASE3_4 | 3-4 |
-| OFF_SPREAD | spread | DEF_BASE4_3 | 4-3 |
-| OFF_SPREAD_OPTION | spread_option | DEF_MULTIPLE_DEFENSE | multiple |
-| OFF_VEER_AND_SHOOT | veer_&_shoot | | |
+- **`Coach.OffensivePlaybook` / `DefensivePlaybook`** (on the head-coach record) — **authoritative**.
+  32-bit binary refs (`refFromBinary`): top 15 bits = a game asset-table id (16456), **low 17 bits =
+  the playbook row that identifies the book** (`decodePlaybookRow`). This is what a user coach's in-game
+  selection updates, and it can differ from the team's default — verified: the user's Notre Dame HC and
+  Ohio State's HC share offense row **89340**, so the user runs the Ohio State book, exactly as reported.
+- `Team.TEAM_OFFPLAYBOOK` / `TEAM_DEFPLAYBOOK` — the team's **canonical default** (dense int enum:
+  offense 200-401 alphabetical by team-book slug, defense 500-508 the nine base scheme books). Handy for
+  building the row→slug map but *not* the live selection — Notre Dame's default is 326 = `washington_state`.
+- `DefaultOffensiveScheme` / `DefaultDefensiveScheme` — scheme **archetype** enums (OFF_AIR_RAID,
+  DEF_MULTIPLE_DEFENSE, …). Scheme family only; the fallback when the exact book isn't bundled.
 
-Extractor `scripts/extract-playbooks.ts` writes per-book JSON to `resources/playbooks/<enum>.json`
-(bundled via electron-builder `extraResources`, same takedown-contingency posture as `resources/logos`).
+**Offense books are team-specific** (155 books, mostly school names); **defense books are scheme
+archetypes** (44 books: 3-2-6, 3-3-5, 3-4, 4-3, 4-2-5, multiple, + man/zone/shell/pressure variants).
+Book slugs use the game's own separators (`&`, mixed `-`/`_`), and a handful need team aliases
+(California→`cal`, Miami University→`miami_(oh)`, Texas A&M→`texas_a&m`, Southern Mississippi→`southern_miss`,
+Middle Tennessee→`mid_tenn_state`, Sam Houston→`sam_houston_state`, Hawai'i→`hawaii`).
+
+**Coach-row → slug map:** built at extract time by joining each HC's decoded playbook row to that team's
+default-book slug, preferring teams that natively run their own book so a shared row resolves to the
+book's home school. Baked into `manifest.json`. The app reads the user HC's Offensive/DefensivePlaybook
+rows (via the coach-schema fix) and looks them up; unmapped rows fall back to the scheme archetype
+(archetype enum → slug: OFF_AIR_RAID→air_raid, OFF_SPREAD→spread, DEF_MULTIPLE_DEFENSE→multiple, etc.).
+
+### Extractor output (bundled offline, like `resources/logos`)
+
+`scripts/extract-playbooks.ts` reads the Frostbite archives (never at runtime) and writes:
+`resources/playbooks/books/<o|d>_<slug>.json.gz` (all 191 books, ~4.3 MB gzipped from ~49 MB JSON) plus
+`resources/playbooks/manifest.json` (coach-row maps, scheme-enum fallbacks, book directory). Runtime
+(`src/main/playbooks.ts`) resolves the coach row → slug, gunzips the one book, and serves it over the
+`playbook:get` IPC. Same takedown-contingency posture as the bundled logos.
 
 ## Portraits
 
