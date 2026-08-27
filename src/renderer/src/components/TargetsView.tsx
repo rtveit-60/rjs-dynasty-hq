@@ -12,6 +12,13 @@ function Race({ pursuing }: { pursuing: TargetSchool[] }) {
           <span className={s.isUser ? 'lead' : ''}>
             {s.name} {s.influence}
           </span>
+          {s.delta !== null && s.delta !== 0 && (
+            <span className={s.delta > 0 ? 'delta-up' : 'delta-down'}>
+              {' '}
+              {s.delta > 0 ? '+' : '−'}
+              {Math.abs(s.delta)}
+            </span>
+          )}
         </span>
       ))}
     </span>
@@ -58,9 +65,11 @@ export default function TargetsView({ school }: { school: School }) {
               <th>Pos</th>
               <th>Rating</th>
               <th>Status</th>
+              <th>Visit</th>
               <th className="num">NIL</th>
-              <th className="num">Infl</th>
+              <th className="num">Standing</th>
               <th className="num">Natl</th>
+              <th className="num">Pos Rk</th>
               <th>The Race</th>
             </tr>
           </thead>
@@ -87,16 +96,22 @@ export default function TargetsView({ school }: { school: School }) {
                   <span className={t.stage.includes('Committed') ? 'commit' : ''}>
                     {STAGE_LABELS[t.stage] ?? t.stage}
                   </span>
-                  {t.hasVisit && <span className="tag" style={{ marginLeft: 6 }}>Visit</span>}
                 </td>
+                <td>{t.hasVisit ? <span className="visit-yes" title="Visit scheduled">✓</span> : '—'}</td>
                 <td className="num" title={`Expects ${t.nilExpectation}`}>
                   {t.nilOffer > 0 ? t.nilOffer : '—'}
                   {t.nilOffer > 0 && t.nilOffer < t.nilExpectation && (
                     <span style={{ color: 'var(--warn)' }}> ▾</span>
                   )}
                 </td>
-                <td className="num">{t.influence}</td>
+                <td className="num" title={`Influence ${t.influence}`}>
+                  {(() => {
+                    const rank = t.pursuing.findIndex((s) => s.isUser);
+                    return rank >= 0 ? <b>#{rank + 1}</b> : '—';
+                  })()}
+                </td>
                 <td className="num">{t.nationalRank > 0 ? t.nationalRank : '—'}</td>
+                <td className="num">{t.positionRank > 0 ? t.positionRank : '—'}</td>
                 <td>
                   <Race pursuing={t.pursuing} />
                 </td>
@@ -106,8 +121,9 @@ export default function TargetsView({ school }: { school: School }) {
         </table>
       </div>
       <p className="foot-note">
-        Influence is total recruiting influence earned with the recruit; the race shows the top three
-        pursuing programs. ♥ marks board favorites.
+        Standing is your rank among the schools pursuing the recruit (hover for raw influence). The
+        race shows the top three pursuers with their week-over-week influence change. ♥ marks board
+        favorites.
       </p>
     </>
   );

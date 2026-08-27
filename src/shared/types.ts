@@ -140,6 +140,8 @@ export interface TargetSchool {
   name: string;
   influence: number;
   isUser: boolean;
+  /** Influence gained/lost since last week, when the school's board tracks this recruit. */
+  delta: number | null;
 }
 
 export interface RecruitTargetEntry {

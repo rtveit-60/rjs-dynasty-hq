@@ -393,12 +393,54 @@ const RECRUIT_FIELDS = [
   'Class'
 ];
 
+/**
+ * Weekly influence deltas for every (school, recruit) pursuit: sweep each
+ * school's recruiting board once and record Total vs LastWeek influence.
+ * Keyed `${recruitRow}:${teamIndex}`.
+ */
+async function extractPursuitDeltas(
+  franchise: any,
+  teamTable: any,
+  rowToTeamIndex: Map<number, number>
+): Promise<Map<string, number>> {
+  const deltas = new Map<string, number>();
+  try {
+    for (const [row, teamIndex] of rowToTeamIndex) {
+      const teamRec = teamTable.records[row];
+      if (!teamRec || teamRec.isEmpty) continue;
+      const boardRef = refFromRecord(teamRec, 'RecruitingBoard');
+      if (isNullRef(boardRef)) continue;
+      const boardTable = await tableById(franchise, boardRef.tableId);
+      const boardRec = boardTable?.records?.[boardRef.row];
+      if (!boardRec) continue;
+      const listRef = refFromRecord(boardRec, 'Recruits');
+      if (isNullRef(listRef)) continue;
+      const listTable = await tableById(franchise, listRef.tableId);
+      const listRec = listTable?.records?.[listRef.row];
+      for (const tr of listRec ? refsFromArrayRecord(listRec) : []) {
+        const targetTable = await tableById(franchise, tr.tableId);
+        const targetRec = targetTable?.records?.[tr.row];
+        if (!targetRec || targetRec.isEmpty) continue;
+        const recruitRef = refFromRecord(targetRec, 'Recruit');
+        if (isNullRef(recruitRef)) continue;
+        const total = Number(val(targetRec, 'ProspectInfluenceTotal') ?? 0);
+        const lastWeek = Number(val(targetRec, 'ProspectInfluenceTotalLastWeek') ?? 0);
+        deltas.set(`${recruitRef.row}:${teamIndex}`, total - lastWeek);
+      }
+    }
+  } catch {
+    // deltas are decoration
+  }
+  return deltas;
+}
+
 async function extractBoard(
   franchise: any,
   teamRec: any,
   playerTable: any,
   teamIndexToName: Map<number, string>,
-  ownTeamIndex: number
+  ownTeamIndex: number,
+  pursuitDeltas: Map<string, number>
 ): Promise<{ info: import('../../shared/types.ts').BoardInfo; recruitRows: Set<number> } | null> {
   const recruitRows = new Set<number>();
   try {
@@ -447,7 +489,8 @@ async function extractBoard(
             pursuing.push({
               name: teamIndexToName.get(tid) ?? `Team ${tid}`,
               influence: Number(val(entry, 'TeamInfluence') ?? 0),
-              isUser: tid === ownTeamIndex
+              isUser: tid === ownTeamIndex,
+              delta: pursuitDeltas.get(`${recruitRef!.row}:${tid}`) ?? null
             });
           }
           pursuing.sort((a, b) => b.influence - a.influence);
@@ -629,7 +672,8 @@ async function extractRecruiting(
   schoolAssets: Map<number, SchoolAssets>,
   ownTeamIndex: number,
   boardRecruitRows: Set<number>,
-  seasonYear: number
+  seasonYear: number,
+  pursuitDeltas: Map<string, number>
 ): Promise<import('../../shared/types.ts').RecruitingData | null> {
   try {
     const recruitTable = await readTable(mainTable(franchise, 'Recruit'), RECRUIT_FIELDS);
@@ -691,7 +735,8 @@ async function extractRecruiting(
           race.push({
             name: teamIndexToName.get(tid) ?? `Team ${tid}`,
             influence,
-            isUser: tid === ownTeamIndex
+            isUser: tid === ownTeamIndex,
+            delta: pursuitDeltas.get(`${row}:${tid}`) ?? null
           });
         }
         race.sort((a, b) => b.influence - a.influence);
@@ -897,7 +942,15 @@ export async function extractSnapshot(
     const budget = extractBudget(teamRec);
     const splits = await extractSplits(franchise, teamRec);
     const staff = await staffTendencies(franchise, staffByTeamIndex.get(ownTeamIndex));
-    const boardResult = await extractBoard(franchise, teamRec, playerTable, teamIndexToName, ownTeamIndex);
+    const pursuitDeltas = await extractPursuitDeltas(franchise, teamTable, rowToTeamIndex);
+    const boardResult = await extractBoard(
+      franchise,
+      teamRec,
+      playerTable,
+      teamIndexToName,
+      ownTeamIndex,
+      pursuitDeltas
+    );
     const schoolAssets = await extractSchoolAssets(franchise, teamTable, rowToTeamIndex);
     const recruiting = await extractRecruiting(
       franchise,
@@ -907,7 +960,8 @@ export async function extractSnapshot(
       schoolAssets,
       ownTeamIndex,
       boardResult?.recruitRows ?? new Set(),
-      season?.seasonYear ?? 0
+      season?.seasonYear ?? 0,
+      pursuitDeltas
     );
 
     school = {

@@ -1238,9 +1238,26 @@ table.tbl {
 }
 
 .q.gem {
-  color: var(--dev-elite);
-  background: color-mix(in srgb, var(--dev-elite) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--dev-elite) 50%, transparent);
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--good) 50%, transparent);
+}
+
+.delta-up {
+  color: var(--good);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.delta-down {
+  color: var(--bad);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.visit-yes {
+  color: var(--good);
+  font-weight: 700;
 }
 
 .q.bust {
