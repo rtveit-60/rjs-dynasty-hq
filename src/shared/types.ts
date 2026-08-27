@@ -8,6 +8,7 @@ export interface Settings {
   theme: ThemeMode;
   brandPack: BrandPack;
   portraitsDir: string | null;
+  logosDir: string | null;
   autoUpdate: boolean;
   windowBounds?: { x: number; y: number; width: number; height: number };
 }

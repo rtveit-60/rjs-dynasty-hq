@@ -76,6 +76,11 @@ _Last updated: 2026-08-27 (kickoff + parse spike, both same day)_
 - `MediaPoll_CurrentRank` ranks ALL teams (1–136), not just 25 — treat ≤25 as "ranked" for display. `MediaPoll_LastWeeksRank` enables poll-move stories without history.
 - Media engine design: per-school `MediaState` (ranks, played-game keys, commits, staff, roster names) persisted under `userData/media/`; diff on each parse emits id-deduped events; season change or school switch triggers a baseline "season so far" seed. Articles are deterministic (seeded variants keyed on event id) so re-parses are idempotent.
 
+### Team logos — not in the save (worked around, 2026-08-27)
+
+- Logo bitmaps live in the game's Frostbite archives; the save only carries asset names/refs (`TEAM_LOGO_ASSETNAME` etc.). The game's `twinkle/temp/httpcache` (Documents) is a dead end — it caches the embedded web UI's localization strings and chrome icons, not team art.
+- Approach: `logo://<teamRow>` protocol resolving (1) a user-chosen local logo folder keyed by school slug (`notre-dame.png`), then (2) `userData/logos/<row>.png` filled by a one-time user-triggered import that matches save school names against ESPN's public team directory (`src/main/logos.ts` — name normalization + alias table; 138/138 match) and downloads each mark. Fallback everywhere: the colored-initials block.
+
 ### Known wrinkles (normal reverse-engineering work, none blocking)
 
 1. **Duplicate table names.** `getTableByName` returns the first match; e.g. the first `Team` is a cap-1 stub and the first `Coach` instance has no schema (generic `Field_N` names). Select instances by **tableId** (use `getAllTablesByName`, pick by capacity/schema presence). The community (cfb27-aio-app) hardcodes table ids — consult their constants.

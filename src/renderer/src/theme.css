@@ -1135,6 +1135,12 @@ table.tbl {
   color: var(--dev-elite);
 }
 
+.team-logo {
+  object-fit: contain;
+  display: block;
+  flex: none;
+}
+
 .avatar {
   display: inline-block;
   width: 22px;

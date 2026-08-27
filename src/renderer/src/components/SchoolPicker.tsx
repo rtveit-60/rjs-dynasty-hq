@@ -1,11 +1,16 @@
 import { useMemo, useState } from 'react';
 import type { TeamInfo } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
+import TeamLogo from './TeamLogo.tsx';
 
 function SchoolRow({ team, onPick }: { team: TeamInfo; onPick: (row: number) => void }) {
   return (
     <button className="school-row" onClick={() => onPick(team.row)}>
-      <span className="swatch" style={{ background: team.colors.primary }} />
+      <TeamLogo
+        row={team.row}
+        size={22}
+        fallback={<span className="swatch" style={{ background: team.colors.primary }} />}
+      />
       <span>
         <div className="nm">{team.longName}</div>
         <div className="nick">

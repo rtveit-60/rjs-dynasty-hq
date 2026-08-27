@@ -1,5 +1,6 @@
 import { initials } from '../lib/format.ts';
 import { useHQ, type NavKey } from '../store.ts';
+import TeamLogo from './TeamLogo.tsx';
 import ThemeToggle from './ThemeToggle.tsx';
 
 const ITEMS: { key: NavKey; label: string; soon?: boolean }[] = [
@@ -29,7 +30,15 @@ export default function SideNav() {
   return (
     <aside className="rail">
       <div className="school-block">
-        <div className="school-mark">{team ? initials(team.longName) : '·'}</div>
+        {team ? (
+          <TeamLogo
+            row={team.row}
+            size={40}
+            fallback={<div className="school-mark">{initials(team.longName)}</div>}
+          />
+        ) : (
+          <div className="school-mark">·</div>
+        )}
         <div>
           <div className="school-name">{team ? team.longName : 'Loading…'}</div>
           <div className="school-sub">

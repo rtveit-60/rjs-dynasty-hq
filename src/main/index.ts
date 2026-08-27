@@ -1,6 +1,6 @@
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron';
 import { pathToFileURL } from 'node:url';
-import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   AppState,
@@ -11,6 +11,7 @@ import type {
   ThemeMode,
   WatchStatus
 } from '../shared/types.ts';
+import { ESPN_TEAMS_URL, matchTeams, parseEspnDirectory, slugName } from './logos.ts';
 import { Pipeline } from './pipeline.ts';
 import { getSettings, updateSettings } from './settings.ts';
 import { checkForUpdates, installUpdate } from './updater.ts';
@@ -107,6 +108,24 @@ function registerIpc(): void {
     return updateSettings({ brandPack: pack === 'parody' ? 'parody' : 'real' });
   });
 
+  ipcMain.handle('logos:import', async () => {
+    const result = await importLogos();
+    return { ...result, cached: countLogos() };
+  });
+
+  ipcMain.handle('logos:status', () => ({ cached: countLogos(), dir: getSettings().logosDir }));
+
+  ipcMain.handle('logos:pickDir', async () => {
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Select a logo pack folder',
+      properties: ['openDirectory']
+    });
+    if (!result.canceled && result.filePaths[0]) updateSettings({ logosDir: result.filePaths[0] });
+    return getSettings();
+  });
+
+  ipcMain.handle('logos:clearDir', () => updateSettings({ logosDir: null }));
+
   ipcMain.handle('autoupdate:set', (_e, enabled: boolean) => {
     const settings = updateSettings({ autoUpdate: enabled === true });
     if (settings.autoUpdate) startUpdateCheck(); // turning it on checks right away
@@ -180,6 +199,71 @@ function countPortraits(): number {
   } catch {
     return 0;
   }
+}
+
+const logoCacheDir = () => join(app.getPath('userData'), 'logos');
+
+function countLogos(): number {
+  try {
+    return readdirSync(logoCacheDir()).filter((f) => /^\d+\.png$/.test(f)).length;
+  } catch {
+    return 0;
+  }
+}
+
+/** logo://<teamRow> — local logo pack first (by school name), then the imported cache. */
+function registerLogoProtocol(): void {
+  protocol.handle('logo', (request) => {
+    try {
+      const row = new URL(request.url).hostname;
+      if (!/^\d+$/.test(row)) return new Response('', { status: 404 });
+      const dir = getSettings().logosDir;
+      if (dir) {
+        const team = snapshot?.teams.find((t) => t.row === Number(row));
+        if (team) {
+          for (const ext of ['png', 'svg', 'jpg', 'jpeg', 'webp']) {
+            const file = join(dir, `${slugName(team.longName)}.${ext}`);
+            if (existsSync(file)) return net.fetch(pathToFileURL(file).toString());
+          }
+        }
+      }
+      const cached = join(logoCacheDir(), `${row}.png`);
+      if (existsSync(cached)) return net.fetch(pathToFileURL(cached).toString());
+    } catch {
+      // fall through to 404
+    }
+    return new Response('', { status: 404 });
+  });
+}
+
+/** One-time, user-triggered logo import: match school names against ESPN's public
+ *  team directory and cache each mark locally. The app never fetches again. */
+async function importLogos(): Promise<{ matched: number; total: number; misses: string[] }> {
+  if (!snapshot?.teams.length) throw new Error('Load a dynasty save first.');
+  const res = await net.fetch(ESPN_TEAMS_URL);
+  if (!res.ok) throw new Error(`Team directory request failed (${res.status}).`);
+  const espn = parseEspnDirectory(await res.json());
+  const ours = snapshot.teams.map((t) => ({ row: t.row, longName: t.longName, nickName: t.nickName }));
+  const { matches, misses } = matchTeams(ours, espn);
+  mkdirSync(logoCacheDir(), { recursive: true });
+  let done = 0;
+  const queue = [...matches];
+  const workers = Array.from({ length: 6 }, async () => {
+    for (;;) {
+      const m = queue.shift();
+      if (!m) return;
+      try {
+        const r = await net.fetch(m.url);
+        if (!r.ok) continue;
+        writeFileSync(join(logoCacheDir(), `${m.row}.png`), Buffer.from(await r.arrayBuffer()));
+        done++;
+      } catch {
+        // skip this school; fallback initials remain
+      }
+    }
+  });
+  await Promise.all(workers);
+  return { matched: done, total: ours.filter((t) => !t.longName.startsWith('FCS ')).length, misses };
 }
 
 /** portrait://<id> serves <portraitsDir>/<id>.(png|jpg|jpeg|webp), read-only. */
@@ -310,6 +394,7 @@ if (!gotLock) {
 
   void app.whenReady().then(() => {
     registerPortraitProtocol();
+    registerLogoProtocol();
     registerIpc();
     createWindow();
     startUpdateCheck();

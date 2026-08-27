@@ -3,6 +3,7 @@ import { schemeLabel } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 import BudgetView from './BudgetView.tsx';
 import DepthChartView from './DepthChartView.tsx';
+import TeamLogo from './TeamLogo.tsx';
 import PlaybookView from './PlaybookView.tsx';
 import RosterTable from './RosterTable.tsx';
 import TargetsView from './TargetsView.tsx';
@@ -36,14 +37,19 @@ export default function TeamHQ() {
 
   return (
     <div className="page">
-      {team.city && (
-        <div className="page-kicker">
-          {team.city}, {team.state}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+        <TeamLogo row={team.row} size={64} fallback={null} />
+        <div>
+          {team.city && (
+            <div className="page-kicker">
+              {team.city}, {team.state}
+            </div>
+          )}
+          <h1 className="page-title">
+            {team.longName} <span className="nick">{team.nickName}</span>
+          </h1>
         </div>
-      )}
-      <h1 className="page-title">
-        {team.longName} <span className="nick">{team.nickName}</span>
-      </h1>
+      </div>
       <div className="page-sub">
         {team.headCoach && (
           <span className="chip">

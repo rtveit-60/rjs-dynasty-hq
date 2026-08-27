@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useHQ } from '../store.ts';
+import { useLogoVersion } from './TeamLogo.tsx';
 import ThemeToggle from './ThemeToggle.tsx';
 
 export default function Setup() {
@@ -55,6 +56,12 @@ export default function Setup() {
       <ThemeToggle />
 
       <div className="section-h">
+        <h3>Team logos</h3>
+        <div className="rule" />
+      </div>
+      <LogoSettings />
+
+      <div className="section-h">
         <h3>Player portraits</h3>
         <div className="rule" />
       </div>
@@ -96,6 +103,83 @@ function AutoUpdateToggle() {
         Off
       </button>
     </div>
+  );
+}
+
+function LogoSettings() {
+  const settings = useHQ((s) => s.settings);
+  const setSettings = useHQ((s) => s.applySettings);
+  const bumpLogos = useLogoVersion((s) => s.bump);
+  const [cached, setCached] = useState<number>(0);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    void window.hq.logoStatus().then((s) => setCached(s.cached));
+  }, []);
+
+  const runImport = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const r = await window.hq.importLogos();
+      setCached(r.cached);
+      setMessage(
+        `Imported ${r.matched} of ${r.total} school logos.` +
+          (r.misses.length ? ` No match for: ${r.misses.join(', ')}.` : '')
+      );
+      bumpLogos();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message.replace(/^.*Error: /, '') : 'Import failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <p style={{ color: 'var(--ink-2)', fontSize: 12.5 }}>
+        {cached > 0
+          ? `${cached} logos cached locally — schools show their real marks.`
+          : 'No logos yet — schools show colored initials.'}
+        {settings?.logosDir && (
+          <span style={{ color: 'var(--ink-3)', wordBreak: 'break-all' }}>
+            {' '}
+            · local pack: {settings.logosDir}
+          </span>
+        )}
+      </p>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        <button className="btn primary" disabled={busy} onClick={() => void runImport()}>
+          {busy ? 'Importing…' : cached > 0 ? 'Re-import logos' : 'Import team logos (one-time download)'}
+        </button>
+        <button
+          className="btn"
+          onClick={() => void window.hq.pickLogosDir().then((s) => setSettings(s))}
+        >
+          Choose local logo folder…
+        </button>
+        {settings?.logosDir && (
+          <button
+            className="btn"
+            onClick={() => void window.hq.clearLogosDir().then((s) => {
+              setSettings(s);
+              bumpLogos();
+            })}
+          >
+            Clear folder
+          </button>
+        )}
+      </div>
+      {message && (
+        <p style={{ color: 'var(--ink-2)', fontSize: 12, marginTop: 8 }}>{message}</p>
+      )}
+      <p className="foot-note">
+        Import fetches each school's mark once from ESPN's public directory and caches it locally —
+        the app stays fully offline afterward. A local folder (files named like{' '}
+        <code>notre-dame.png</code>) takes priority and works with no download at all.
+      </p>
+    </>
   );
 }
 

@@ -11,6 +11,7 @@ const DEFAULTS: Settings = {
   theme: 'system',
   brandPack: 'real',
   portraitsDir: null,
+  logosDir: null,
   autoUpdate: true
 };
 
