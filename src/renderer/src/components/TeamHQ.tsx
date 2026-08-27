@@ -6,13 +6,15 @@ import BudgetView from './BudgetView.tsx';
 import DepthChartView from './DepthChartView.tsx';
 import TeamLogo from './TeamLogo.tsx';
 import PlaybookView from './PlaybookView.tsx';
+import ProgramDashboard from './ProgramDashboard.tsx';
 import RosterTable from './RosterTable.tsx';
 import TargetsView from './TargetsView.tsx';
 import TendenciesView from './TendenciesView.tsx';
 
-type Tab = 'roster' | 'depth' | 'targets' | 'budget' | 'tendencies' | 'playbook';
+type Tab = 'program' | 'roster' | 'depth' | 'targets' | 'budget' | 'tendencies' | 'playbook';
 
 const TABS: { key: Tab; label: string }[] = [
+  { key: 'program', label: 'PROGRAM DASHBOARD' },
   { key: 'roster', label: 'ROSTER' },
   { key: 'depth', label: 'DEPTH CHART' },
   { key: 'targets', label: 'TARGETS' },
@@ -23,7 +25,7 @@ const TABS: { key: Tab; label: string }[] = [
 
 export default function TeamHQ() {
   const snapshot = useHQ((s) => s.snapshot);
-  const [tab, setTab] = useState<Tab>('roster');
+  const [tab, setTab] = useState<Tab>('program');
   const school = snapshot?.school;
 
   if (!school) {
@@ -85,6 +87,7 @@ export default function TeamHQ() {
         ))}
       </div>
 
+      {tab === 'program' && <ProgramDashboard school={school} />}
       {tab === 'roster' && <RosterTable roster={roster} />}
       {tab === 'depth' && <DepthChartView school={school} />}
       {tab === 'targets' && <TargetsView school={school} />}

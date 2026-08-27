@@ -108,39 +108,6 @@ export default function RecruitingView() {
         </span>
       </div>
 
-      <div className="two-col" style={{ marginTop: 18 }}>
-        <div className="panel">
-          <div className="panel-title">Your pipelines</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {rc.pipelines.map((p) => (
-              <span key={p.pipeline} className="chip" title={`Influence ${p.value}`}>
-                <b>{p.label}</b>&nbsp;
-                <span style={{ color: p.tier >= 4 ? 'var(--dev-elite)' : 'var(--ink-3)' }}>{p.level}</span>
-              </span>
-            ))}
-            {!rc.pipelines.length && <span style={{ color: 'var(--ink-3)' }}>No established pipelines.</span>}
-          </div>
-        </div>
-        <div className="panel">
-          <div className="panel-title">Program grades</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {rc.reportCard.map((g) => (
-              <span key={g.label} className="chip">
-                {g.label}&nbsp;<span className={`grade ${g.grade.startsWith('A') ? 'good' : ''}`}>{g.grade}</span>
-              </span>
-            ))}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-            {rc.proPotential.map((g) => (
-              <span key={g.label} className="chip" title={`Pro potential — ${g.label}`}>
-                <span className="k">{g.label}</span>&nbsp;
-                <span className={`grade ${g.grade.startsWith('A') ? 'good' : ''}`}>{g.grade}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
       <div className="filters" style={{ marginTop: 16 }}>
         <input
           className="search"
