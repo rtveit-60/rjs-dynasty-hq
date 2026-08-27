@@ -1,5 +1,6 @@
 import type {
   BowlAppearance,
+  CoachContract,
   DepthChartSlot,
   RosterPlayer,
   SeasonRecord,
@@ -79,7 +80,22 @@ const COACH_FIELDS = [
   'COACH_DEFTENDENCYAGGRESSCONSERV',
   'CareerStats',
   'OffensivePlaybook',
-  'DefensivePlaybook'
+  'DefensivePlaybook',
+  // AD mandate + job security. All sit at schema indices 116-126, inside the
+  // range the drift-padded Coach layout decodes correctly (see coach-schema.ts).
+  // SeasonStartJobSecurityStatus (index 134) is past that and reads undefined.
+  'ContractLength',
+  'ContractStatus',
+  'ContractYearsRemaining',
+  'ContractExpectationProgress',
+  'ContractYearSummaries',
+  'CurrentContractExpectation',
+  'CurrentJobSecurityPercentage',
+  'CurrentJobSecurityPercentageRank',
+  'CurrentJobSecurityStatus',
+  'EarnedContractPoints_ThisYear',
+  'EarnedContractPoints_LastYear',
+  'EarnedContractPoints_TwoYearsAgo'
 ];
 
 const STAFF_ROLE: Record<string, keyof Pick<StaffEntry, 'hc' | 'oc' | 'dc'>> = {
@@ -176,6 +192,77 @@ async function staffTendencies(
     });
   }
   return out;
+}
+
+/**
+ * The AD's standing mandate for the head coach plus the job security riding on
+ * it. The goal is an enum ladder (Win4Games…Win9Games, WinConfChamp,
+ * WinNY6Bowl); the save carries no prose for it, so the UI supplies wording.
+ * `Count_` is the engine's "unset" sentinel and is normalised to empty.
+ */
+async function extractCoachContract(
+  franchise: any,
+  staff: StaffEntry | undefined
+): Promise<CoachContract | null> {
+  if (!staff?.hc) return null;
+  try {
+    const coachTable = mainTable(franchise, 'Coach');
+    const rec = coachTable.records?.[staff.hc.row];
+    if (!rec || rec.isEmpty) return null;
+
+    const num = (k: string): number => {
+      const v = Number(val(rec, k));
+      return Number.isFinite(v) ? v : 0;
+    };
+    const str = (k: string): string => {
+      const v = String(val(rec, k) ?? '').trim();
+      return v === 'Count_' || v === 'Invalid' || v === 'undefined' ? '' : v;
+    };
+
+    const history: import('../../shared/types.ts').ContractYear[] = [];
+    const ref = refFromRecord(rec, 'ContractYearSummaries');
+    if (!isNullRef(ref)) {
+      const arrTable = await tableById(franchise, ref.tableId);
+      const arrRec = arrTable?.records?.[ref.row];
+      if (arrRec) {
+        for (const r of refsFromArrayRecord(arrRec)) {
+          const t = await tableById(franchise, r.tableId);
+          const y = t?.records?.[r.row];
+          if (!y) continue;
+          const year = Number(val(y, 'ContractYear'));
+          if (!Number.isFinite(year) || year < 1900) continue;
+          history.push({
+            year,
+            expectation: String(val(y, 'ExpectationLevelAchieved') ?? ''),
+            securityStatus: String(val(y, 'JobSecurityStatusAchieved') ?? ''),
+            securityPct: Number(val(y, 'JobSecurityPercentageAchieved') ?? 0)
+          });
+        }
+        history.sort((a, b) => a.year - b.year);
+      }
+    }
+
+    const expectation = str('CurrentContractExpectation');
+    if (!expectation && !history.length) return null;
+
+    return {
+      coachName: staff.hc.name,
+      expectation,
+      progress: str('ContractExpectationProgress'),
+      securityStatus: str('CurrentJobSecurityStatus'),
+      securityPct: num('CurrentJobSecurityPercentage'),
+      securityRank: num('CurrentJobSecurityPercentageRank'),
+      yearsRemaining: num('ContractYearsRemaining'),
+      contractLength: num('ContractLength'),
+      status: str('ContractStatus'),
+      pointsThisYear: num('EarnedContractPoints_ThisYear'),
+      pointsLastYear: num('EarnedContractPoints_LastYear'),
+      pointsTwoYearsAgo: num('EarnedContractPoints_TwoYearsAgo'),
+      history
+    };
+  } catch {
+    return null;
+  }
 }
 
 function teamFromRecord(rec: any, row: number): TeamInfo | null {
@@ -1147,6 +1234,7 @@ export async function extractSnapshot(
     const budget = extractBudget(teamRec, leagueSpendingPct(teamTable));
     const splits = await extractSplits(franchise, teamRec);
     const staff = await staffTendencies(franchise, staffByTeamIndex.get(ownTeamIndex));
+    const contract = await extractCoachContract(franchise, staffByTeamIndex.get(ownTeamIndex));
     const pursuitDeltas = await extractPursuitDeltas(franchise, teamTable, rowToTeamIndex);
     const boardResult = await extractBoard(
       franchise,
@@ -1185,7 +1273,8 @@ export async function extractSnapshot(
       staff,
       board: boardResult?.info ?? null,
       recruiting,
-      seasonHistory
+      seasonHistory,
+      contract
     };
   }
 

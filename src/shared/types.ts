@@ -118,6 +118,38 @@ export interface SeasonRecord {
   bowl: BowlAppearance | null;
 }
 
+/** One completed year of the head coach's current contract. */
+export interface ContractYear {
+  year: number;
+  /** Raw save enum, e.g. "Win9Games". */
+  expectation: string;
+  securityStatus: string;
+  securityPct: number;
+}
+
+/**
+ * The athletic director's standing mandate for the head coach, plus the job
+ * security that rides on it. Read from the Coach table's contract fields.
+ */
+export interface CoachContract {
+  coachName: string;
+  /** The AD's goal this season — raw save enum, e.g. "WinNY6Bowl". */
+  expectation: string;
+  /** Best result banked so far this season; empty until something is earned. */
+  progress: string;
+  securityStatus: string;
+  securityPct: number;
+  /** Job-security standing among all head coaches (1 = safest). */
+  securityRank: number;
+  yearsRemaining: number;
+  contractLength: number;
+  status: string;
+  pointsThisYear: number;
+  pointsLastYear: number;
+  pointsTwoYearsAgo: number;
+  history: ContractYear[];
+}
+
 export interface BudgetPillar {
   label: string;
   points: number;
@@ -293,6 +325,7 @@ export interface Snapshot {
     board: BoardInfo | null;
     recruiting: RecruitingData | null;
     seasonHistory: SeasonRecord[];
+    contract: CoachContract | null;
   } | null;
 }
 

@@ -1,5 +1,6 @@
 import type { BowlAppearance, SeasonRecord, SeasonState, Snapshot } from '../../../shared/types.ts';
 import BowlIcon, { BowlMarkGroup, CfpMarkGroup } from './BowlIcon.tsx';
+import ContractPanel from './ContractPanel.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -112,7 +113,7 @@ export default function ProgramDashboard({
 }) {
   const rc = school.recruiting;
   const seasons = school.seasonHistory ?? [];
-  if (!rc && !seasons.length) {
+  if (!rc && !seasons.length && !school.contract) {
     return <div className="empty">Reading your dynasty save…</div>;
   }
   const dynastyYear = season?.dynastyYear ?? 0;
@@ -154,7 +155,8 @@ export default function ProgramDashboard({
           </div>
         )}
       </div>
-      <div className="panel">
+      {school.contract && <ContractPanel contract={school.contract} />}
+      <div className="panel" style={{ gridColumn: '1 / -1' }}>
         <div className="panel-title">Your Pipelines</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {(rc?.pipelines ?? []).map((p) => (

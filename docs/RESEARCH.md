@@ -51,6 +51,15 @@ _Last updated: 2026-08-27 (kickoff + parse spike, both same day)_
 - **Coach↔Team join**: `Coach.TeamIndex` matches `Team.TeamIndex` (a field), NOT the Team table row. 255 = unemployed. `Position` enum: HeadCoach, OffensiveCoordinator, DefensiveCoordinator.
 - **User detection**: `FranchiseUser` (table 4349) is schema'd; its `UserEntity` ref points at the user's Coach row. Simpler still: `Coach.IsUserControlled`. Both verified.
 
+### AD goal / job security — CONFIRMED (readable for every head coach)
+
+- The athletic director's mandate is `Coach.CurrentContractExpectation`, an enum ladder: `Win4Games` → `Win9Games`, then `WinConfChamp`, then `WinNY6Bowl`. `Count_` is the unset sentinel. `ContractExpectationProgress` holds the best rung banked so far this season (mostly `Count_` early in the year — it only fills in as results land).
+- Job security: `CurrentJobSecurityStatus` (`Safe` / `SafeForNow` / `Low` / `HotSeat`, plus `Invalid` for placeholder rows), `CurrentJobSecurityPercentage` (0–100) and `CurrentJobSecurityPercentageRank` (national, 1 = safest). Readable league-wide — the 2034 sample has 6 coaches on the hot seat, good Dynasty Media material.
+- Contract: `ContractStatus`, `ContractLength`, `ContractYearsRemaining`, `ContractSalary` (units unverified — not surfaced), `EarnedContractPoints_ThisYear/_LastYear/_TwoYearsAgo`.
+- `ContractYearSummaries` → `ContractYearSummary[]` with `{ContractYear, ExpectationLevelAchieved, JobSecurityStatusAchieved, JobSecurityPercentageAchieved}` — per-year history, but only for the **current tenure** (changing schools starts a fresh list).
+- ⚠️ The goal **prose is not in the save**: `UserCoachSeasonalGoal`, `CoachGoal[]`, `Goal[]` and `ActiveMediaGoal[]` all exist with `Title`/`Description` fields but have zero live records, and `Coach.SeasonalGoal`/`WeeklyGoals` are null refs. The app supplies its own wording (`ContractPanel.tsx`).
+- ⚠️ Field-index limits: everything above sits at schema indices 116–126, inside the range the drift-padded Coach layout decodes correctly. `SeasonStartJobSecurityStatus` (index 134) reads `undefined` — past the point where the padded layout still lines up.
+
 ### School city/state — save stores no readable strings (worked around)
 
 `Team.City` and `Team.Stadium` are asset-style references (high bit set, ids beyond the in-save table range) that resolve into the game's FTC/common data files, not the save; the save's own asset table and the lib's interned-string lookups don't cover them, and a raw string-pool scan found no constant offset base. Workaround: `src/main/data/school-locations.ts` ships static city/state for all 138 real schools keyed by exact `LongName` (custom TeamBuilder schools show no location). Revisit only if FTC parsing lands for another feature.

@@ -52,6 +52,9 @@ console.log('distinct redshirt:', distinct((p) => p.redshirt));
 console.log('weight range:', Math.min(...roster.map((p) => p.weightLb)), '-', Math.max(...roster.map((p) => p.weightLb)));
 console.log('height range:', Math.min(...roster.map((p) => p.heightIn)), '-', Math.max(...roster.map((p) => p.heightIn)));
 
+console.log('\n== coach contract / AD goal ==');
+console.log(JSON.stringify(snap.school?.contract, null, 1));
+
 console.log('\n== season history ==');
 for (const s of snap.school?.seasonHistory ?? []) console.log(' ', JSON.stringify(s));
 
