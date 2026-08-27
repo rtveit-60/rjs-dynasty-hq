@@ -53,10 +53,34 @@ const FLAG_TOP: [number, number] = [POLE_X + POLE_W - 1, 58];
 const FLAG_BOTTOM: [number, number] = [POLE_X + POLE_W - 1, 138];
 const FLAG_TIP: [number, number] = [206, 98];
 
+// "RJ" monogram — varsity block glyphs on a 5×7 grid, painted inside the pennant
+const GLYPHS: Record<string, string[]> = {
+  R: ['XXXX.', 'X...X', 'X...X', 'XXXX.', 'X.X..', 'X..X.', 'X...X'],
+  J: ['XXXXX', '...X.', '...X.', '...X.', '...X.', 'X..X.', '.XX..']
+};
+const MONOGRAM: { ch: string; x: number }[] = [
+  { ch: 'R', x: 96 },
+  { ch: 'J', x: 122 }
+];
+const LETTER_W = 21;
+const LETTER_H = 30;
+const LETTER_Y = 83;
+
+function inMonogram(x: number, y: number): boolean {
+  for (const { ch, x: lx } of MONOGRAM) {
+    if (x < lx || x >= lx + LETTER_W || y < LETTER_Y || y >= LETTER_Y + LETTER_H) continue;
+    const col = Math.floor(((x - lx) / LETTER_W) * 5);
+    const row = Math.floor(((y - LETTER_Y) / LETTER_H) * 7);
+    if (GLYPHS[ch][row]?.[col] === 'X') return true;
+  }
+  return false;
+}
+
 function shade(x: number, y: number): number[] | null {
   // pennant with a paper stripe near the hoist and a darker lower fold
   if (inTri([x, y], FLAG_TOP, FLAG_TIP, FLAG_BOTTOM)) {
     if (x < FLAG_TOP[0] + 16) return STRIPE;
+    if (inMonogram(x, y)) return BG_TOP;
     // lower fold shading beneath the centerline toward the tip
     const t = (x - FLAG_TOP[0]) / (FLAG_TIP[0] - FLAG_TOP[0]);
     const midY = FLAG_TOP[1] + (FLAG_TIP[1] - FLAG_TOP[1]) * t;
