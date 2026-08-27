@@ -97,7 +97,7 @@ export interface BudgetInfo {
   rollover: number;
   overallGrade: string | null;
   pillars: BudgetPillar[];
-  spending: { label: string; points: number }[];
+  spending: { label: string; points: number; leaguePct: number | null }[];
   staffWeekly: { hc: number; oc: number; dc: number };
 }
 

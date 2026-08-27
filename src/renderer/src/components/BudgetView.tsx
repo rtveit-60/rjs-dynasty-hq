@@ -60,16 +60,26 @@ export default function BudgetView({ school }: { school: School }) {
         </div>
         <div className="panel">
           <div className="panel-title">Where it goes</div>
-          {b.spending.map((s) => (
-            <div key={s.label} className="bar-row">
-              <span>{s.label}</span>
-              <span className="track">
-                <span className="fill" style={{ width: `${(s.points / maxSpend) * 100}%` }} />
-              </span>
-              <span />
-              <span className="pts">{fmt(s.points)}</span>
-            </div>
-          ))}
+          {b.spending.map((s) => {
+            const pct = Math.round((s.points / Math.max(b.total, 1)) * 100);
+            return (
+              <div key={s.label} className="bar-row">
+                <span>{s.label}</span>
+                <span className="track">
+                  <span className="fill" style={{ width: `${(s.points / maxSpend) * 100}%` }} />
+                </span>
+                <span className="pct-pair">
+                  <b>{pct}%</b>
+                  {s.leaguePct !== null && <span className="lg">lg avg {s.leaguePct}%</span>}
+                </span>
+                <span className="pts">{fmt(s.points)}</span>
+              </div>
+            );
+          })}
+          <p className="foot-note" style={{ marginTop: 8 }}>
+            Percentages are shares of your total budget; "lg avg" is what the other 137 programs
+            spend on the same line, as a benchmark.
+          </p>
           <div className="section-h" style={{ margin: '14px 0 6px' }}>
             <h3>Weekly staff points</h3>
             <div className="rule" />

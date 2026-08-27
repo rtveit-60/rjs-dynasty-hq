@@ -278,7 +278,37 @@ function playerFromRecord(rec: any, row: number): RosterPlayer {
   };
 }
 
-function extractBudget(teamRec: any): import('../../shared/types.ts').BudgetInfo | null {
+const SPEND_FIELDS: [string, string][] = [
+  ['NIL', 'NILProgramPointsSpent'],
+  ['Support Staff', 'StaffProgramPointsSpent'],
+  ['Recruiting', 'RecruitProgramPointsSpent'],
+  ['Facilities', 'FacilitiesProgramPointsSpent']
+];
+
+/** League-wide spending share per category: sum of category spend over sum of budgets. */
+function leagueSpendingPct(teamTable: any): Map<string, number> {
+  const out = new Map<string, number>();
+  let budgets = 0;
+  const sums = new Map<string, number>(SPEND_FIELDS.map(([label]) => [label, 0]));
+  for (const rec of teamTable.records) {
+    if (rec.isEmpty) continue;
+    const budget = Number(val(rec, 'ProgramPointBudget') ?? 0);
+    if (!budget) continue;
+    budgets += budget;
+    for (const [label, field] of SPEND_FIELDS) {
+      sums.set(label, (sums.get(label) ?? 0) + Number(val(rec, field) ?? 0));
+    }
+  }
+  if (budgets > 0) {
+    for (const [label, sum] of sums) out.set(label, Math.round((sum / budgets) * 100));
+  }
+  return out;
+}
+
+function extractBudget(
+  teamRec: any,
+  leaguePct: Map<string, number>
+): import('../../shared/types.ts').BudgetInfo | null {
   const n = (k: string) => Number(val(teamRec, k) ?? 0);
   const g = (k: string) => {
     const v = String(val(teamRec, k) ?? '');
@@ -299,12 +329,11 @@ function extractBudget(teamRec: any): import('../../shared/types.ts').BudgetInfo
       { label: 'Contract Goals', points: n('CoachContractGoalsProgramPoints'), grade: null },
       { label: 'Rollover', points: n('RolloverProgramPoints'), grade: null }
     ].filter((p) => p.points > 0),
-    spending: [
-      { label: 'NIL', points: n('NILProgramPointsSpent') },
-      { label: 'Support Staff', points: n('StaffProgramPointsSpent') },
-      { label: 'Recruiting', points: n('RecruitProgramPointsSpent') },
-      { label: 'Facilities', points: n('FacilitiesProgramPointsSpent') }
-    ].filter((s) => s.points > 0),
+    spending: SPEND_FIELDS.map(([label, field]) => ({
+      label,
+      points: n(field),
+      leaguePct: leaguePct.get(label) ?? null
+    })).filter((s) => s.points > 0),
     staffWeekly: {
       hc: n('HeadCoachProgramPointBudget'),
       oc: n('OffensiveCoordinatorPointBudget'),
@@ -963,7 +992,7 @@ export async function extractSnapshot(
     }
 
     const ownTeamIndex = rowToTeamIndex.get(teamRow) ?? teamRow;
-    const budget = extractBudget(teamRec);
+    const budget = extractBudget(teamRec, leagueSpendingPct(teamTable));
     const splits = await extractSplits(franchise, teamRec);
     const staff = await staffTendencies(franchise, staffByTeamIndex.get(ownTeamIndex));
     const pursuitDeltas = await extractPursuitDeltas(franchise, teamTable, rowToTeamIndex);
