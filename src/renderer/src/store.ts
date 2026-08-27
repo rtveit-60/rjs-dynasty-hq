@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type {
-  BrandPack,
   DetectedSave,
   MediaEvent,
   Settings,
@@ -29,9 +28,7 @@ interface HQStore {
   refreshDetected: () => Promise<void>;
   setSchool: (row: number | null) => Promise<void>;
   setTheme: (theme: ThemeMode) => Promise<void>;
-  setBrandPack: (pack: BrandPack) => Promise<void>;
   setAutoUpdate: (enabled: boolean) => Promise<void>;
-  applySettings: (settings: Settings) => void;
 }
 
 let initialized = false;
@@ -86,17 +83,10 @@ export const useHQ = create<HQStore>((set, get) => ({
     set({ settings });
   },
 
-  setBrandPack: async (pack) => {
-    const settings = await window.hq.setBrandPack(pack);
-    set({ settings });
-  },
-
   setAutoUpdate: async (enabled) => {
     const settings = await window.hq.setAutoUpdate(enabled);
     set({ settings });
-  },
-
-  applySettings: (settings) => set({ settings })
+  }
 }));
 
 export function useEffectiveTheme(): 'light' | 'dark' {

@@ -25,14 +25,6 @@ export interface HQBridge {
   useSave: (path: string) => Promise<Settings>;
   setSchool: (row: number | null) => Promise<Settings>;
   setTheme: (theme: ThemeMode) => Promise<Settings>;
-  setBrandPack: (pack: BrandPack) => Promise<Settings>;
-  pickPortraits: () => Promise<{ settings: Settings; count: number }>;
-  clearPortraits: () => Promise<{ settings: Settings; count: number }>;
-  countPortraits: () => Promise<number>;
-  importLogos: () => Promise<{ matched: number; total: number; misses: string[]; cached: number }>;
-  logoStatus: () => Promise<{ cached: number; dir: string | null }>;
-  pickLogosDir: () => Promise<Settings>;
-  clearLogosDir: () => Promise<Settings>;
   setAutoUpdate: (enabled: boolean) => Promise<Settings>;
   installUpdate: () => Promise<void>;
   onUpdateReady: (cb: (version: string) => void) => () => void;
@@ -50,14 +42,6 @@ const bridge: HQBridge = {
   useSave: (path) => ipcRenderer.invoke('save:use', path),
   setSchool: (row) => ipcRenderer.invoke('school:set', row),
   setTheme: (theme) => ipcRenderer.invoke('theme:set', theme),
-  setBrandPack: (pack) => ipcRenderer.invoke('brand:set', pack),
-  pickPortraits: () => ipcRenderer.invoke('portraits:pick'),
-  clearPortraits: () => ipcRenderer.invoke('portraits:clear'),
-  countPortraits: () => ipcRenderer.invoke('portraits:count'),
-  importLogos: () => ipcRenderer.invoke('logos:import'),
-  logoStatus: () => ipcRenderer.invoke('logos:status'),
-  pickLogosDir: () => ipcRenderer.invoke('logos:pickDir'),
-  clearLogosDir: () => ipcRenderer.invoke('logos:clearDir'),
   setAutoUpdate: (enabled) => ipcRenderer.invoke('autoupdate:set', enabled),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateReady: subscribe<string>('update:ready'),

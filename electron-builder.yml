@@ -8,6 +8,9 @@ directories:
   output: release
 files:
   - out/**
+extraResources:
+  - from: resources/logos
+    to: logos
 win:
   target:
     - nsis
