@@ -67,6 +67,7 @@ export interface RosterPlayer {
   weightLb: number;
   speed: number;
   devTrait: string;
+  archetype: string;
   homeState: string;
   portraitId: number;
 }

@@ -42,6 +42,12 @@ export function yearAbbrev(schoolYear: string, redshirt: string): string {
   return yr + rs;
 }
 
+/** "WR_ShiftyRouteRunner" → "Shifty Route Runner" */
+export function archetypeLabel(raw: string): string {
+  if (!raw) return '—';
+  return spaceOut(raw.replace(/^[A-Z]+_/, ''));
+}
+
 export function devLabel(raw: string): string {
   const t = raw.replace(/^College_/, '');
   return t === 'Normal' ? 'Normal' : t;

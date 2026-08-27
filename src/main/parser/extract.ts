@@ -36,7 +36,8 @@ const PLAYER_FIELDS = [
   'TeamIndex',
   'ProspectStarRating',
   'PLYR_PORTRAIT',
-  'HomePipeline'
+  'HomePipeline',
+  'PlayerType'
 ];
 
 function rgbHex(r: unknown, g: unknown, b: unknown): string | null {
@@ -269,6 +270,7 @@ function playerFromRecord(rec: any, row: number): RosterPlayer {
     weightLb: rawWeight + 160,
     speed: Number(val(rec, 'SpeedRating') ?? 0),
     devTrait: String(val(rec, 'TraitDevelopment') ?? ''),
+    archetype: String(val(rec, 'PlayerType') ?? ''),
     homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
     portraitId: Number(val(rec, 'PLYR_PORTRAIT') ?? 0)
   };

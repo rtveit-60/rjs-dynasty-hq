@@ -3,6 +3,7 @@ import type { RosterPlayer } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
 import {
   POSITION_GROUPS,
+  archetypeLabel,
   devClass,
   devLabel,
   heightFt,
@@ -13,12 +14,13 @@ import {
 
 type SortKey =
   | 'overall'
-  | 'name'
+  | 'first'
+  | 'last'
   | 'position'
   | 'year'
-  | 'speed'
   | 'jersey'
   | 'dev'
+  | 'archetype'
   | 'height'
   | 'weight'
   | 'home';
@@ -51,16 +53,18 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
     const dir = asc ? 1 : -1;
     list.sort((a, b) => {
       switch (sortKey) {
-        case 'name':
-          return dir * `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`);
+        case 'first':
+          return dir * a.firstName.localeCompare(b.firstName) || a.lastName.localeCompare(b.lastName);
+        case 'last':
+          return dir * a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
         case 'position':
           return dir * a.position.localeCompare(b.position) || b.overall - a.overall;
         case 'year':
           return dir * ((YEAR_ORDER[a.schoolYear] ?? 9) - (YEAR_ORDER[b.schoolYear] ?? 9)) || b.overall - a.overall;
-        case 'speed':
-          return dir * (a.speed - b.speed);
         case 'jersey':
           return dir * (a.jersey - b.jersey);
+        case 'archetype':
+          return dir * archetypeLabel(a.archetype).localeCompare(archetypeLabel(b.archetype)) || b.overall - a.overall;
         case 'dev':
           return dir * ((DEV_ORDER[a.devTrait] ?? 0) - (DEV_ORDER[b.devTrait] ?? 0)) || b.overall - a.overall;
         case 'height':
@@ -110,14 +114,15 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
           <thead>
             <tr>
               {th('#', 'jersey', { defaultAsc: true })}
-              {th('Player', 'name', { defaultAsc: true })}
+              {th('First', 'first', { defaultAsc: true })}
+              {th('Last', 'last', { defaultAsc: true })}
               {th('Pos', 'position', { defaultAsc: true })}
               {th('Yr', 'year', { defaultAsc: true })}
               {th('OVR', 'overall')}
               {th('Dev', 'dev')}
+              {th('Archetype', 'archetype', { defaultAsc: true })}
               {th('Ht', 'height', { num: true })}
               {th('Wt', 'weight', { num: true })}
-              {th('Spd', 'speed', { num: true })}
               {th('Home', 'home', { defaultAsc: true })}
             </tr>
           </thead>
@@ -125,10 +130,11 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
             {filtered.map((p) => (
               <tr key={p.row}>
                 <td className="jersey">{p.jersey}</td>
-                <td className="pname" title={`Portrait #${p.portraitId}`}>
+                <td title={`Portrait #${p.portraitId}`}>
                   {portraitsOn && <Portrait id={p.portraitId} />}
-                  {p.firstName} {p.lastName}
+                  {p.firstName}
                 </td>
+                <td className="pname">{p.lastName}</td>
                 <td>
                   <span className="pos-tag">{p.position}</span>
                 </td>
@@ -142,9 +148,9 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
                 <td>
                   <span className={devClass(p.devTrait)}>{devLabel(p.devTrait)}</span>
                 </td>
+                <td style={{ color: 'var(--ink-2)' }}>{archetypeLabel(p.archetype)}</td>
                 <td className="num">{heightFt(p.heightIn)}</td>
                 <td className="num">{p.weightLb}</td>
-                <td className="num">{p.speed}</td>
                 <td style={{ color: 'var(--ink-2)' }}>{spaceOut(p.homeState)}</td>
               </tr>
             ))}
