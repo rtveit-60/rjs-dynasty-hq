@@ -68,7 +68,8 @@ const COACH_FIELDS = [
   'COACH_OFFTENDENCYRUNPASS',
   'COACH_DEFTENDENCYRUNPASS',
   'COACH_OFFTENDENCYAGGRESSCONSERV',
-  'COACH_DEFTENDENCYAGGRESSCONSERV'
+  'COACH_DEFTENDENCYAGGRESSCONSERV',
+  'CareerStats'
 ];
 
 const STAFF_ROLE: Record<string, keyof Pick<StaffEntry, 'hc' | 'oc' | 'dc'>> = {
@@ -103,7 +104,10 @@ async function extractStaff(franchise: any): Promise<Map<number, StaffEntry>> {
   return map;
 }
 
-function staffTendencies(franchise: any, staff: StaffEntry | undefined): import('../../shared/types.ts').StaffTendency[] {
+async function staffTendencies(
+  franchise: any,
+  staff: StaffEntry | undefined
+): Promise<import('../../shared/types.ts').StaffTendency[]> {
   if (!staff) return [];
   let coachTable: any;
   try {
@@ -125,10 +129,29 @@ function staffTendencies(franchise: any, staff: StaffEntry | undefined): import(
     if (!member) continue;
     const rec = coachTable.records?.[member.row];
     if (!rec || rec.isEmpty) continue;
+
+    let careerWins: number | null = null;
+    let careerLosses: number | null = null;
+    try {
+      const careerRef = refFromRecord(rec, 'CareerStats');
+      if (!isNullRef(careerRef)) {
+        const careerTable = await tableById(franchise, careerRef.tableId);
+        const careerRec = careerTable?.records?.[careerRef.row];
+        if (careerRec) {
+          careerWins = num(careerRec, 'Wins');
+          careerLosses = num(careerRec, 'Losses');
+        }
+      }
+    } catch {
+      // career record is decoration; leave nulls
+    }
+
     out.push({
       role,
       name: member.name,
       prestige: String(val(rec, 'CoachPrestige') ?? '') || null,
+      careerWins,
+      careerLosses,
       offRunPass: num(rec, 'COACH_OFFTENDENCYRUNPASS'),
       defRunPass: num(rec, 'COACH_DEFTENDENCYRUNPASS'),
       offAggression: num(rec, 'COACH_OFFTENDENCYAGGRESSCONSERV'),
@@ -159,11 +182,14 @@ function teamFromRecord(rec: any, row: number): TeamInfo | null {
     colors: { primary, secondary },
     offScheme: String(val(rec, 'CurrentOffensiveScheme') ?? ''),
     defScheme: String(val(rec, 'CurrentDefensiveScheme') ?? ''),
+    offPlaybook: String(val(rec, 'DefaultOffensiveScheme') ?? ''),
+    defPlaybook: String(val(rec, 'DefaultDefensiveScheme') ?? ''),
     headCoach: null,
     offCoordinator: null,
     defCoordinator: null,
     city: SCHOOL_LOCATIONS[longName || displayName]?.[0] ?? null,
     state: SCHOOL_LOCATIONS[longName || displayName]?.[1] ?? null,
+    founded: SCHOOL_LOCATIONS[longName || displayName]?.[2] ?? null,
     isUserTeam: false,
     rank: Number(val(rec, 'MediaPoll_CurrentRank') ?? 0),
     lastWeekRank: Number(val(rec, 'MediaPoll_LastWeeksRank') ?? 0)
@@ -866,7 +892,7 @@ export async function extractSnapshot(
     const ownTeamIndex = rowToTeamIndex.get(teamRow) ?? teamRow;
     const budget = extractBudget(teamRec);
     const splits = await extractSplits(franchise, teamRec);
-    const staff = staffTendencies(franchise, staffByTeamIndex.get(ownTeamIndex));
+    const staff = await staffTendencies(franchise, staffByTeamIndex.get(ownTeamIndex));
     const boardResult = await extractBoard(franchise, teamRec, playerTable, teamIndexToName, ownTeamIndex);
     const schoolAssets = await extractSchoolAssets(franchise, teamTable, rowToTeamIndex);
     const recruiting = await extractRecruiting(

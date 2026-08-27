@@ -320,6 +320,133 @@ body {
   max-width: 1240px;
 }
 
+/* ——— Team HQ title card ——— */
+
+.hq-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.hq-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.hq-meta span + span::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--line);
+}
+
+.accent-bar {
+  position: relative;
+  display: flex;
+  height: 7px;
+  margin: 16px 0 16px;
+  border-radius: 2px;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+}
+
+.accent-bar .half {
+  flex: 1;
+}
+
+.accent-bar .divider {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 12px;
+  background: #c9c7c2;
+  transform: translateX(-50%) skewX(-24deg);
+}
+
+.staff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.staff-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 11px 14px;
+}
+
+.staff-role {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.staff-topline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 3px 0 7px;
+}
+
+.staff-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+
+.staff-rec {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.staff-line {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  padding: 3px 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.staff-line .k {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  width: 26px;
+  flex: none;
+}
+
+.staff-line b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.staff-line .book {
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .page-kicker {
   display: flex;
   align-items: center;

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { StaffTendency } from '../../../shared/types.ts';
 import { schemeLabel } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 import BudgetView from './BudgetView.tsx';
@@ -33,48 +34,43 @@ export default function TeamHQ() {
     );
   }
 
-  const { team, roster } = school;
+  const { team, roster, staff } = school;
+  const hc = staff.find((s) => s.role === 'HC');
+  const oc = staff.find((s) => s.role === 'OC');
+  const dc = staff.find((s) => s.role === 'DC');
+  const offLine = { k: 'OFF', scheme: schemeLabel(team.offScheme), playbook: schemeLabel(team.offPlaybook) };
+  const defLine = { k: 'DEF', scheme: schemeLabel(team.defScheme), playbook: schemeLabel(team.defPlaybook) };
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <TeamLogo row={team.row} size={64} fallback={null} />
+      <div className="hq-head">
+        <TeamLogo row={team.row} size={72} fallback={null} />
         <div>
-          {team.city && (
-            <div className="page-kicker">
-              {team.city}, {team.state}
-            </div>
-          )}
           <h1 className="page-title">
             {team.longName} <span className="nick">{team.nickName}</span>
           </h1>
+          <div className="hq-meta">
+            {team.city && (
+              <span>
+                {team.city}, {team.state}
+              </span>
+            )}
+            {team.founded && <span>Est. {team.founded}</span>}
+            <span>Roster {roster.length}</span>
+          </div>
         </div>
       </div>
-      <div className="page-sub">
-        {team.headCoach && (
-          <span className="chip">
-            <span className="k">HC</span> <b>{team.headCoach}</b>
-          </span>
-        )}
-        {team.offCoordinator && (
-          <span className="chip">
-            <span className="k">OC</span> <b>{team.offCoordinator}</b>
-          </span>
-        )}
-        {team.defCoordinator && (
-          <span className="chip">
-            <span className="k">DC</span> <b>{team.defCoordinator}</b>
-          </span>
-        )}
-        <span className="chip">
-          <span className="k">OFF</span> <b>{schemeLabel(team.offScheme)}</b>
-        </span>
-        <span className="chip">
-          <span className="k">DEF</span> <b>{schemeLabel(team.defScheme)}</b>
-        </span>
-        <span className="chip">
-          <span className="k">ROSTER</span> <b>{roster.length}</b>
-        </span>
+
+      <div className="accent-bar">
+        <span className="half" style={{ background: team.colors.primary }} />
+        <span className="half" style={{ background: team.colors.secondary ?? team.colors.primary }} />
+        <span className="divider" />
+      </div>
+
+      <div className="staff-grid">
+        {hc && <StaffHeadCard role="Head Coach" staff={hc} lines={[offLine, defLine]} />}
+        {oc && <StaffHeadCard role="Offensive Coordinator" staff={oc} lines={[offLine]} />}
+        {dc && <StaffHeadCard role="Defensive Coordinator" staff={dc} lines={[defLine]} />}
       </div>
 
       <div className="tabs">
@@ -95,6 +91,38 @@ export default function TeamHQ() {
       {tab === 'budget' && <BudgetView school={school} />}
       {tab === 'tendencies' && <TendenciesView school={school} />}
       {tab === 'playbook' && <PlaybookView school={school} />}
+    </div>
+  );
+}
+
+function StaffHeadCard({
+  role,
+  staff,
+  lines
+}: {
+  role: string;
+  staff: StaffTendency;
+  lines: { k: string; scheme: string; playbook: string }[];
+}) {
+  const hasRecord = staff.careerWins !== null && staff.careerLosses !== null;
+  return (
+    <div className="staff-card">
+      <div className="staff-role">{role}</div>
+      <div className="staff-topline">
+        <span className="staff-name">{staff.name}</span>
+        {hasRecord && (
+          <span className="staff-rec" title="Career record">
+            {staff.careerWins}–{staff.careerLosses}
+          </span>
+        )}
+      </div>
+      {lines.map((line) => (
+        <div key={line.k} className="staff-line">
+          <span className="k">{line.k}</span>
+          <b>{line.scheme}</b>
+          <span className="book">· {line.playbook} playbook</span>
+        </div>
+      ))}
     </div>
   );
 }

@@ -32,6 +32,9 @@ export interface TeamInfo {
   defCoordinator: string | null;
   city: string | null;
   state: string | null;
+  founded: number | null;
+  offPlaybook: string;
+  defPlaybook: string;
   isUserTeam: boolean;
   rank: number;
   lastWeekRank: number;
@@ -123,6 +126,8 @@ export interface StaffTendency {
   role: 'HC' | 'OC' | 'DC';
   name: string;
   prestige: string | null;
+  careerWins: number | null;
+  careerLosses: number | null;
   offRunPass: number | null;
   defRunPass: number | null;
   offAggression: number | null;
