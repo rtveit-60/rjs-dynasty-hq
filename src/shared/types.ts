@@ -86,6 +86,18 @@ export interface SeasonState {
   stage: string;
 }
 
+/**
+ * The bowl a team played in a given season. Only readable once the save has
+ * reached bowl season — before then the bowl slots carry no teams.
+ */
+export interface BowlAppearance {
+  name: string;
+  won: boolean;
+  playoff: boolean;
+  primary: string;
+  secondary: string;
+}
+
 /** One season's bottom line, from the save's rolling five-season stat window. */
 export interface SeasonRecord {
   year: number;
@@ -97,6 +109,7 @@ export interface SeasonRecord {
   bowlWon: boolean;
   /** Season still being played — the record is a running total, not final. */
   inProgress: boolean;
+  bowl: BowlAppearance | null;
 }
 
 export interface BudgetPillar {
@@ -275,6 +288,45 @@ export interface Snapshot {
     recruiting: RecruitingData | null;
     seasonHistory: SeasonRecord[];
   } | null;
+}
+
+// --- Playbooks (extracted offline from game assets into resources/playbooks/<enum>.json) ---
+
+export interface PlaybookPlayer {
+  x: number; // yards, +x = offense's right
+  y: number; // yards downfield, LOS = 0
+  posId?: number;
+  posType?: number;
+  side?: number;
+}
+
+export interface PlaybookRoute {
+  points: { x: number; y: number }[]; // absolute yard polyline, [0] = player's alignment
+}
+
+export interface PlaybookPlay {
+  name: string;
+  id: number;
+  routes: PlaybookRoute[];
+}
+
+export interface PlaybookFormation {
+  family: string; // e.g. "Shotgun"
+  name: string; // e.g. "Spread Y-Flex"
+  personnel: string[]; // substitution package names
+  alignment: PlaybookPlayer[]; // base ("Normal") alignment, ~11 players
+  motions: string[]; // alignment-variant names
+  plays: PlaybookPlay[];
+}
+
+export interface PlaybookBook {
+  enum: string; // save scheme enum, e.g. "OFF_AIR_RAID"
+  slug: string;
+  side: 'offense' | 'defense';
+  name: string; // display name, e.g. "Air Raid"
+  formationCount: number;
+  playCount: number;
+  formations: PlaybookFormation[];
 }
 
 export type WatchStatus =

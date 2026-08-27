@@ -58,7 +58,8 @@ _Last updated: 2026-08-27 (kickoff + parse spike, both same day)_
 ### Team HQ tabs — data map (all verified 2026-08-27)
 
 - **Budget/NIL** — everything on the Team record: `ProgramPointBudget` (total), `RemainingProgramPoints`, `RolloverProgramPoints`; income pillars `BrandExposureProgramPoints`, `ProgramTraditionsProgramPoints`, `StadiumAtmosphereProgramPoints`, `ConferencePrestigeProgramPoints`, `CoachContractGoalsProgramPoints` (pillars + rollover sum exactly to the total); spends `NILProgramPointsSpent`, `StaffProgramPointsSpent`, `RecruitProgramPointsSpent`, `FacilitiesProgramPointsSpent`; grades `ProgramPoints*Grade` ("Aplus" → A+); weekly staff points `HeadCoachProgramPointBudget` / `OffensiveCoordinatorPointBudget` / `DefensiveCoordinatorPointBudget`.
-- **Season splits** — `Team.TeamGameStatsRegSeason` → TeamStats[] with one `TeamStats` row per played game (sum for current season); `Team.TeamSeasonStats` → a rolling **five-season** window of season totals, ordered **newest-first**: index 0 is the season underway (final once `SeasonInfo.CurrentStage` = `OffSeason`), index i is `CurrentSeasonYear − i`; older seasons are overwritten (ring buffer, block = dynasty year mod 5 in the 5×136-row TeamStats pool). Verified across two snapshots three seasons apart. Rows also carry season achievements: `CONFCHAMPSMADE/WON`, `NATCHAMPSMADE/WON`, `CFPSMADE/WON`, `BOWLSMADE/WON`, `NY6BOWLSMADE/WON`. The app banks seasons per school in `userData/history` so the Program Dashboard graph can outlive the five-season window. `Team.TeamHistory`/`TeamHistoricalData`/`HistoryEntries` are null or empty — no longer history in the save. `TeamStats` covers attempts/yards both ways, 3rd/4th downs, red zone, sacks, takeaways/giveaways. `Team.TeamTendencyStats` is a **null ref** — per-play man/zone/blitz data is not stored; coach sliders are the honest proxy.
+- **Season splits** — `Team.TeamGameStatsRegSeason` → TeamStats[] with one `TeamStats` row per played game (sum for current season); `Team.TeamSeasonStats` → a rolling **five-season** window of season totals, ordered **newest-first**: index 0 is the season underway (final once `SeasonInfo.CurrentStage` = `OffSeason`), index i is `CurrentSeasonYear − i`; older seasons are overwritten (ring buffer, block = dynasty year mod 5 in the 5×136-row TeamStats pool). Verified across two snapshots three seasons apart. Rows also carry season achievements: `CONFCHAMPSMADE/WON`, `NATCHAMPSMADE/WON`, `CFPSMADE/WON`, `BOWLSMADE/WON`, `NY6BOWLSMADE/WON`. The app banks seasons per school in `userData/history` so the Program Dashboard graph can outlive the five-season window. `Team.TeamHistory`/`TeamHistoricalData`/`HistoryEntries` are null or empty (the 38,400-row `HistoryEntry` pool has zero live records) — no longer history in the save.
+- **Bowls** — `BowlGame` (45 rows) is the bowl directory: `Name`, `AssetName`, `IsPlayoffBowl`, `BowlLogoId`, `PresentationId`, `Trophy`/`Stadium` refs (FTC-side), conference tie-ins, and official `BOWL_PRIMARY/SECONDARY/TERTIARY_COLOR_R/G/B`. Rows 7–17 are the bracket slots (CFP First Round ×4, Quarterfinal ×4, Semifinal ×2, National Championship); `PlayoffBowlsInfo` (6 rows) holds the NY6 hosts (Cotton, Fiesta, Orange, Peach, Rose, Sugar). **Which** bowl a team played comes from `SeasonGame` rows carrying a `BowlGame` ref — but only for the current dynasty year, and only once bowl season assigns teams (mid-season the slots read `GameStatus: Unscheduled` with null team refs and stale scores). Past seasons are unrecoverable, so the app banks each season's bowl alongside its record. Take the deepest `SeasonWeekType` (BowlSeason1 → 2 → 3 → NationalChampionship) when a team plays several playoff rounds. Bowl **logo art** is FTC-locked like playbook art — `BowlLogoId` is the join key if Frostbite extraction ever lands. `TeamStats` covers attempts/yards both ways, 3rd/4th downs, red zone, sacks, takeaways/giveaways. `Team.TeamTendencyStats` is a **null ref** — per-play man/zone/blitz data is not stored; coach sliders are the honest proxy.
 - **Coach sliders** — `COACH_OFFTENDENCYRUNPASS` (higher = run: Air Force option HC reads 63), `COACH_OFF/DEFTENDENCYAGGRESSCONSERV` (higher = aggressive: conservative AF HC reads 38), `COACH_DEFTENDENCYRUNPASS` usually 0/unused. Coordinators carry their own sliders.
 - **Recruiting board** — `Team.RecruitingBoard` → `RecruitingBoard` row (`RecruitingHoursTotal/Assigned`) → `Recruits` ref → RecruitTarget[] array (indexed by TeamIndex) → rows in `UserRecruitTarget` (user school, has `IsFavorite`) or `RecruitTarget` (CPU schools) → `Recruit` ref → `Recruit` row (`QualityModifier` is a literal **GEM/BUST/NORMAL** field; `RecruitStage`: Top10/Top5/Top3/Battle/SoftCommitted/HardCommitted; ranks, offers) → `Player` ref for name/`ProspectStarRating` (FIVE_STAR… enum)/position/home state. `Recruit.TopSchoolsList` → ProspectTargetSchool[] → `{TeamId, TeamInfluence}` = pursuing schools (TeamId is TeamIndex space; committed recruits cap influence at 1000).
 
@@ -88,6 +89,78 @@ _Last updated: 2026-08-27 (kickoff + parse spike, both same day)_
 3. **Gem/bust** — no literal field found yet on `Player`; likely derived from scouting state (`UnlockedIntelBitfield` + true rating vs `ProspectStarRating`) or in `RecruitSummaryEntry`/`RecruitScoreEval`. Verify against in-game UI.
 4. **Tendencies** — pass/run % is computable from season stat splits (`SeasonOffensiveStats` etc.). Man/zone % and blitz rate have no confirmed field yet; scheme identity is confirmed and is the fallback. Investigate `Coach` (schema'd instance) and gameplan tables.
 5. **Coach data** — first instance schema-less; the real coach records (names, schemes, contracts) need the correct instance or related staff tables.
+
+## Game asset containers — Playbooks (SOLVED 2026-08-27)
+
+Playbook contents are **not** in the save (confirmed earlier), but they extract cleanly from the game
+install's Frostbite archives, fully offline. Full read path implemented in `scripts/fb/frostbite.ts`
+(dev/build-time tooling) and productionized for runtime under `src/main/playbooks/`.
+
+### Container format (this title = Manifest2019 Frostbite, FB version ~2021)
+
+- `Data/layout.toc` — legacy Frostbite **DbObject** (varint-LEB128 typed tree). Signature header is the
+  standard `00 D1 CE 01` + 0x22C bytes; **payload is plain** (no XOR/obfuscation on this branch — the
+  BlockStream deobfuscator returns the raw payload for version byte 0x01). Carries `superBundles[]`
+  (44 of them) and `installManifest.installChunks[]` (persistentIndex → cas directory).
+- Superbundle `.toc` (e.g. `Data/Win32/playbooks.toc`, 500 bundles) — Manifest2019 layout: header of
+  big-endian u32 offsets/counts, then a **huffman-coded bundle-name** table (flag bit `0x4`), a bundle
+  record list, and an optional chunk list. Ported from Frosty 2.0 `Manifest2019AssetLoader.cs`.
+- Bundle records: loadFlag 1 = record inline in the `.toc`. Bundle **meta** (asset name lists) is either
+  inline or stored raw in a cas file (first location entry points at it) — playbook gamesheet bundles use
+  the cas-stored-meta path. Meta = the standard `BinaryBundle` (salt "pecn", magic `0xED1CEDB8`).
+- CAS file identifiers: location flags `0x01` (u32) and `0x80` (u32 pair) per Frosty, **plus `0x84`**
+  (u64 identifier: isPatch bit 48, installChunkIndex = uint32 persistentIndex in bits 16-47, casIndex in
+  bits 0-15) — new to this title; Frosty master doesn't emit it. Install-chunk persistentIndex keys are
+  hash-valued uint32s, so `layout.toc` keys and location indices are normalized with `>>> 0`.
+- CAS block stream: `u64 BE` header = flags(8) | decompressedSize(24) | compressionType(8) | `0x7`(4) |
+  bufferSize(20). Compression types seen: **Oodle Kraken (`0x11`)** for real payloads. Decompressed via
+  the game's own `oo2core_9_win64.dll` at the install root, called through the **koffi** FFI package
+  (`OodleLZ_Decompress`, fuzzSafe=1, threadPhase=3). zlib(`0x02`)/zstd(`0x0f`)/none(`0x00`) also handled.
+- **Type descriptors are locked**: EBX field layouts live in `SharedTypeDescriptors.ebx` inside
+  `initfs_Win32`, which is **AES-encrypted** (title-specific InitFsKey; no plaintext). So generic RIFF-EBX
+  field decoding is not available offline. Fortunately it isn't needed (below).
+
+### Playbook data — the master gamesheet is self-describing protobuf (the win)
+
+Each playbook lives in `Win32/playbooks.toc` bundle `.../gamesheets/college_<slug>_offense|defense_playbooks_brt`.
+That bundle holds three EBX assets; the big one, `.../gamesheets/college_<slug>_<side>` (300–760 KB), embeds
+the entire book as a **base64 CString → protobuf** blob (no type info required — protobuf is self-describing).
+Decoder + model in `scripts/fb/playbook.ts` / `src/main/playbooks/`. Schema (field numbers verified against
+Air Raid offense + Multiple defense, both offense & defense identical):
+
+- root `1` → repeated: `1` = formation-family header `{1:name "Shotgun"/"4-3", 2:id, 3:type}`, and `2` =
+  formation-with-plays `{ 1: Formation, 2..: Play[] }`.
+- **Formation** `{1:name "Split Y-Flex", 2:id, 3/4:flags, 12: personnel package[], 13: alignment[]}`.
+  - field `12` = personnel packages `{1:name "WR Swap"/"Dual TE"/…, 3: per-slot substitution refs}`.
+  - field `13` = **alignment variants keyed by motion** `{1:name "Normal"/"M1left"…"M5right", 4: player[×11]}`.
+    Each player `4` = `{ 1:{1:x, 2:y}, 2:{mirror x,y}, 3/4: facing° (90 = straight upfield), 5: slot/pos id,
+    6: side, 7: position-type, 8: z-order, 13: index }`. **x,y are yards; LOS at y=0; +x right, −y behind LOS.**
+- **Play** `{1:name "Y Cross"/"Mesh"…, 2:hash id, 3:sort, 5:personnel idx, 9/10:…, 28: assignment[×11]}`.
+  - field `28` = per-player route assignment `{1:route-lib id, 2:?, 3: step[]}`. Each step `3` =
+    `{1:stepType, <one of>: geometry}`; geometry sub-msg carries `{1:distance, 2:angle°, 3:speed% (100),
+    5:0}` (a `run<angle>for<dist>` segment — matches the standalone `runroute/wr_run90for08…` asset names
+    and their EBX float arrays). Assignment i ↔ alignment player i (both ×11).
+
+### Save scheme enum → playbook slug (verified against sample save's 143 teams)
+
+`Team.DefaultOffensiveScheme` / `DefaultDefensiveScheme` are archetype enums (a superset of team-specific
+books, which the app maps to the shared archetype gamesheet). Books use `&`, and mixed `-`/`_` separators:
+
+| Offense enum | slug | Defense enum | slug |
+|---|---|---|---|
+| OFF_AIR_RAID | air_raid | DEF_3_2_6 | 3-2-6 |
+| OFF_MULTIPLE_OFFENSE | multiple | DEF_3_3_5 | 3-3-5 |
+| OFF_OPTION | option | DEF_3_3_5_TITE | 3-3-5_tite |
+| OFF_PISTOL | pistol | DEF_3_4_MULTIPLE | 3-4_multiple |
+| OFF_POWER_SPREAD | power_spread | DEF_4_2_5 | 4-2-5 |
+| OFF_PRO_STYLE | pro_style | DEF_4_3_MULTIPLE | 4-3_multiple |
+| OFF_RUN_AND_SHOOT | run_&_shoot | DEF_BASE3_4 | 3-4 |
+| OFF_SPREAD | spread | DEF_BASE4_3 | 4-3 |
+| OFF_SPREAD_OPTION | spread_option | DEF_MULTIPLE_DEFENSE | multiple |
+| OFF_VEER_AND_SHOOT | veer_&_shoot | | |
+
+Extractor `scripts/extract-playbooks.ts` writes per-book JSON to `resources/playbooks/<enum>.json`
+(bundled via electron-builder `extraResources`, same takedown-contingency posture as `resources/logos`).
 
 ## Portraits
 

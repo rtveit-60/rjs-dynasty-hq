@@ -1,4 +1,4 @@
-import type { SeasonRecord, SeasonState, Snapshot } from '../../../shared/types.ts';
+import type { BowlAppearance, SeasonRecord, SeasonState, Snapshot } from '../../../shared/types.ts';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -9,9 +9,44 @@ const BASE_Y = 118;
 const BAR_MAX = 90;
 
 function badge(s: SeasonRecord): { text: string; fill: string; size: number } | null {
-  if (s.cfpMade && !s.natlChamp) return { text: 'CFP', fill: 'var(--ink-3)', size: 7 };
-  if (s.confChamp && !s.natlChamp) return { text: 'CONF', fill: 'var(--ink-3)', size: 7 };
+  if (s.natlChamp || s.bowl) return null;
+  if (s.cfpMade) return { text: 'CFP', fill: 'var(--ink-3)', size: 7 };
+  if (s.confChamp) return { text: 'CONF', fill: 'var(--ink-3)', size: 7 };
   return null;
+}
+
+/**
+ * A bowl mark, drawn in the bowl's own brand colors from the save — the game
+ * ships no readable bowl logo art, so the football carries the colors and the
+ * caption carries the name. Won fills solid, lost stays outlined; playoff bowls
+ * take the gold outline.
+ */
+function BowlCrest({ cx, bottom, bowl }: { cx: number; bottom: number; bowl: BowlAppearance }) {
+  const w = 7.5;
+  const h = 5;
+  const cy = bottom - h;
+  const stroke = bowl.playoff ? 'var(--dev-elite)' : bowl.won ? bowl.secondary : bowl.primary;
+  return (
+    <g>
+      <path
+        d={`M ${cx - w} ${cy} Q ${cx} ${cy - h} ${cx + w} ${cy} Q ${cx} ${cy + h} ${cx - w} ${cy} Z`}
+        fill={bowl.won ? bowl.primary : 'transparent'}
+        stroke={stroke}
+        strokeWidth={1.2}
+      />
+      {bowl.won && (
+        <line
+          x1={cx - 2.4}
+          y1={cy}
+          x2={cx + 2.4}
+          y2={cy}
+          stroke={bowl.secondary}
+          strokeWidth={1}
+          opacity={0.9}
+        />
+      )}
+    </g>
+  );
 }
 
 /**
@@ -51,8 +86,8 @@ function tooltip(s: SeasonRecord): string {
   const notes = [
     s.natlChamp && 'National Champions',
     s.confChamp && 'Conference Champions',
-    s.cfpMade && 'CFP',
-    s.bowlWon && 'Bowl win',
+    s.cfpMade && !s.bowl?.playoff && 'CFP',
+    s.bowl ? `${s.bowl.name} (${s.bowl.won ? 'W' : 'L'})` : s.bowlWon && 'Bowl win',
     s.inProgress && 'In progress'
   ].filter(Boolean);
   return `${s.year} — ${s.wins}–${s.losses}${notes.length ? ` · ${notes.join(' · ')}` : ''}`;
@@ -117,6 +152,7 @@ function RecordGraph({ seasons, color }: { seasons: SeasonRecord[]; color: strin
               {s.wins}–{s.losses}
             </text>
             {s.natlChamp && <CfpMark cx={cx} bottom={top - 14} h={12} />}
+            {!s.natlChamp && s.bowl && <BowlCrest cx={cx} bottom={top - 16} bowl={s.bowl} />}
             {b && (
               <text x={cx} y={top - 17} textAnchor="middle" fontSize={b.size} fontWeight={700} fill={b.fill}>
                 {b.text}
@@ -148,12 +184,38 @@ export default function ProgramDashboard({
   }
   const dynastyYear = season?.dynastyYear ?? 0;
   const truncated = seasons.length > 0 && seasons.length < Math.min(8, dynastyYear);
+  const bowls = seasons.filter((s) => s.bowl);
 
   return (
     <div className="two-col" style={{ marginTop: 16 }}>
       <div className="panel">
         <div className="panel-title">Season Records</div>
         <RecordGraph seasons={seasons} color={school.team.colors.primary} />
+        {bowls.length > 0 && (
+          <div style={{ fontSize: 11.5, color: 'var(--ink-2)', marginTop: 10, lineHeight: 1.6 }}>
+            {bowls.map((s) => (
+              <span key={s.year} style={{ marginRight: 12, whiteSpace: 'nowrap' }}>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 9,
+                    height: 6,
+                    borderRadius: '50% / 50%',
+                    marginRight: 5,
+                    verticalAlign: 'middle',
+                    background: s.bowl!.won ? s.bowl!.primary : 'transparent',
+                    border: `1px solid ${s.bowl!.playoff ? 'var(--dev-elite)' : s.bowl!.primary}`
+                  }}
+                />
+                <span style={{ color: 'var(--ink-3)' }}>{'’'}{String(s.year).slice(2)}</span>{' '}
+                {s.bowl!.name}{' '}
+                <span style={{ color: s.bowl!.won ? 'var(--good)' : 'var(--ink-3)', fontWeight: 700 }}>
+                  {s.bowl!.won ? 'W' : 'L'}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
         {truncated && (
           <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8 }}>
             The game keeps five seasons of records — earlier years stay on the graph once they have

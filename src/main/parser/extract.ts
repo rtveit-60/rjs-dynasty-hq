@@ -1,4 +1,5 @@
 import type {
+  BowlAppearance,
   DepthChartSlot,
   RosterPlayer,
   SeasonRecord,
@@ -881,6 +882,88 @@ async function extractSeason(franchise: any): Promise<SeasonState | null> {
   };
 }
 
+/** How deep into the postseason a bowl slot sits — the deepest one is the story. */
+const BOWL_DEPTH: Record<string, number> = {
+  BowlSeason1: 1,
+  BowlSeason2: 2,
+  BowlSeason3: 3,
+  NationalChampionship: 4
+};
+
+/**
+ * The bowl the team played this season, read from the SeasonGame rows that carry
+ * a BowlGame ref. Slots sit unassigned (null team refs) until bowl season, so this
+ * returns null for most of the year — the caller banks it once it appears.
+ */
+async function extractSeasonBowl(
+  franchise: any,
+  teamTableId: number,
+  teamRow: number,
+  currentYearIndex: number
+): Promise<BowlAppearance | null> {
+  try {
+    const candidates = tablesByName(franchise, 'SeasonGame').filter(
+      (t: any) => (t.header?.recordCapacity ?? 0) > 100
+    );
+    if (!candidates.length) return null;
+    const table = candidates.sort(
+      (a: any, b: any) => b.header.recordCapacity - a.header.recordCapacity
+    )[0];
+    await table.readRecords([
+      'BowlGame',
+      'HomeTeam',
+      'AwayTeam',
+      'GameStatus',
+      'SeasonWeekType',
+      'SeasonYear'
+    ]);
+
+    let best: { rec: any; bowlRef: any; isHome: boolean; depth: number } | null = null;
+    for (const rec of table.records) {
+      if (rec.isEmpty) continue;
+      if (Number(val(rec, 'SeasonYear')) !== currentYearIndex) continue;
+      const status = String(val(rec, 'GameStatus'));
+      if (status !== 'HomeWon' && status !== 'AwayWon') continue;
+      const bowlRef = refFromRecord(rec, 'BowlGame');
+      if (isNullRef(bowlRef)) continue;
+      const home = refFromRecord(rec, 'HomeTeam');
+      const away = refFromRecord(rec, 'AwayTeam');
+      const isHome = !isNullRef(home) && home.tableId === teamTableId && home.row === teamRow;
+      const isAway = !isNullRef(away) && away.tableId === teamTableId && away.row === teamRow;
+      if (!isHome && !isAway) continue;
+      const depth = BOWL_DEPTH[String(val(rec, 'SeasonWeekType'))] ?? 0;
+      if (!best || depth > best.depth) best = { rec, bowlRef, isHome, depth };
+    }
+    if (!best) return null;
+
+    const bowlTable = await tableById(franchise, best.bowlRef.tableId);
+    const bowlRec = bowlTable?.records?.[best.bowlRef.row];
+    if (!bowlRec) return null;
+    const name = String(val(bowlRec, 'Name') ?? '').trim();
+    if (!name) return null;
+    const status = String(val(best.rec, 'GameStatus'));
+    return {
+      name,
+      won: (status === 'HomeWon') === best.isHome,
+      playoff: val(bowlRec, 'IsPlayoffBowl') === true,
+      primary:
+        rgbHex(
+          val(bowlRec, 'BOWL_PRIMARY_COLOR_R'),
+          val(bowlRec, 'BOWL_PRIMARY_COLOR_G'),
+          val(bowlRec, 'BOWL_PRIMARY_COLOR_B')
+        ) ?? '#3f4a5a',
+      secondary:
+        rgbHex(
+          val(bowlRec, 'BOWL_SECONDARY_COLOR_R'),
+          val(bowlRec, 'BOWL_SECONDARY_COLOR_G'),
+          val(bowlRec, 'BOWL_SECONDARY_COLOR_B')
+        ) ?? '#ffffff'
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Team.TeamSeasonStats is a rolling five-season window of TeamStats totals,
  * ordered newest-first: index 0 is the season underway (final once the save
@@ -891,7 +974,8 @@ async function extractSeason(franchise: any): Promise<SeasonState | null> {
 async function extractSeasonHistory(
   franchise: any,
   teamRec: any,
-  season: SeasonState | null
+  season: SeasonState | null,
+  thisSeasonBowl: BowlAppearance | null
 ): Promise<SeasonRecord[]> {
   try {
     const baseYear = season?.seasonYear ?? 0;
@@ -919,7 +1003,8 @@ async function extractSeasonHistory(
         natlChamp: Number(val(rec, 'NATCHAMPSWON') ?? 0) > 0,
         cfpMade: Number(val(rec, 'CFPSMADE') ?? 0) > 0,
         bowlWon: Number(val(rec, 'BOWLSWON') ?? 0) > 0,
-        inProgress: i === 0 && inSeason
+        inProgress: i === 0 && inSeason,
+        bowl: i === 0 ? thisSeasonBowl : null
       });
     }
     return out.reverse();
@@ -1054,7 +1139,13 @@ export async function extractSnapshot(
       pursuitDeltas
     );
     const schoolAssets = await extractSchoolAssets(franchise, teamTable, rowToTeamIndex);
-    const seasonHistory = await extractSeasonHistory(franchise, teamRec, season);
+    const seasonBowl = await extractSeasonBowl(
+      franchise,
+      teamTable.header?.tableId ?? -1,
+      teamRow,
+      Math.max(0, (season?.dynastyYear ?? 1) - 1)
+    );
+    const seasonHistory = await extractSeasonHistory(franchise, teamRec, season, seasonBowl);
     const recruiting = await extractRecruiting(
       franchise,
       teamRec,

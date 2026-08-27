@@ -22,7 +22,11 @@ export function mergeSeasonHistory(teamRow: number, fromSave: SeasonRecord[]): S
     } catch {
       // first parse for this school
     }
-    for (const rec of fromSave) stored[rec.year] = rec;
+    // Save data wins, except a banked bowl: it is only readable during bowl
+    // season, so never let a later parse blank one out.
+    for (const rec of fromSave) {
+      stored[rec.year] = { ...rec, bowl: rec.bowl ?? stored[rec.year]?.bowl ?? null };
+    }
     const years = Object.keys(stored)
       .map(Number)
       .sort((a, b) => a - b);
