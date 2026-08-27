@@ -61,6 +61,22 @@ const TITLES: Record<string, string[]> = {
   // src/renderer/src/lib/cfp-mark.ts, which follows the theme's ink.
 };
 
+/**
+ * Bowls whose Wikipedia article carries no logo file. These come straight from
+ * the bowl's own site or its conference CDN instead. Full-resolution originals —
+ * the downscale pass below caps them at MAX_EDGE.
+ */
+const OVERRIDES: Record<string, string> = {
+  Holiday_Bowl: 'https://holidaybowl.com/wp-content/uploads/Holiday-Bowl-Logo.png',
+  Camellia_Bowl:
+    'https://dxbhsrqyrr690.cloudfront.net/sidearm.nextgen.sites/fba.sidearmsports.com/images/2024/10/14/IS4S_Salute_to_Veterans_Bowl.png',
+  Guaranteed_Rate_Bowl:
+    'https://dxbhsrqyrr690.cloudfront.net/sidearm.nextgen.sites/fba.sidearmsports.com/images/2024/10/17/Rate_Bowl_CMYK-logo.png',
+  // The save labels this slot "Xbox Bowl", which replaced the Bahamas Bowl.
+  Bahamas_Bowl:
+    'https://xboxbowl.wpenginepowered.com/wp-content/uploads/2025/12/Xbox-Bowl-Logo-Default%402.png'
+};
+
 const JUNK =
   /commons.logo|wikinews|wiktionary|wikisource|wikiquote|edit.|ambox|question.book|padlock|symbol|flag.of|folder|portal|wikimedia|increase|decrease|pog\b|location.dot|disambig|text.document|wiki.letter|sound.icon|gnome|nuvola|magnify|kellanova|stub|merge|split|crystal/i;
 
@@ -170,7 +186,8 @@ for (const [asset, titles] of Object.entries(TITLES)) {
     got++;
     continue;
   }
-  const hit = await logoFor(titles);
+  const override = OVERRIDES[asset];
+  const hit = override ? { url: override, file: override, title: asset } : await logoFor(titles);
   if (!hit) {
     console.log(`! ${asset} — no logo found`);
     missing.push(asset);
