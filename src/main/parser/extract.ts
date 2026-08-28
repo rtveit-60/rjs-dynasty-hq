@@ -2,10 +2,14 @@ import type {
   BowlAppearance,
   CoachContract,
   DepthChartSlot,
+  HeismanWinner,
+  ProgramHonor,
+  RivalrySeries,
   RosterPlayer,
   SeasonRecord,
   SeasonState,
   Snapshot,
+  TeamHistoryData,
   TeamInfo
 } from '../../shared/types.ts';
 import { COACH_GOAL_LABELS } from '../data/coach-goals.ts';
@@ -244,15 +248,17 @@ async function extractCoachContract(
       }
     }
 
-    // The AD's three seasonal goals hang off Team, not Coach. Their refs point
-    // into game asset files (tableIds far above anything in the save), so the
-    // goal text is unreadable — only the per-slot status is.
+    // The AD's three seasonal goals hang off Team, not Coach. Their refs are
+    // FranTk asset ids into the game's tuning stores; the wording is generated
+    // into COACH_GOAL_LABELS by scripts/extract-coach-goals.ts.
+    const homeState = SCHOOL_LOCATIONS[String(val(teamRec, 'LongName') ?? '')]?.[1] ?? null;
     const seasonGoals: import('../../shared/types.ts').SeasonGoalSlot[] = [];
     for (let slot = 1; slot <= 3; slot++) {
       const status = String(val(teamRec, `HCContractGoal${slot}Status`) ?? '').trim();
       if (!status || status === 'Count_' || status === 'Invalid') continue;
       const id = goalRefId(refFromRecord(teamRec, `HCContractGoal${slot}`));
-      seasonGoals.push({ slot, status, id, label: (id && COACH_GOAL_LABELS[id]) || '' });
+      const raw = (id && COACH_GOAL_LABELS[id]) || '';
+      seasonGoals.push({ slot, status, id, label: displayGoalLabel(raw, homeState) });
     }
     const expectedPts = Number(val(teamRec, 'ExpectedContractPoints_ThisYear'));
 
@@ -314,8 +320,119 @@ function teamFromRecord(rec: any, row: number): TeamInfo | null {
     founded: SCHOOL_LOCATIONS[longName || displayName]?.[2] ?? null,
     isUserTeam: false,
     rank: Number(val(rec, 'MediaPoll_CurrentRank') ?? 0),
-    lastWeekRank: Number(val(rec, 'MediaPoll_LastWeeksRank') ?? 0)
+    lastWeekRank: Number(val(rec, 'MediaPoll_LastWeeksRank') ?? 0),
+    adDemeanor: enumOrNull(val(rec, 'ADDemeanor')),
+    adPriorities: [
+      val(rec, 'ADPriorityPrimary'),
+      val(rec, 'ADPrioritySecondary'),
+      val(rec, 'ADPriorityTertiary')
+    ]
+      .map((v) => enumOrNull(v))
+      .filter((v): v is string => !!v)
   };
+}
+
+/** Real enum values only — the save's Count_/Invalid sentinels read as null. */
+function enumOrNull(v: unknown): string | null {
+  const s = String(v ?? '').trim();
+  return s && !/^(Count_?|Invalid_?|First_?|Last_?)$/.test(s) ? s : null;
+}
+
+/**
+ * Live vacancies from the save's JobOpening table. Empty outside the game's
+ * own postseason carousel weeks; when populated, each row names the team, the
+ * role, who left and why (Fired / Retired / Pro / NewJob / ContractEnding),
+ * and — once filled — who took it and for how many program points.
+ */
+async function extractJobOpenings(
+  franchise: any,
+  teamTableId: number,
+  realTeamRows: Set<number>
+): Promise<import('../../shared/types.ts').JobOpeningEntry[]> {
+  const out: import('../../shared/types.ts').JobOpeningEntry[] = [];
+  try {
+    const table = tablesByName(franchise, 'JobOpening')[0];
+    if (!table) return out;
+    await readTable(table);
+    const live = (table.records as any[]).filter((r) => !r.isEmpty);
+    if (!live.length) return out;
+
+    const coachTable = mainTable(franchise, 'Coach');
+    const coachName = (ref: { tableId: number; row: number } | null): string | null => {
+      if (!ref || isNullRef(ref)) return null;
+      const rec = coachTable?.records?.[ref.row];
+      if (!rec || rec.isEmpty) return null;
+      const name = `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
+      return name || null;
+    };
+
+    for (const rec of live) {
+      const teamRef = refFromRecord(rec, 'Team');
+      if (!teamRef || isNullRef(teamRef) || teamRef.tableId !== teamTableId) continue;
+      if (!realTeamRows.has(teamRef.row)) continue;
+      const role = STAFF_ROLE[String(val(rec, 'Position'))];
+      if (!role) continue;
+      out.push({
+        teamRow: teamRef.row,
+        role: role.toUpperCase() as 'HC' | 'OC' | 'DC',
+        prevCoach: coachName(refFromRecord(rec, 'PrevCoach')),
+        reason: enumOrNull(val(rec, 'Reason')) ?? 'None',
+        filled: val(rec, 'Filled') === true,
+        selectedCoach: coachName(refFromRecord(rec, 'SelectedCoach')),
+        finalPts: Number(val(rec, 'FinalContractProgramPoints') ?? 0),
+        highestOfferPts: Number(val(rec, 'HighestOfferedProgramPoints') ?? 0)
+      });
+    }
+  } catch {
+    // openings are an enhancement — never fail the snapshot over them
+  }
+  return out;
+}
+
+/**
+ * League-wide job security for every HC/OC/DC — the Coaching Carousel board.
+ * Reads the Coach table already loaded by extractStaff.
+ */
+async function extractCarousel(
+  franchise: any,
+  teamIndexToRow: Map<number, number>,
+  realTeamRows: Set<number>
+): Promise<import('../../shared/types.ts').CarouselEntry[]> {
+  const out: import('../../shared/types.ts').CarouselEntry[] = [];
+  try {
+    const table = mainTable(franchise, 'Coach');
+    if (!(await ensureCoachSchema(franchise, table))) return out;
+    await table.readRecords(COACH_FIELDS);
+    for (const rec of table.records as any[]) {
+      if (rec.isEmpty) continue;
+      const role = STAFF_ROLE[String(val(rec, 'Position'))];
+      if (!role) continue;
+      const teamIndex = Number(val(rec, 'TeamIndex'));
+      const teamRow = teamIndexToRow.get(teamIndex);
+      if (teamRow === undefined || !realTeamRows.has(teamRow)) continue;
+      const status = enumOrNull(val(rec, 'CurrentJobSecurityStatus'));
+      if (!status) continue;
+      const name = `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
+      if (!name) continue;
+      const age = Number(val(rec, 'Age'));
+      out.push({
+        teamRow,
+        role: role.toUpperCase() as 'HC' | 'OC' | 'DC',
+        name,
+        age: Number.isFinite(age) && age > 0 ? age : null,
+        securityStatus: status,
+        securityPct: Number(val(rec, 'CurrentJobSecurityPercentage') ?? 0),
+        securityRank: Number(val(rec, 'CurrentJobSecurityPercentageRank') ?? 0),
+        yearsRemaining: Number(val(rec, 'ContractYearsRemaining') ?? 0),
+        contractLength: Number(val(rec, 'ContractLength') ?? 0),
+        isUser: val(rec, 'IsUserControlled') === true
+      });
+    }
+    out.sort((a, b) => a.securityPct - b.securityPct);
+  } catch {
+    // carousel data is an enhancement — never fail the snapshot over it
+  }
+  return out;
 }
 
 /** All current-season games (played + scheduled) from the main SeasonGame table. */
@@ -683,6 +800,7 @@ async function extractBoard(
         }
 
         targets.push({
+          recruitRow: recruitRef!.row,
           name: `${String(val(playerRec, 'FirstName') ?? '')} ${String(val(playerRec, 'LastName') ?? '')}`.trim(),
           position: String(val(playerRec, 'Position') ?? ''),
           stars: STAR_MAP[String(val(playerRec, 'ProspectStarRating'))] ?? 0,
@@ -1025,10 +1143,139 @@ async function extractSeason(franchise: any): Promise<SeasonState | null> {
  */
 const ASSET_REF_FLAG = 0x4000;
 
+/**
+ * Goal wording ships verbatim from the game's tuning data and can carry
+ * placeholders the game fills at draw time. Resolve the one the save lets us
+ * resolve (the school's home state), genericize the rival name, and drop the
+ * deadline tokens the app doesn't track. Presentation only — the generated
+ * coach-goals.ts keeps the game's exact text.
+ */
+function displayGoalLabel(raw: string, homeState: string | null): string {
+  if (!raw) return '';
+  return raw
+    .replace(/out</g, 'out <') // "Blow out<oppteamlongname>" ships without the space
+    .replace(/<oppteamlongname>/g, 'your rival')
+    .replace(/<homestate>/g, homeState ?? 'your home state')
+    .replace(/\s*<time(_maint)?>/g, '')
+    .trim();
+}
+
 function goalRefId(ref: { tableId: number; row: number } | null): string {
   if (!ref || (ref.tableId === 0 && ref.row === 0)) return '';
   if (!(ref.tableId & ASSET_REF_FLAG)) return '';
   return `${ref.tableId & (ASSET_REF_FLAG - 1)}:${ref.row}`;
+}
+
+/**
+ * Program history for the Team History tab: rivalry series, the program's
+ * national season awards, and the league's Heisman line.
+ *
+ * Rivalries come from the save's Rivalry table (233 live series with per-side
+ * win totals, streaks and last-meeting scores). Awards come from
+ * LeagueHistoryAward, which logs each season's national award show as a
+ * fixed block of rows — names stored as plain text, so they stay right even
+ * after the winner's Player row is recycled. Years are inferred from block
+ * position anchored to the last completed season; the award types repeat each
+ * block, which is how the block length is derived rather than assumed.
+ */
+async function extractTeamHistory(
+  franchise: any,
+  teamTableId: number,
+  teamRow: number,
+  teams: TeamInfo[],
+  season: SeasonState | null
+): Promise<TeamHistoryData | null> {
+  const nameByRow = new Map(teams.map((t) => [t.row, t.longName || t.displayName]));
+  const own = teams.find((t) => t.row === teamRow);
+  const ownNames = new Set(
+    [own?.longName, own?.displayName].filter((n): n is string => !!n).map((n) => n.toLowerCase())
+  );
+
+  const rivalries: RivalrySeries[] = [];
+  try {
+    const rt = tablesByName(franchise, 'Rivalry')[0];
+    if (rt) {
+      await readTable(rt);
+      for (const rec of rt.records as any[]) {
+        if (rec.isEmpty) continue;
+        const t1 = refFromRecord(rec, 'Team1');
+        const t2 = refFromRecord(rec, 'Team2');
+        if (isNullRef(t1) || isNullRef(t2)) continue;
+        if (t1.tableId !== teamTableId || t2.tableId !== teamTableId) continue;
+        const side = t1.row === teamRow ? 1 : t2.row === teamRow ? 2 : 0;
+        if (!side) continue;
+        const rivalRow = side === 1 ? t2.row : t1.row;
+        const usWins = Number(val(rec, side === 1 ? 'Team1Wins' : 'Team2Wins')) || 0;
+        const themWins = Number(val(rec, side === 1 ? 'Team2Wins' : 'Team1Wins')) || 0;
+        // StreakTeam is 0-based (0 = Team1, 1 = Team2) — verified against known
+        // results: ND (Team2, streakTeam=1) on the W16 Army / W4 Navy runs.
+        const streakTeam = Number(val(rec, 'StreakTeam'));
+        const streakSide = streakTeam === 0 ? 1 : streakTeam === 1 ? 2 : 0;
+        const streakLength = Number(val(rec, 'StreakLength')) || 0;
+        rivalries.push({
+          name: String(val(rec, 'Name') ?? '').trim(),
+          secondaryName: String(val(rec, 'SecondaryName') ?? '').trim() || null,
+          rivalRow,
+          rivalName: nameByRow.get(rivalRow) ?? 'Unknown',
+          usWins,
+          themWins,
+          streakOurs: streakLength > 0 && streakSide !== 0 ? streakSide === side : null,
+          streakLength,
+          lastScoreUs: Number(val(rec, side === 1 ? 'Team1LastScore' : 'Team2LastScore')) || 0,
+          lastScoreThem: Number(val(rec, side === 1 ? 'Team2LastScore' : 'Team1LastScore')) || 0
+        });
+      }
+      rivalries.sort((a, b) => b.usWins + b.themWins - (a.usWins + a.themWins));
+    }
+  } catch {
+    // rivalry table is decoration; the tab renders what it gets
+  }
+
+  const honors: ProgramHonor[] = [];
+  const heisman: HeismanWinner[] = [];
+  try {
+    const lt = tablesByName(franchise, 'LeagueHistoryAward')[0];
+    if (lt) {
+      await readTable(lt);
+      const rows = (lt.records as any[]).filter((r) => !r.isEmpty);
+      if (rows.length) {
+        const firstType = String(val(rows[0], 'AwardType') ?? '');
+        let blockLen = rows.findIndex(
+          (r, i) => i > 0 && String(val(r, 'AwardType') ?? '') === firstType
+        );
+        if (blockLen <= 0) blockLen = rows.length;
+        const numBlocks = Math.ceil(rows.length / blockLen);
+        const lastCompleted =
+          season ? (season.stage === 'OffSeason' ? season.seasonYear : season.seasonYear - 1) : 0;
+        rows.forEach((rec, i) => {
+          const blockIdx = Math.floor(i / blockLen);
+          const year = lastCompleted - (numBlocks - 1 - blockIdx);
+          const awardType = String(val(rec, 'AwardType') ?? '');
+          const first = String(val(rec, 'firstName') ?? '').trim();
+          const last = String(val(rec, 'lastName') ?? '').trim();
+          const school = String(val(rec, 'TeamDisplayName') ?? '').trim();
+          const recipient = `${first} ${last}`.trim();
+          if (!recipient) return;
+          if (awardType === 'HEISMAN') heisman.push({ year, name: recipient, school });
+          if (school && ownNames.has(school.toLowerCase())) {
+            honors.push({
+              year,
+              awardType,
+              recipient,
+              position: String(val(rec, 'Position') ?? '').trim() || null
+            });
+          }
+        });
+        honors.sort((a, b) => b.year - a.year || a.awardType.localeCompare(b.awardType));
+        heisman.sort((a, b) => b.year - a.year);
+      }
+    }
+  } catch {
+    // award log is decoration; the tab renders what it gets
+  }
+
+  if (!rivalries.length && !honors.length && !heisman.length) return null;
+  return { rivalries, honors, heisman };
 }
 
 /** How deep into the postseason a bowl slot sits — the deepest one is the story. */
@@ -1201,10 +1448,14 @@ export async function extractSnapshot(
   const teams: TeamInfo[] = [];
   const teamIndexToName = new Map<number, string>();
   const rowToTeamIndex = new Map<number, number>();
+  // Real programs only — the save also carries generic FCS squads (TEAM_TYPE
+  // 'ProBowl', e.g. "FCS West") with their own coach pools.
+  const realTeamRows = new Set<number>();
   teamTable.records.forEach((rec: any, row: number) => {
     if (rec.isEmpty) return;
     const info = teamFromRecord(rec, row);
     if (!info) return;
+    if (String(val(rec, 'TEAM_TYPE') ?? '') === 'Current') realTeamRows.add(row);
     const teamIndex = recordHasField(rec, 'TeamIndex') ? Number(val(rec, 'TeamIndex')) : row;
     teamIndexToName.set(teamIndex, info.longName);
     rowToTeamIndex.set(row, teamIndex);
@@ -1226,6 +1477,15 @@ export async function extractSnapshot(
     franchise,
     teamTable.header?.tableId ?? -1,
     Math.max(0, (season?.dynastyYear ?? 1) - 1)
+  );
+
+  const teamIndexToRow = new Map<number, number>();
+  for (const [row, ti] of rowToTeamIndex) teamIndexToRow.set(ti, row);
+  const carousel = await extractCarousel(franchise, teamIndexToRow, realTeamRows);
+  const jobOpenings = await extractJobOpenings(
+    franchise,
+    teamTable.header?.tableId ?? -1,
+    realTeamRows
   );
 
   let school: Snapshot['school'] = null;
@@ -1299,6 +1559,13 @@ export async function extractSnapshot(
       Math.max(0, (season?.dynastyYear ?? 1) - 1)
     );
     const seasonHistory = await extractSeasonHistory(franchise, teamRec, season, seasonBowl);
+    const history = await extractTeamHistory(
+      franchise,
+      teamTable.header?.tableId ?? -1,
+      teamRow,
+      teams,
+      season
+    );
     const recruiting = await extractRecruiting(
       franchise,
       teamRec,
@@ -1321,7 +1588,8 @@ export async function extractSnapshot(
       board: boardResult?.info ?? null,
       recruiting,
       seasonHistory,
-      contract
+      contract,
+      history
     };
   }
 
@@ -1331,6 +1599,8 @@ export async function extractSnapshot(
     season,
     teams,
     games,
+    carousel,
+    jobOpenings,
     school
   };
 }

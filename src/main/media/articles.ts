@@ -13,9 +13,12 @@ export type RawEvent =
       role: 'HC' | 'OC' | 'DC';
       incoming: string;
       outgoing: string;
+      /** From the save's JobOpening ledger when the carousel is live: Fired / Retired / Pro / NewJob / ContractEnding. */
+      leaveReason?: string | null;
       ctx: MediaContext;
     }
   | { kind: 'rosterMove'; id: string; departures: string[][]; arrivals: string[][]; ctx: MediaContext }
+  | { kind: 'hotSeat'; id: string; teamRow: number; coach: string; pct: number; yearsRemaining: number; ctx: MediaContext }
   | { kind: 'seasonSoFar'; id: string; ctx: MediaContext };
 
 const AFFINITY: Record<RawEvent['kind'], string[]> = {
@@ -24,6 +27,7 @@ const AFFINITY: Record<RawEvent['kind'], string[]> = {
   pollMove: ['espn', 'cbs'],
   commit: ['si', 'espn', 'gameday'],
   coachChange: ['espn', 'si'],
+  hotSeat: ['espn', 'si'],
   rosterMove: ['espn', 'cbs'],
   seasonSoFar: ['si', 'gameday']
 };
@@ -289,13 +293,59 @@ function coachStory(r: Extract<RawEvent, { kind: 'coachChange' }>): MediaEvent {
     ],
     r.id
   );
+  const departure =
+    r.leaveReason === 'Fired'
+      ? `${r.outgoing} was dismissed`
+      : r.leaveReason === 'Retired'
+        ? `${r.outgoing} retired`
+        : r.leaveReason === 'Pro'
+          ? `${r.outgoing} left for the NFL`
+          : r.leaveReason === 'NewJob'
+            ? `${r.outgoing} took another job`
+            : r.leaveReason === 'ContractEnding'
+              ? `${r.outgoing}'s contract ran out`
+              : `the role held by ${r.outgoing} came open`;
   return {
     ...base(r, isUser ? 68 : 56, isUser, [name, 'Coaching']),
     type: 'coachChange',
     headline,
     dek: pick(['The carousel spins.', 'A new voice in the building.', 'Sideline shakeup.'], r.id, 2),
     body: [
-      `${name} has a new ${roleTxt}: ${r.incoming} takes over the role held by ${r.outgoing}. How quickly the transition settles may define the ${team?.nickName ?? 'program'}'s next stretch.`
+      `${name} has a new ${roleTxt}: ${r.incoming} takes over after ${departure}. How quickly the transition settles may define the ${team?.nickName ?? 'program'}'s next stretch.`
+    ]
+  };
+}
+
+function hotSeatStory(r: Extract<RawEvent, { kind: 'hotSeat' }>): MediaEvent {
+  const { ctx } = r;
+  const team = ctx.teamsByRow.get(r.teamRow);
+  const name = team?.longName ?? 'A program';
+  const isUser = r.teamRow === ctx.userRow;
+  const rec = recordThrough(ctx, r.teamRow, ctx.week);
+  const headline = pick(
+    [
+      `The seat under ${r.coach} is officially hot at ${name}`,
+      `${name}'s ${r.coach} lands on the hot seat`,
+      `Job watch: ${r.coach} is coaching for his future at ${name}`
+    ],
+    r.id
+  );
+  const demeanor = team?.adDemeanor;
+  const patience =
+    demeanor === 'Impatient' || demeanor === 'Reactionary'
+      ? ` The athletic director has a reputation for pulling the trigger — the front office reads as ${demeanor.toLowerCase()}.`
+      : demeanor === 'Patient'
+        ? ' The athletic director is known for patience, which may be the only thing buying time.'
+        : '';
+  return {
+    ...base(r, isUser ? 66 : 54, isUser, [name, 'Coaching']),
+    type: 'hotSeat',
+    headline,
+    dek: pick(['The carousel warms up.', 'Every loss counts double now.', 'The buyout math begins.'], r.id, 2),
+    body: [
+      `${r.coach}'s job security at ${name} has slipped to ${r.pct}% — hot seat territory by any measure. The ${
+        team?.nickName ?? 'program'
+      } sit at ${rec.w}–${rec.l}, and ${r.yearsRemaining <= 1 ? 'his deal is up after this season' : `${r.yearsRemaining} years remain on his deal`}.${patience}`
     ]
   };
 }
@@ -390,6 +440,8 @@ export function writeArticle(r: RawEvent): MediaEvent | null {
         return commitStory(r);
       case 'coachChange':
         return coachStory(r);
+      case 'hotSeat':
+        return hotSeatStory(r);
       case 'rosterMove':
         return rosterStory(r);
       case 'seasonSoFar':

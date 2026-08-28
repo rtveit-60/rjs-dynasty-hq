@@ -15,6 +15,9 @@ extraResources:
     to: bowl-logos
   - from: resources/playbooks
     to: playbooks
+  # Gitignored; populated per-machine by scripts/extract-game-icons.ts.
+  - from: resources/game-icons
+    to: game-icons
 win:
   target:
     - nsis

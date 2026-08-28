@@ -42,6 +42,44 @@ export interface TeamInfo {
   isUserTeam: boolean;
   rank: number;
   lastWeekRank: number;
+  /** The school's AD personality: Patient / Balanced / Impatient / Reactionary. */
+  adDemeanor: string | null;
+  /** The AD's ranked priorities (Rival, Conference, Recruiting, Achievement, Offense, Defense). */
+  adPriorities: string[];
+}
+
+/**
+ * One materialized coaching vacancy from the save's JobOpening table. Rows
+ * only exist while the game's own carousel runs (postseason) — mid-season the
+ * table is empty and forecasting is all anyone has.
+ */
+export interface JobOpeningEntry {
+  teamRow: number;
+  role: 'HC' | 'OC' | 'DC';
+  prevCoach: string | null;
+  /** Save enum: Fired / Retired / Pro / NewJob / ContractEnding / None. */
+  reason: string;
+  filled: boolean;
+  selectedCoach: string | null;
+  /** Winning contract, in program points; 0 until filled. */
+  finalPts: number;
+  highestOfferPts: number;
+}
+
+/** One coach's job-security line for the league-wide carousel board. */
+export interface CarouselEntry {
+  teamRow: number;
+  role: 'HC' | 'OC' | 'DC';
+  name: string;
+  age: number | null;
+  /** Save enum: Safe / SafeForNow / Low / HotSeat. */
+  securityStatus: string;
+  securityPct: number;
+  /** National rank among coaches of any role (1 = safest); 0 when unset. */
+  securityRank: number;
+  yearsRemaining: number;
+  contractLength: number;
+  isUser: boolean;
 }
 
 export interface GameInfo {
@@ -167,6 +205,47 @@ export interface CoachContract {
   history: ContractYear[];
 }
 
+/** One rivalry series from the save's Rivalry table, seen from the user's side. */
+export interface RivalrySeries {
+  name: string;
+  secondaryName: string | null;
+  rivalRow: number;
+  rivalName: string;
+  usWins: number;
+  themWins: number;
+  /** Whose streak is live: true = ours, false = theirs, null = none recorded. */
+  streakOurs: boolean | null;
+  streakLength: number;
+  lastScoreUs: number;
+  lastScoreThem: number;
+}
+
+/**
+ * One national season award won by someone at this program, from the save's
+ * LeagueHistoryAward log (names stored as text there, so they survive player
+ * rows being recycled after graduation).
+ */
+export interface ProgramHonor {
+  year: number;
+  /** Raw award enum from the save, e.g. "BEST_QB", "HEISMAN". */
+  awardType: string;
+  recipient: string;
+  /** Position string as the save records it (player position, or HC/AC). */
+  position: string | null;
+}
+
+export interface HeismanWinner {
+  year: number;
+  name: string;
+  school: string;
+}
+
+export interface TeamHistoryData {
+  rivalries: RivalrySeries[];
+  honors: ProgramHonor[];
+  heisman: HeismanWinner[];
+}
+
 export interface BudgetPillar {
   label: string;
   points: number;
@@ -227,6 +306,8 @@ export interface TargetSchool {
 }
 
 export interface RecruitTargetEntry {
+  /** Row in the Recruit table — joins board targets to class recruits. */
+  recruitRow: number;
   name: string;
   position: string;
   stars: number;
@@ -342,6 +423,7 @@ export type MediaEventType =
   | 'pollMove'
   | 'commit'
   | 'coachChange'
+  | 'hotSeat'
   | 'rosterMove'
   | 'seasonSoFar';
 
@@ -359,6 +441,10 @@ export interface MediaEvent {
   headline: string;
   dek: string;
   body: string[];
+  /** 'article' (default) or a short social-style 'post' from the wire's press corps. */
+  format?: 'article' | 'post';
+  /** Set on posts: the fictional personality who wrote it. */
+  byline?: { name: string; handle: string; role: string; outletName: string };
 }
 
 export interface Snapshot {
@@ -367,6 +453,10 @@ export interface Snapshot {
   season: SeasonState | null;
   teams: TeamInfo[];
   games: GameInfo[];
+  /** League-wide coach job security, all 3 roles per school. */
+  carousel: CarouselEntry[];
+  /** Live vacancies from the save's JobOpening table (postseason only). */
+  jobOpenings: JobOpeningEntry[];
   school: {
     team: TeamInfo;
     roster: RosterPlayer[];
@@ -378,6 +468,7 @@ export interface Snapshot {
     recruiting: RecruitingData | null;
     seasonHistory: SeasonRecord[];
     contract: CoachContract | null;
+    history: TeamHistoryData | null;
   } | null;
 }
 

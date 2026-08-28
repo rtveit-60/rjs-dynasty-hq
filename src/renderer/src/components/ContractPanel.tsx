@@ -50,8 +50,6 @@ export default function ContractPanel({ contract }: { contract: CoachContract })
   const met = goalRung >= 0 && gotRung >= goalRung;
   const active = contract.seasonGoals.filter((g) => g.status === 'InProgress');
   const done = contract.seasonGoals.filter((g) => /complete|achiev|met|success/i.test(g.status));
-  const ptsMet =
-    contract.pointsExpectedThisYear > 0 && contract.pointsThisYear >= contract.pointsExpectedThisYear;
 
   return (
     <div className="panel">
@@ -93,6 +91,19 @@ export default function ContractPanel({ contract }: { contract: CoachContract })
         <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>
           {contract.securityPct}%{contract.securityRank > 0 && ` · ${ordinal(contract.securityRank)} nationally`}
         </span>
+        {contract.contractLength > 0 && (
+          <span style={{ marginLeft: 'auto', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+            Current contract{' '}
+            <b style={{ color: 'var(--ink)', fontSize: 12, letterSpacing: 0 }}>
+              Year{' '}
+              {Math.min(
+                Math.max(contract.contractLength - contract.yearsRemaining + 1, 1),
+                contract.contractLength
+              )}{' '}
+              of {contract.contractLength}
+            </b>
+          </span>
+        )}
       </div>
       <div
         style={{
@@ -112,33 +123,19 @@ export default function ContractPanel({ contract }: { contract: CoachContract })
         />
       </div>
 
-      {contract.pointsExpectedThisYear > 0 && (
+      {contract.seasonGoals.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
             <span style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
               Season goals
             </span>
-            <b style={{ fontSize: 13, color: ptsMet ? 'var(--good)' : 'var(--ink)' }}>
-              {contract.pointsThisYear} of {contract.pointsExpectedThisYear} pts
-            </b>
             {active.length > 0 && (
               <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>
                 {active.length} active{done.length > 0 && `, ${done.length} done`}
               </span>
             )}
           </div>
-          <div
-            style={{ height: 6, borderRadius: 3, background: 'var(--line-soft)', overflow: 'hidden', marginBottom: 4 }}
-          >
-            <div
-              style={{
-                width: `${Math.max(0, Math.min(100, (contract.pointsThisYear / contract.pointsExpectedThisYear) * 100))}%`,
-                height: '100%',
-                background: ptsMet ? 'var(--good)' : 'var(--team-bright, var(--ink-2))'
-              }}
-            />
-          </div>
-          <div style={{ fontSize: 12.5, lineHeight: 1.7, marginBottom: 6 }}>
+          <div style={{ fontSize: 12.5, lineHeight: 1.7, marginBottom: 12 }}>
             {contract.seasonGoals.map((g) => {
               const st = /complete|achiev|met|success/i.test(g.status)
                 ? { text: 'done', color: 'var(--good)' }
@@ -151,8 +148,8 @@ export default function ContractPanel({ contract }: { contract: CoachContract })
                   {g.label ? (
                     <span>{g.label}</span>
                   ) : (
-                    <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>
-                      goal not yet identified
+                    <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }} title={`goal id ${g.id}`}>
+                      unrecognized goal — regenerate coach-goals.ts
                     </span>
                   )}{' '}
                   <span style={{ color: st.color, fontSize: 11.5 }}>· {st.text}</span>
@@ -160,60 +157,9 @@ export default function ContractPanel({ contract }: { contract: CoachContract })
               );
             })}
           </div>
-          {contract.seasonGoals.some((g) => !g.label) && (
-            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 12 }}>
-              The save references each goal but keeps its wording in the game's own files. Add the text
-              once in <code>coach-goals.ts</code> and it sticks for every team and season.
-            </div>
-          )}
         </>
       )}
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: contract.history.length ? 12 : 0 }}>
-        {contract.contractLength > 0 && (
-          <span className="chip">
-            <span className="k">CONTRACT</span>{' '}
-            <b>
-              {contract.yearsRemaining} of {contract.contractLength} yrs left
-            </b>
-          </span>
-        )}
-        <span className="chip" title="Contract points earned toward the AD's grade">
-          <span className="k">POINTS</span> <b>{contract.pointsThisYear}</b>
-          {contract.pointsLastYear > 0 && (
-            <span style={{ color: 'var(--ink-3)' }}>&nbsp;· {contract.pointsLastYear} last yr</span>
-          )}
-        </span>
-      </div>
-
-      {contract.history.length > 0 && (
-        <>
-          <div
-            style={{
-              fontSize: 11,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              color: 'var(--ink-3)',
-              marginBottom: 4
-            }}
-          >
-            This contract
-          </div>
-          <div style={{ fontSize: 12.5, lineHeight: 1.7 }}>
-            {contract.history.map((h) => {
-              const s = SECURITY[h.securityStatus] ?? { label: h.securityStatus, color: 'var(--ink-2)' };
-              return (
-                <div key={h.year}>
-                  <span style={{ color: 'var(--ink-3)' }}>{h.year}</span>{' '}
-                  <span style={{ color: 'var(--ink-2)' }}>{label(h.expectation) || '—'}</span>{' '}
-                  <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>
-                  <span style={{ color: 'var(--ink-3)' }}> {h.securityPct}%</span>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
     </div>
   );
 }

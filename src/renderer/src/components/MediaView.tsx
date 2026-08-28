@@ -12,9 +12,10 @@ const FILTERS: { key: string; label: string; match: (e: MediaEvent) => boolean }
   {
     key: 'coaching',
     label: 'COACHING & ROSTER',
-    match: (e) => e.type === 'coachChange' || e.type === 'rosterMove'
+    match: (e) => e.type === 'coachChange' || e.type === 'rosterMove' || e.type === 'hotSeat'
   },
-  { key: 'polls', label: 'POLLS', match: (e) => e.type === 'pollMove' }
+  { key: 'polls', label: 'POLLS', match: (e) => e.type === 'pollMove' },
+  { key: 'wire', label: 'THE WIRE', match: (e) => e.format === 'post' }
 ];
 
 const STORY_CAP = 60;
@@ -40,7 +41,27 @@ function weekLabel(e: MediaEvent): string {
   return `${spaceOut(e.weekType)} · ${e.seasonYear}`;
 }
 
+/** A short social-style post from one of the wire's fictional personalities. */
+function WirePost({ e }: { e: MediaEvent }) {
+  const b = e.byline!;
+  return (
+    <article className={`story wire-post ${e.aboutUser ? 'user-story' : ''}`}>
+      <div className="post-head">
+        <b>{b.name}</b>
+        <span className="post-handle">{b.handle}</span>
+        <span className="post-outlet">{b.outletName}</span>
+      </div>
+      <p className="post-text">{e.headline}</p>
+      <div className="meta">
+        <span>{weekLabel(e)}</span>
+        <span className="tag">{b.role}</span>
+      </div>
+    </article>
+  );
+}
+
 function Story({ e, lead }: { e: MediaEvent; lead: boolean }) {
+  if (e.format === 'post' && e.byline) return <WirePost e={e} />;
   return (
     <article className={`story ${lead ? 'lead' : ''} ${e.aboutUser ? 'user-story' : ''}`}>
       <Masthead outlet={e.outlet} />

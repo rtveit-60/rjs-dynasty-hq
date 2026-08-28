@@ -246,6 +246,32 @@ function registerBowlProtocol(): void {
   });
 }
 
+/**
+ * gameicon://<name> — UI icon textures extracted from the user's own game
+ * install by `node scripts/extract-game-icons.ts`. The folder is gitignored
+ * (EA's art stays out of the repo); the renderer falls back to drawn marks
+ * when an icon is missing.
+ */
+function bundledGameIconDir(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'game-icons')
+    : join(app.getAppPath(), 'resources', 'game-icons');
+}
+
+function registerGameIconProtocol(): void {
+  protocol.handle('gameicon', (request) => {
+    try {
+      const name = decodeURIComponent(new URL(request.url).hostname);
+      if (!/^[a-z0-9-]+$/.test(name)) return new Response('', { status: 404 });
+      const file = join(bundledGameIconDir(), `${name}.png`);
+      if (existsSync(file)) return net.fetch(pathToFileURL(file).toString());
+    } catch {
+      // fall through to 404
+    }
+    return new Response('', { status: 404 });
+  });
+}
+
 /** portrait://<id> serves <portraitsDir>/<id>.(png|jpg|jpeg|webp), read-only. */
 function registerPortraitProtocol(): void {
   protocol.handle('portrait', (request) => {
@@ -399,6 +425,7 @@ if (!gotLock) {
     registerPortraitProtocol();
     registerLogoProtocol();
     registerBowlProtocol();
+    registerGameIconProtocol();
     registerIpc();
     createWindow();
     startUpdateCheck();

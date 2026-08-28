@@ -19,3 +19,7 @@ portrait-packs/
 # OS noise
 Thumbs.db
 .DS_Store
+
+# Game-extracted UI textures (personal use; run scripts/extract-game-icons.ts)
+resources/game-icons/*
+!resources/game-icons/.gitkeep

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { RosterPlayer } from '../../../shared/types.ts';
+import type { RosterPlayer, SchoolGrade } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
 import {
   POSITION_GROUPS,
@@ -39,17 +39,44 @@ function Portrait({ id }: { id: number }) {
   return <img className="avatar" src={`portrait://${id}`} alt="" onError={() => setFailed(true)} />;
 }
 
-export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
-  const [group, setGroup] = useState<string>('ALL');
+export default function RosterTable({
+  roster,
+  proPotential = []
+}: {
+  roster: RosterPlayer[];
+  proPotential?: SchoolGrade[];
+}) {
+  // Empty set = no position filter (ALL). Multiple groups can be selected.
+  const [groups, setGroups] = useState<Set<string>>(new Set());
+  const [menuOpen, setMenuOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('overall');
   const [asc, setAsc] = useState(false);
   const portraitsOn = useHQ((s) => !!s.settings?.portraitsDir);
 
+  const isAll = groups.size === 0;
+  const selected = [...groups];
+  const summary = isAll
+    ? 'ALL'
+    : selected.length <= 3
+      ? selected.join(' · ')
+      : `${selected.length} GROUPS`;
+
+  const toggleGroup = (g: string) =>
+    setGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g);
+      else next.add(g);
+      return next;
+    });
+
+  /** A grade chip stays lit while its position group is part of the filter. */
+  const gradeLit = (label: string): boolean =>
+    isAll || selected.some((g) => g === label || (g === 'ST' && (label === 'K' || label === 'P')));
+
   const filtered = useMemo(() => {
-    const list =
-      group === 'ALL'
-        ? [...roster]
-        : roster.filter((p) => (POSITION_GROUPS[group] ?? []).includes(p.position));
+    const list = isAll
+      ? [...roster]
+      : roster.filter((p) => selected.some((g) => (POSITION_GROUPS[g] ?? []).includes(p.position)));
     const dir = asc ? 1 : -1;
     list.sort((a, b) => {
       switch (sortKey) {
@@ -81,7 +108,8 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
       }
     });
     return list;
-  }, [roster, group, sortKey, asc]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selected/isAll derive from groups
+  }, [roster, groups, sortKey, asc]);
 
   const sortBy = (key: SortKey, defaultAsc = false) => {
     if (sortKey === key) {
@@ -104,12 +132,102 @@ export default function RosterTable({ roster }: { roster: RosterPlayer[] }) {
 
   return (
     <>
-      <div className="filters">
-        {['ALL', ...Object.keys(POSITION_GROUPS)].map((g) => (
-          <button key={g} className={`filter ${group === g ? 'active' : ''}`} onClick={() => setGroup(g)}>
-            {g}
-          </button>
-        ))}
+      <div className="filters" style={{ alignItems: 'center', position: 'relative', flexWrap: 'nowrap' }}>
+        <button
+          className={`filter ${!isAll ? 'active' : ''}`}
+          style={{ whiteSpace: 'nowrap' }}
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          POSITIONS · {summary} ▾
+        </button>
+        {menuOpen && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setMenuOpen(false)} />
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 4px)',
+                left: 0,
+                zIndex: 41,
+                background: 'var(--paper)',
+                border: '1px solid var(--line)',
+                borderRadius: 8,
+                padding: 8,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                minWidth: 150,
+                boxShadow: '0 10px 28px rgba(0, 0, 0, 0.35)'
+              }}
+            >
+              <button
+                className={`filter ${isAll ? 'active' : ''}`}
+                onClick={() => {
+                  setGroups(new Set());
+                  setMenuOpen(false);
+                }}
+              >
+                ALL
+              </button>
+              {Object.keys(POSITION_GROUPS).map((g) => (
+                <button
+                  key={g}
+                  className={`filter ${groups.has(g) ? 'active' : ''}`}
+                  style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
+                  onClick={() => toggleGroup(g)}
+                >
+                  <span>{g}</span>
+                  {groups.has(g) && <span>✓</span>}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        {proPotential.length > 0 && (
+          <span
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                lineHeight: 1,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: 'var(--ink-3)'
+              }}
+            >
+              Pro Potential by Position
+            </span>
+            {proPotential.map((g) => (
+              <span
+                key={g.label}
+                title={`Pro potential — ${g.label}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  opacity: gradeLit(g.label) ? 1 : 0.4
+                }}
+              >
+                <span style={{ fontSize: 11, lineHeight: 1, fontWeight: 600, color: 'var(--ink-3)' }}>
+                  {g.label}
+                </span>
+                <span
+                  className={`grade ${g.grade.startsWith('A') ? 'good' : ''}`}
+                  style={{ lineHeight: '17px' }}
+                >
+                  {g.grade}
+                </span>
+              </span>
+            ))}
+          </span>
+        )}
       </div>
 
       <div className="tbl-wrap">

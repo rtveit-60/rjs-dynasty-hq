@@ -8,7 +8,7 @@ import type {
   WatchStatus
 } from '../../shared/types.ts';
 
-export type NavKey = 'team' | 'recruiting' | 'media' | 'setup';
+export type NavKey = 'team' | 'recruiting' | 'media' | 'carousel' | 'setup';
 
 interface HQStore {
   ready: boolean;

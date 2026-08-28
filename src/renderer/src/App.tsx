@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { contrastOn } from './lib/format.ts';
 import { useEffectiveTheme, useHQ } from './store.ts';
+import CarouselView from './components/CarouselView.tsx';
 import MediaView from './components/MediaView.tsx';
 import Onboarding from './components/Onboarding.tsx';
 import RecruitingView from './components/RecruitingView.tsx';
@@ -56,6 +57,8 @@ export default function App() {
     body = <RecruitingView />;
   } else if (nav === 'media') {
     body = <MediaView />;
+  } else if (nav === 'carousel') {
+    body = <CarouselView />;
   } else {
     body = <TeamHQ />;
   }

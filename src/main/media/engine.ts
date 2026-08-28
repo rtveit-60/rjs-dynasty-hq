@@ -1,5 +1,6 @@
 import type { GameInfo, MediaEvent, Snapshot, TeamInfo } from '../../shared/types.ts';
 import { writeArticle, type RawEvent } from './articles.ts';
+import { writeWirePosts } from './wire-posts.ts';
 
 /** Compact cross-save memory, persisted per school. */
 export interface MediaState {
@@ -14,6 +15,8 @@ export interface MediaState {
   commits: Record<number, string>;
   staff: Record<number, { hc: string | null; oc: string | null; dc: string | null }>;
   rosterNames: string[];
+  /** Head-coach job security status by team row (absent in states saved before the carousel). */
+  hcSecurity?: Record<number, string>;
 }
 
 const gameKey = (seasonYear: number, g: GameInfo) => `g${seasonYear}w${g.week}-${g.homeRow}-${g.awayRow}`;
@@ -32,6 +35,10 @@ export function buildMediaState(snapshot: Snapshot): MediaState | null {
   for (const r of school.recruiting?.recruits ?? []) {
     if (r.committedTo) commits[r.row] = r.committedTo;
   }
+  const hcSecurity: Record<number, string> = {};
+  for (const c of snapshot.carousel ?? []) {
+    if (c.role === 'HC') hcSecurity[c.teamRow] = c.securityStatus;
+  }
   return {
     version: 1,
     seasonYear: season.seasonYear,
@@ -45,7 +52,8 @@ export function buildMediaState(snapshot: Snapshot): MediaState | null {
       .map((g) => gameKey(season.seasonYear, g)),
     commits,
     staff,
-    rosterNames: school.roster.map((p) => `${p.firstName} ${p.lastName}|${p.position}`)
+    rosterNames: school.roster.map((p) => `${p.firstName} ${p.lastName}|${p.position}`),
+    hcSecurity
   };
 }
 
@@ -167,6 +175,11 @@ export function diffMedia(prev: MediaState | null, snapshot: Snapshot): RawEvent
 
   // --- coaching changes ---
   if (!baseline) {
+    // Why the previous coach left, when the save's carousel ledger says so.
+    const leaveReasons = new Map<string, string>();
+    for (const o of snapshot.jobOpenings ?? []) {
+      if (o.reason && o.reason !== 'None') leaveReasons.set(`${o.teamRow}:${o.role}`, o.reason);
+    }
     for (const t of snapshot.teams) {
       const before = prev!.staff[t.row];
       if (!before) continue;
@@ -178,6 +191,7 @@ export function diffMedia(prev: MediaState | null, snapshot: Snapshot): RawEvent
           role: 'HC',
           incoming: t.headCoach,
           outgoing: before.hc,
+          leaveReason: leaveReasons.get(`${t.row}:HC`) ?? null,
           ctx
         });
       }
@@ -194,11 +208,37 @@ export function diffMedia(prev: MediaState | null, snapshot: Snapshot): RawEvent
               role,
               incoming: now,
               outgoing: was,
+              leaveReason: leaveReasons.get(`${t.row}:${role}`) ?? null,
               ctx
             });
           }
         }
       }
+    }
+  }
+
+  // --- hot seats (head coaches whose security just turned HotSeat) ---
+  if (!baseline && prev!.hcSecurity) {
+    const flips = (snapshot.carousel ?? [])
+      .filter(
+        (c) =>
+          c.role === 'HC' &&
+          c.securityStatus === 'HotSeat' &&
+          prev!.hcSecurity![c.teamRow] !== undefined &&
+          prev!.hcSecurity![c.teamRow] !== 'HotSeat'
+      )
+      .sort((a, b) => a.securityPct - b.securityPct)
+      .slice(0, 4);
+    for (const c of flips) {
+      events.push({
+        kind: 'hotSeat',
+        id: `hotseat${season.seasonYear}w${season.week}-${c.teamRow}`,
+        teamRow: c.teamRow,
+        coach: c.name,
+        pct: c.securityPct,
+        yearsRemaining: c.yearsRemaining,
+        ctx
+      });
     }
   }
 
@@ -237,6 +277,8 @@ export function generateMedia(
   const events = raw
     .map((r) => writeArticle(r))
     .filter((e): e is MediaEvent => !!e);
+  // The personality layer: short wire posts riding alongside the articles.
+  for (const r of raw) events.push(...writeWirePosts(r));
   return { state, events };
 }
 

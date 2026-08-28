@@ -1,8 +1,124 @@
+import { useEffect, useState } from 'react';
 import type { BowlAppearance, SeasonRecord, SeasonState, Snapshot } from '../../../shared/types.ts';
+import { spaceOut } from '../lib/format.ts';
 import BowlIcon, { BowlMarkGroup, CfpMarkGroup } from './BowlIcon.tsx';
 import ContractPanel from './ContractPanel.tsx';
 
 type School = NonNullable<Snapshot['school']>;
+
+/**
+ * Pipeline tier badge the way the game draws it: its own map-pin texture
+ * (`dynas_general_Pipeline_Empty`, extracted from the user's install by
+ * `node scripts/extract-game-icons.ts` — the game ships only this shell and
+ * tints it per tier with a number on top, so we composite it the same way).
+ * Metals follow the game's ladder: bronze, silver, gold, teal, amethyst.
+ * When the extracted texture is absent (fresh clone), a drawn SVG pin stands in.
+ */
+const PIN_METALS: Record<number, { hi: string; body: string; rim: string; num: string }> = {
+  1: { hi: '#b07a42', body: '#8a5a2b', rim: '#54361a', num: '#38220f' },
+  2: { hi: '#c9ccd1', body: '#a8abb0', rim: '#63666b', num: '#3f4247' },
+  3: { hi: '#e0bc56', body: '#c9a03c', rim: '#7d6021', num: '#503d13' },
+  4: { hi: '#74c2d6', body: '#4fa3b8', rim: '#2a6b7d', num: '#173f4b' },
+  5: { hi: '#c37fe0', body: '#a957c9', rim: '#6d3689', num: '#3f1e53' }
+};
+
+const PIN_TEXTURE = 'gameicon://pipeline-pin';
+let pinProbe: Promise<boolean> | undefined;
+function probePinTexture(): Promise<boolean> {
+  pinProbe ??= new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = PIN_TEXTURE;
+  });
+  return pinProbe;
+}
+
+function TierPin({ tier }: { tier: number }) {
+  const [haveTexture, setHaveTexture] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void probePinTexture().then((ok) => {
+      if (alive && ok) setHaveTexture(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const metal = PIN_METALS[tier];
+
+  if (haveTexture) {
+    const mask: React.CSSProperties = {
+      position: 'absolute',
+      inset: 0,
+      WebkitMaskImage: `url(${PIN_TEXTURE})`,
+      maskImage: `url(${PIN_TEXTURE})`,
+      WebkitMaskSize: '100% 100%',
+      maskSize: '100% 100%',
+      background: metal
+        ? `linear-gradient(155deg, ${metal.hi} 18%, ${metal.body} 55%, ${metal.rim} 96%)`
+        : 'var(--line-soft)'
+    };
+    return (
+      <span
+        style={{ position: 'relative', width: 16, height: 19, flexShrink: 0, display: 'inline-block' }}
+        aria-label={`Tier ${tier} of 5`}
+      >
+        <span style={mask} />
+        {metal && (
+          <span
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 0,
+              height: '64%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 9.5,
+              fontWeight: 800,
+              fontFamily: 'var(--font-display, sans-serif)',
+              color: metal.num
+            }}
+          >
+            {tier}
+          </span>
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <svg
+      width="15"
+      height="19"
+      viewBox="0 0 20 26"
+      style={{ display: 'block', flexShrink: 0 }}
+      aria-label={`Tier ${tier} of 5`}
+    >
+      <path
+        d="M10 1 C4.9 1 1 4.9 1 10 c0 6 9 15 9 15 s9 -9 9 -15 C19 4.9 15.1 1 10 1 Z"
+        fill={metal ? metal.body : 'transparent'}
+        stroke={metal ? metal.rim : 'var(--ink-3)'}
+        strokeWidth="1.6"
+      />
+      {metal && (
+        <text
+          x="10"
+          y="14.2"
+          textAnchor="middle"
+          fontSize="11.5"
+          fontWeight="800"
+          fontFamily="var(--font-display, sans-serif)"
+          fill={metal.num}
+        >
+          {tier}
+        </text>
+      )}
+    </svg>
+  );
+}
 
 const SLOT_W = 46;
 const BAR_W = 22;
@@ -156,32 +272,29 @@ export default function ProgramDashboard({
         )}
       </div>
       {school.contract && <ContractPanel contract={school.contract} />}
-      <div className="panel" style={{ gridColumn: '1 / -1' }}>
+      <div className="panel">
         <div className="panel-title">Your Pipelines</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {(rc?.pipelines ?? []).map((p) => (
-            <span key={p.pipeline} className="chip" title={`Influence ${p.value}`}>
-              <b>{p.label}</b>&nbsp;
-              <span style={{ color: p.tier >= 4 ? 'var(--dev-elite)' : 'var(--ink-3)' }}>{p.level}</span>
+            <span
+              key={p.pipeline}
+              className="chip"
+              title={`Tier ${p.tier} of 5 — ${spaceOut(p.level)} · influence ${p.value}`}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}
+            >
+              <b>{p.label}</b>
+              <TierPin tier={p.tier} />
             </span>
           ))}
           {!rc?.pipelines.length && <span style={{ color: 'var(--ink-3)' }}>No established pipelines.</span>}
         </div>
       </div>
-      <div className="panel" style={{ gridColumn: '1 / -1' }}>
+      <div className="panel">
         <div className="panel-title">Program Grades</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {(rc?.reportCard ?? []).map((g) => (
             <span key={g.label} className="chip">
               {g.label}&nbsp;<span className={`grade ${g.grade.startsWith('A') ? 'good' : ''}`}>{g.grade}</span>
-            </span>
-          ))}
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-          {(rc?.proPotential ?? []).map((g) => (
-            <span key={g.label} className="chip" title={`Pro potential — ${g.label}`}>
-              <span className="k">{g.label}</span>&nbsp;
-              <span className={`grade ${g.grade.startsWith('A') ? 'good' : ''}`}>{g.grade}</span>
             </span>
           ))}
         </div>

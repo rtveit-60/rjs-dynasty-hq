@@ -7,6 +7,7 @@ const ITEMS: { key: NavKey; label: string; soon?: boolean }[] = [
   { key: 'team', label: 'TEAM HQ' },
   { key: 'recruiting', label: 'RECRUITING' },
   { key: 'media', label: 'DYNASTY MEDIA' },
+  { key: 'carousel', label: 'COACHING CAROUSEL' },
   { key: 'setup', label: 'SETUP' }
 ];
 
