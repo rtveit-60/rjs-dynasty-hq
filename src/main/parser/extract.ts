@@ -202,7 +202,8 @@ async function staffTendencies(
  */
 async function extractCoachContract(
   franchise: any,
-  staff: StaffEntry | undefined
+  staff: StaffEntry | undefined,
+  teamRec: any
 ): Promise<CoachContract | null> {
   if (!staff?.hc) return null;
   try {
@@ -242,8 +243,19 @@ async function extractCoachContract(
       }
     }
 
+    // The AD's three seasonal goals hang off Team, not Coach. Their refs point
+    // into game asset files (tableIds far above anything in the save), so the
+    // goal text is unreadable — only the per-slot status is.
+    const seasonGoals: import('../../shared/types.ts').SeasonGoalSlot[] = [];
+    for (let slot = 1; slot <= 3; slot++) {
+      const status = String(val(teamRec, `HCContractGoal${slot}Status`) ?? '').trim();
+      if (!status || status === 'Count_' || status === 'Invalid') continue;
+      seasonGoals.push({ slot, status });
+    }
+    const expectedPts = Number(val(teamRec, 'ExpectedContractPoints_ThisYear'));
+
     const expectation = str('CurrentContractExpectation');
-    if (!expectation && !history.length) return null;
+    if (!expectation && !history.length && !seasonGoals.length) return null;
 
     return {
       coachName: staff.hc.name,
@@ -258,6 +270,8 @@ async function extractCoachContract(
       pointsThisYear: num('EarnedContractPoints_ThisYear'),
       pointsLastYear: num('EarnedContractPoints_LastYear'),
       pointsTwoYearsAgo: num('EarnedContractPoints_TwoYearsAgo'),
+      pointsExpectedThisYear: Number.isFinite(expectedPts) ? expectedPts : 0,
+      seasonGoals,
       history
     };
   } catch {
@@ -1234,7 +1248,7 @@ export async function extractSnapshot(
     const budget = extractBudget(teamRec, leagueSpendingPct(teamTable));
     const splits = await extractSplits(franchise, teamRec);
     const staff = await staffTendencies(franchise, staffByTeamIndex.get(ownTeamIndex));
-    const contract = await extractCoachContract(franchise, staffByTeamIndex.get(ownTeamIndex));
+    const contract = await extractCoachContract(franchise, staffByTeamIndex.get(ownTeamIndex), teamRec);
     const pursuitDeltas = await extractPursuitDeltas(franchise, teamTable, rowToTeamIndex);
     const boardResult = await extractBoard(
       franchise,

@@ -48,6 +48,10 @@ export default function ContractPanel({ contract }: { contract: CoachContract })
   const goalRung = RUNG.indexOf(contract.expectation);
   const gotRung = RUNG.indexOf(contract.progress);
   const met = goalRung >= 0 && gotRung >= goalRung;
+  const active = contract.seasonGoals.filter((g) => g.status === 'InProgress');
+  const done = contract.seasonGoals.filter((g) => /complete|achiev|met|success/i.test(g.status));
+  const ptsMet =
+    contract.pointsExpectedThisYear > 0 && contract.pointsThisYear >= contract.pointsExpectedThisYear;
 
   return (
     <div className="panel">
@@ -107,6 +111,39 @@ export default function ContractPanel({ contract }: { contract: CoachContract })
           }}
         />
       </div>
+
+      {contract.pointsExpectedThisYear > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+              Season goals
+            </span>
+            <b style={{ fontSize: 13, color: ptsMet ? 'var(--good)' : 'var(--ink)' }}>
+              {contract.pointsThisYear} of {contract.pointsExpectedThisYear} pts
+            </b>
+            {active.length > 0 && (
+              <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>
+                {active.length} active{done.length > 0 && `, ${done.length} done`}
+              </span>
+            )}
+          </div>
+          <div
+            style={{ height: 6, borderRadius: 3, background: 'var(--line-soft)', overflow: 'hidden', marginBottom: 4 }}
+          >
+            <div
+              style={{
+                width: `${Math.max(0, Math.min(100, (contract.pointsThisYear / contract.pointsExpectedThisYear) * 100))}%`,
+                height: '100%',
+                background: ptsMet ? 'var(--good)' : 'var(--team-bright, var(--ink-2))'
+              }}
+            />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 12 }}>
+            The AD sets three goals a season; the save stores their status but keeps the wording in the
+            game's own files.
+          </div>
+        </>
+      )}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: contract.history.length ? 12 : 0 }}>
         {contract.contractLength > 0 && (

@@ -131,6 +131,15 @@ export interface ContractYear {
  * The athletic director's standing mandate for the head coach, plus the job
  * security that rides on it. Read from the Coach table's contract fields.
  */
+/**
+ * One of the AD's three seasonal goal slots. The goal's *definition* lives in
+ * the game's asset files, not the save, so only its status is readable.
+ */
+export interface SeasonGoalSlot {
+  slot: number;
+  status: string;
+}
+
 export interface CoachContract {
   coachName: string;
   /** The AD's goal this season — raw save enum, e.g. "WinNY6Bowl". */
@@ -147,6 +156,10 @@ export interface CoachContract {
   pointsThisYear: number;
   pointsLastYear: number;
   pointsTwoYearsAgo: number;
+  /** The season's contract-point bar, from the Team table. */
+  pointsExpectedThisYear: number;
+  /** The AD's three seasonal goals — status only; see SeasonGoalSlot. */
+  seasonGoals: SeasonGoalSlot[];
   history: ContractYear[];
 }
 
