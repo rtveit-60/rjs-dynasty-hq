@@ -12,11 +12,27 @@ export interface RatingDef {
   name: string;
   /** Position groups this is commonly scouted for; empty = every position. */
   groups: string[];
+  /**
+   * Added to the raw save value to get the real one. Weight is stored as
+   * pounds - 160, so comparing raw would be off by 160.
+   */
+  offset?: number;
+  /** How to render the value; heights print as feet and inches. */
+  kind?: 'rating' | 'height' | 'weight';
+  /** Bounds and starting point for the threshold input. */
+  min?: number;
+  max?: number;
+  dflt?: number;
 }
 
 const ALL: string[] = [];
 
 export const RATINGS: RatingDef[] = [
+  // Measurables first — they apply to every position and are the most common
+  // thing to screen on before looking at a single rating.
+  { field: 'Height', label: 'HT', name: 'Height (inches)', groups: ALL, kind: 'height', min: 58, max: 86, dflt: 74 },
+  { field: 'Weight', label: 'WT', name: 'Weight (lb)', groups: ALL, kind: 'weight', offset: 160, min: 150, max: 400, dflt: 250 },
+
   { field: 'SpeedRating', label: 'SPD', name: 'Speed', groups: ALL },
   { field: 'AccelerationRating', label: 'ACC', name: 'Acceleration', groups: ALL },
   { field: 'AgilityRating', label: 'AGI', name: 'Agility', groups: ALL },
@@ -81,6 +97,14 @@ export const RATINGS: RatingDef[] = [
 ];
 
 export const RATING_BY_FIELD = new Map(RATINGS.map((r) => [r.field, r]));
+
+/** Display form for a value already converted to real units. */
+export function formatRatingValue(field: string, value: number): string {
+  const def = RATING_BY_FIELD.get(field);
+  if (!def || !Number.isFinite(value)) return '—';
+  if (def.kind === 'height') return `${Math.floor(value / 12)}'${value % 12}"`;
+  return String(value);
+}
 
 /** Ratings for a position group, most relevant first. 'ALL' keeps source order. */
 export function ratingsFor(group: string): RatingDef[] {

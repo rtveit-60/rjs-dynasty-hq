@@ -38,10 +38,14 @@ export async function scoutRecruits(
       const p = playerTable.records?.[ref.row];
       if (!p || p.isEmpty) continue;
 
+      // Compare and report in real units — weight is stored as pounds - 160.
+      const real = (field: string): number =>
+        Number(val(p, field)) + (RATING_BY_FIELD.get(field)?.offset ?? 0);
+
       const values: Record<string, number> = {};
       let ok = true;
       for (const c of valid) {
-        const v = Number(val(p, c.field));
+        const v = real(c.field);
         if (!Number.isFinite(v) || (c.op === 'gte' ? v < c.value : v > c.value)) {
           ok = false;
           break;
@@ -51,7 +55,7 @@ export async function scoutRecruits(
       if (!ok) continue;
 
       // Fill in any remaining queried fields so every column has a value.
-      for (const f of fields) if (values[f] === undefined) values[f] = Number(val(p, f)) || 0;
+      for (const f of fields) if (values[f] === undefined) values[f] = real(f) || 0;
 
       hits.push({ playerRow: ref.row, values });
       if (hits.length >= MAX_HITS) break;

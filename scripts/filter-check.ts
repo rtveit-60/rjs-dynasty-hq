@@ -167,7 +167,11 @@ const queries: { label: string; criteria: ScoutCriterion[] }[] = [
   { label: 'SPD >= 92, ACC >= 90', criteria: [{ field: 'SpeedRating', op: 'gte', value: 92 }, { field: 'AccelerationRating', op: 'gte', value: 90 }] },
   { label: 'THP >= 94', criteria: [{ field: 'ThrowPowerRating', op: 'gte', value: 94 }] },
   { label: 'STR <= 60', criteria: [{ field: 'StrengthRating', op: 'lte', value: 60 }] },
-  { label: 'unknown field is ignored', criteria: [{ field: 'NotARating', op: 'gte', value: 50 }] }
+  { label: 'unknown field is ignored', criteria: [{ field: 'NotARating', op: 'gte', value: 50 }] },
+  { label: 'HT >= 78 (6ft 6in+)', criteria: [{ field: 'Height', op: 'gte', value: 78 }] },
+  { label: 'WT >= 300', criteria: [{ field: 'Weight', op: 'gte', value: 300 }] },
+  { label: 'WT <= 180', criteria: [{ field: 'Weight', op: 'lte', value: 180 }] },
+  { label: 'HT >= 76 and WT >= 290', criteria: [{ field: 'Height', op: 'gte', value: 76 }, { field: 'Weight', op: 'gte', value: 290 }] }
 ];
 for (const q of queries) {
   const hits = await scoutRecruits(franchise, q.criteria);
@@ -188,6 +192,28 @@ for (const q of queries) {
     hits.every((h) => byPlayerRow.has(h.playerRow)),
     'some hits are not in the class',
   );
+  // Measurables must agree with what the board already shows for that recruit,
+  // which proves the pounds-160 offset is applied exactly once.
+  const mism = hits.filter((h) => {
+    const r = byPlayerRow.get(h.playerRow);
+    if (!r) return false;
+    const w = h.values['Weight'];
+    const ht = h.values['Height'];
+    return (w !== undefined && w !== r.weightLb) || (ht !== undefined && ht !== r.heightIn);
+  });
+  if (hits.some((h) => h.values['Weight'] !== undefined || h.values['Height'] !== undefined)) {
+    check(
+      `${q.label} measurables match the board`,
+      mism.length === 0,
+      mism
+        .slice(0, 3)
+        .map((h) => {
+          const r = byPlayerRow.get(h.playerRow)!;
+          return `${r.name}: scout ${h.values['Weight'] ?? h.values['Height']} vs board ${h.values['Weight'] !== undefined ? r.weightLb : r.heightIn}`;
+        })
+        .join('; '),
+    );
+  }
 }
 
 console.log(`\n${failures === 0 ? 'ALL FILTER CHECKS PASSED' : `${failures} FAILURE(S)`}`);

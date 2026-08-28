@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ClassRecruit } from '../../../shared/types.ts';
 import {
   RATING_BY_FIELD,
+  formatRatingValue,
   ratingsFor,
   type ScoutCriterion,
   type ScoutHit,
@@ -101,7 +102,22 @@ export default function ScoutingView({
   }, [key, group, pool, minStars, openOnly, sortField, asc]);
 
   const setC = (i: number, patch: Partial<ScoutCriterion>) =>
-    setCriteria((cs) => cs.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+    setCriteria((cs) =>
+      cs.map((c, j) => {
+        if (j !== i) return c;
+        const next = { ...c, ...patch };
+        // Switching attribute: a rating threshold of 90 means nothing as a
+        // weight, so fall back to that attribute's own default when the
+        // carried-over number is outside its range.
+        if (patch.field && patch.field !== c.field) {
+          const def = RATING_BY_FIELD.get(patch.field);
+          const lo = def?.min ?? 0;
+          const hi = def?.max ?? 99;
+          if (next.value < lo || next.value > hi) next.value = def?.dflt ?? Math.round((lo + hi) / 2);
+        }
+        return next;
+      })
+    );
 
   const columns = [...new Set(active.map((c) => c.field))];
   const COLS = 8 + columns.length;
@@ -148,11 +164,14 @@ export default function ScoutingView({
             <input
               className="search scout-value"
               type="number"
-              min={0}
-              max={99}
+              min={RATING_BY_FIELD.get(c.field)?.min ?? 0}
+              max={RATING_BY_FIELD.get(c.field)?.max ?? 99}
               value={Number.isFinite(c.value) ? c.value : ''}
               onChange={(e) => setC(i, { value: Number(e.target.value) })}
             />
+            {RATING_BY_FIELD.get(c.field)?.kind === 'height' && (
+              <span className="scout-hint">{formatRatingValue(c.field, c.value)}</span>
+            )}
             <button
               className="btn"
               onClick={() => setCriteria((cs) => cs.filter((_, j) => j !== i))}
@@ -166,10 +185,10 @@ export default function ScoutingView({
         <button
           className="btn"
           onClick={() =>
-            setCriteria((cs) => [
-              ...cs,
-              { field: options.find((o) => !cs.some((c) => c.field === o.field))?.field ?? 'SpeedRating', op: 'gte', value: 85 }
-            ])
+            setCriteria((cs) => {
+              const next = options.find((o) => !cs.some((c) => c.field === o.field)) ?? options[0];
+              return [...cs, { field: next.field, op: 'gte', value: next.dflt ?? 85 }];
+            })
           }
         >
           + Add attribute
@@ -250,6 +269,13 @@ export default function ScoutingView({
                 </tr>
               </thead>
               <tbody>
+                {!busy && !rows.length && (
+                  <tr>
+                    <td colSpan={COLS} style={{ padding: '28px 12px', textAlign: 'center', color: 'var(--ink-3)' }}>
+                      No recruits clear every threshold. Loosen one, or widen the position filter.
+                    </td>
+                  </tr>
+                )}
                 {rows.map(({ r, values }) => (
                   <Fragment key={r.row}>
                     <tr
@@ -284,7 +310,7 @@ export default function ScoutingView({
                       </td>
                       {columns.map((f) => (
                         <td key={f} className="num">
-                          <b>{values[f] ?? '—'}</b>
+                          <b>{values[f] === undefined ? '—' : formatRatingValue(f, values[f])}</b>
                         </td>
                       ))}
                       <td>
