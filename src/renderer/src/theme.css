@@ -1996,3 +1996,70 @@ table.tbl.tbl-wide {
   align-self: center;
   margin-right: 2px;
 }
+
+/* Attribute criteria flow left to right, three across, collapsing on narrow
+   windows rather than forcing a horizontal squeeze. */
+.scout-rows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+@media (max-width: 1240px) {
+  .scout-rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .scout-rows {
+    grid-template-columns: 1fr;
+  }
+}
+
+.scout-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* The select gives way first so three cells fit before anything wraps. */
+.scout-row .scout-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.scout-row .scout-value {
+  flex: none;
+  width: 58px;
+}
+
+.scout-row .btn {
+  flex: none;
+  padding: 4px 8px;
+}
+
+.seg-ops {
+  flex: none;
+}
+
+.seg-ops .filter {
+  min-width: 28px;
+  padding: 3px 6px;
+}
+
+.scout-hint {
+  flex: none;
+  min-width: 38px;
+}
+
+/* Divider between filter clusters sharing one row. */
+.filter-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: var(--line);
+}

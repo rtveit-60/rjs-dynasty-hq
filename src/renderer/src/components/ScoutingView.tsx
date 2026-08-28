@@ -162,6 +162,7 @@ export default function ScoutingView({
     <>
       <div className="scout-builder">
         <div className="scout-title">Attribute filters</div>
+        <div className="scout-rows">
         {criteria.map((c, i) => (
           <div className="scout-row" key={i}>
             <select
@@ -208,8 +209,10 @@ export default function ScoutingView({
             </button>
           </div>
         ))}
+        </div>
         <button
           className="btn"
+          style={{ marginTop: 8 }}
           onClick={() =>
             setCriteria((cs) => {
               const next = options.find((o) => !cs.some((c) => c.field === o.field)) ?? options[0];
@@ -235,44 +238,8 @@ export default function ScoutingView({
             {g}
           </button>
         ))}
-      </div>
 
-      {/* Sides collapse into roles: LT/RT are both tackles, LOLB is the Will. */}
-      {(SUB_POSITIONS[group]?.length ?? 0) > 0 && (
-        <div className="filters" style={{ marginTop: 0 }}>
-          <span className="filter-label">Role</span>
-          {['ALL', ...SUB_POSITIONS[group].map((s) => s.key)].map((k) => (
-            <button
-              key={k}
-              className={`filter ${sub === k ? 'active' : ''}`}
-              onClick={() => {
-                setSub(k);
-                setArchetype('ALL');
-              }}
-            >
-              {k === 'ALL' ? 'All' : (SUB_POSITIONS[group].find((s) => s.key === k)?.label ?? k)}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="filters" style={{ marginTop: 0 }}>
-        <span className="filter-label">Archetype</span>
-        <select
-          className="scout-select"
-          value={archetype}
-          onChange={(e) => setArchetype(e.target.value)}
-          style={{ minWidth: 200 }}
-        >
-          <option value="ALL">Any archetype ({archetypeOptions.length})</option>
-          {archetypeOptions.map((a) => (
-            <option key={a} value={a}>
-              {archetypeLabel(a)}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="filters" style={{ marginTop: 0 }}>
+        <span className="filter-sep" />
         {[
           { k: 'all', label: 'All' },
           { k: 'hs', label: 'High School' },
@@ -286,6 +253,8 @@ export default function ScoutingView({
             {p.label}
           </button>
         ))}
+
+        <span className="filter-sep" />
         {[
           { label: 'Any ★', min: 0 },
           { label: '5★', min: 5 },
@@ -303,6 +272,44 @@ export default function ScoutingView({
         <button className={`filter ${openOnly ? 'active' : ''}`} onClick={() => setOpenOnly(!openOnly)}>
           Uncommitted
         </button>
+      </div>
+
+      {/* Archetype, with the role chips beside it. Sides collapse into roles:
+          LT/RT are both tackles, LOLB is the Will. */}
+      <div className="filters" style={{ marginTop: 0 }}>
+        <span className="filter-label">Archetype</span>
+        <select
+          className="scout-select"
+          value={archetype}
+          onChange={(e) => setArchetype(e.target.value)}
+          style={{ minWidth: 190 }}
+        >
+          <option value="ALL">Any archetype ({archetypeOptions.length})</option>
+          {archetypeOptions.map((a) => (
+            <option key={a} value={a}>
+              {archetypeLabel(a)}
+            </option>
+          ))}
+        </select>
+
+        {(SUB_POSITIONS[group]?.length ?? 0) > 0 && (
+          <>
+            <span className="filter-sep" />
+            <span className="filter-label">Role</span>
+            {['ALL', ...SUB_POSITIONS[group].map((s) => s.key)].map((k) => (
+              <button
+                key={k}
+                className={`filter ${sub === k ? 'active' : ''}`}
+                onClick={() => {
+                  setSub(k);
+                  setArchetype('ALL');
+                }}
+              >
+                {k === 'ALL' ? 'All' : (SUB_POSITIONS[group].find((s) => s.key === k)?.label ?? k)}
+              </button>
+            ))}
+          </>
+        )}
       </div>
 
       {!active.length ? (
