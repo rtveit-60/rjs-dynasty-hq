@@ -347,7 +347,7 @@ export default function RecruitingView() {
                         <Race race={r.race} />
                       </td>
                     </tr>
-                    {openRow === r.row && <RecruitCardRow playerRow={r.row} span={COLS} />}
+                    {openRow === r.row && <RecruitCardRow playerRow={r.playerRow} span={COLS} />}
                   </Fragment>
                 ))}
               </tbody>

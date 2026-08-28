@@ -329,6 +329,29 @@ function createWindow(): void {
               );
             }
           } else if (capturePath) {
+            // Optional scripted steps so a specific UI state can be captured:
+            //   HQ_CAPTURE_NAV=RECRUITING  HQ_CAPTURE_CLICK="QB,4★+"
+            const navLabel = process.env['HQ_CAPTURE_NAV'];
+            if (navLabel) {
+              await win!.webContents.executeJavaScript(
+                `[...document.querySelectorAll('.nav-item')].find((b) => b.textContent.includes(${JSON.stringify(navLabel)}))?.click()`
+              );
+              await new Promise((r) => setTimeout(r, 1200));
+            }
+            for (const label of (process.env['HQ_CAPTURE_CLICK'] ?? '').split(',').filter(Boolean)) {
+              await win!.webContents.executeJavaScript(
+                `[...document.querySelectorAll('.filter,.tab,.btn')].find((b) => b.textContent.trim() === ${JSON.stringify(label.trim())})?.click()`
+              );
+              await new Promise((r) => setTimeout(r, 700));
+            }
+            // HQ_CAPTURE_ROW=<n> expands the nth table row (for detail cards).
+            const rowIndex = process.env['HQ_CAPTURE_ROW'];
+            if (rowIndex) {
+              await win!.webContents.executeJavaScript(
+                `document.querySelectorAll('.tbl tbody tr')[${Number(rowIndex)}]?.click()`
+              );
+              await new Promise((r) => setTimeout(r, 900));
+            }
             const image = await win!.webContents.capturePage();
             writeFileSync(capturePath, image.toPNG());
             if (depthPath) {

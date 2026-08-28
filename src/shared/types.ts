@@ -269,7 +269,10 @@ export interface SchoolGrade {
 }
 
 export interface ClassRecruit {
+  /** Row in the Recruit table — matches the recruiting board's own ids. */
   row: number;
+  /** Row in the Player table, where names/ratings/abilities live. */
+  playerRow: number;
   name: string;
   position: string;
   stars: number;

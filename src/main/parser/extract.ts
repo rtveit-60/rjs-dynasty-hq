@@ -962,6 +962,9 @@ async function extractRecruiting(
       const classRaw = String(val(rec, 'Class') ?? '');
       recruits.push({
         row,
+        // The Recruit row and the Player row are different indexes; anything
+        // reading Player fields must use this one, not `row`.
+        playerRow: playerRef!.row,
         name: `${String(val(p, 'FirstName') ?? '')} ${String(val(p, 'LastName') ?? '')}`.trim(),
         position,
         stars: STAR_MAP[String(val(p, 'ProspectStarRating'))] ?? 0,
