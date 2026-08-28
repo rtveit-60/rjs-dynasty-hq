@@ -11,8 +11,9 @@ import {
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 import RecruitCardRow from './RecruitCardRow.tsx';
+import ScoutingView from './ScoutingView.tsx';
 
-type Board = 'hs' | 'portal';
+type Board = 'hs' | 'portal' | 'scout';
 
 type SortKey =
   | 'rating'
@@ -217,8 +218,19 @@ export default function RecruitingView() {
           TRANSFER PORTAL
           {portalCount > 0 && <span className="tab-count">{fmt(portalCount)}</span>}
         </button>
+        <button className={`tab ${board === 'scout' ? 'active' : ''}`} onClick={() => setBoard('scout')}>
+          SCOUTING REPORTS
+        </button>
       </div>
 
+      {board === 'scout' ? (
+        <ScoutingView
+          recruits={rc.recruits}
+          teamName={teamName}
+          portalActive={portalCount > 0}
+        />
+      ) : (
+      <>
       <div className="page-sub">
         <span className="chip">
           <span className="k">PROSPECTS</span> <b>{fmt(pool.length)}</b>
@@ -379,6 +391,8 @@ export default function RecruitingView() {
             recruit's actual pursuers.
           </p>
         </>
+      )}
+      </>
       )}
     </div>
   );

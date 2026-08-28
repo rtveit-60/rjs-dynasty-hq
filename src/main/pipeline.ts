@@ -3,7 +3,9 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { MediaEvent, RecruitCard, Snapshot, WatchStatus } from '../shared/types.ts';
+import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
+import { scoutRecruits } from './parser/recruit-scout.ts';
 import { mergeSeasonHistory } from './history.ts';
 import { generateMedia, sortEvents, type MediaState } from './media/engine.ts';
 import { extractSnapshot } from './parser/extract.ts';
@@ -91,6 +93,12 @@ export class Pipeline {
   async recruitCard(playerRow: number): Promise<RecruitCard | null> {
     if (!this.franchise) return null;
     return extractRecruitCard(this.franchise, playerRow);
+  }
+
+  /** Attribute search across the recruiting class. */
+  async scout(criteria: ScoutCriterion[]): Promise<ScoutHit[]> {
+    if (!this.franchise) return [];
+    return scoutRecruits(this.franchise, criteria);
   }
 
   /** Re-scope to a different school without re-parsing the file. */

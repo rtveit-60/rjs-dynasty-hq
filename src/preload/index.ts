@@ -11,6 +11,7 @@ import type {
   ThemeMode,
   WatchStatus
 } from '../shared/types.ts';
+import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
 
 const subscribe = <T>(channel: string) => {
   return (cb: (data: T) => void): (() => void) => {
@@ -32,6 +33,7 @@ export interface HQBridge {
   onUpdateReady: (cb: (version: string) => void) => () => void;
   revealSave: () => Promise<void>;
   getRecruitCard: (playerRow: number) => Promise<RecruitCard | null>;
+  scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
   getPlaybook: (
     side: 'offense' | 'defense',
@@ -56,6 +58,7 @@ const bridge: HQBridge = {
   onUpdateReady: subscribe<string>('update:ready'),
   revealSave: () => ipcRenderer.invoke('save:reveal'),
   getRecruitCard: (playerRow) => ipcRenderer.invoke('recruit:card', playerRow),
+  scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   getPlaybook: (side, coachRow, schemeEnum) =>
     ipcRenderer.invoke('playbook:get', side, coachRow, schemeEnum),

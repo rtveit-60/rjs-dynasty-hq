@@ -154,6 +154,12 @@ function registerIpc(): void {
     Number.isInteger(playerRow) && playerRow >= 0 ? pipeline.recruitCard(playerRow) : null,
   );
 
+  // Attribute search over the recruiting class. Runs against the cached parse,
+  // so it is cheap enough to re-run as the user types a threshold.
+  ipcMain.handle('recruit:scout', (_e, criteria: unknown) =>
+    Array.isArray(criteria) ? pipeline.scout(criteria as never) : [],
+  );
+
   // Returns the pre-extracted playbook the team runs (formations, plays, alignments,
   // routes): the coach's selected book by its playbook row, falling back to the scheme
   // archetype. null if nothing matches.

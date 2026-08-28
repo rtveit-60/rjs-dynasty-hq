@@ -8,6 +8,8 @@ import type { ClassRecruit } from '../src/shared/types.ts';
 import { extractSnapshot } from '../src/main/parser/extract.ts';
 import { loadFranchise } from '../src/main/parser/franchise.ts';
 import { extractRecruitCard } from '../src/main/parser/recruit-card.ts';
+import { scoutRecruits } from '../src/main/parser/recruit-scout.ts';
+import { RATING_BY_FIELD, type ScoutCriterion } from '../src/shared/ratings.ts';
 import { POSITION_GROUPS } from '../src/renderer/src/lib/format.ts';
 
 const savePath = process.argv[2] ?? 'samples/DYNASTY-DUKETOND-AUTOSAVE';
@@ -155,6 +157,36 @@ for (const r of spread) {
     `${r.name} (${r.position})`,
     ok,
     card ? `card says ${card.name} (${card.position})` : 'no card returned',
+  );
+}
+
+// ---- 10. Scouting: attribute queries must hold their own thresholds ----
+console.log('\nscouting queries:');
+const byPlayerRow = new Map(all.map((r) => [r.playerRow, r]));
+const queries: { label: string; criteria: ScoutCriterion[] }[] = [
+  { label: 'SPD >= 92, ACC >= 90', criteria: [{ field: 'SpeedRating', op: 'gte', value: 92 }, { field: 'AccelerationRating', op: 'gte', value: 90 }] },
+  { label: 'THP >= 94', criteria: [{ field: 'ThrowPowerRating', op: 'gte', value: 94 }] },
+  { label: 'STR <= 60', criteria: [{ field: 'StrengthRating', op: 'lte', value: 60 }] },
+  { label: 'unknown field is ignored', criteria: [{ field: 'NotARating', op: 'gte', value: 50 }] }
+];
+for (const q of queries) {
+  const hits = await scoutRecruits(franchise, q.criteria);
+  const known = q.criteria.every((c) => RATING_BY_FIELD.has(c.field));
+  if (!known) {
+    check(`${q.label} → 0 hits`, hits.length === 0, `got ${hits.length}`);
+    continue;
+  }
+  const bad = hits.filter((h) =>
+    q.criteria.some((c) => {
+      const v = h.values[c.field];
+      return v === undefined || (c.op === 'gte' ? v < c.value : v > c.value);
+    }),
+  );
+  check(`${q.label} (${hits.length} hits) all satisfy the thresholds`, bad.length === 0, `${bad.length} violate`);
+  check(
+    `${q.label} hits are all recruits`,
+    hits.every((h) => byPlayerRow.has(h.playerRow)),
+    'some hits are not in the class',
   );
 }
 
