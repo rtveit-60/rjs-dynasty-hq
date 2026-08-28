@@ -10,7 +10,7 @@ import { loadFranchise } from '../src/main/parser/franchise.ts';
 import { extractRecruitCard } from '../src/main/parser/recruit-card.ts';
 import { scoutRecruits } from '../src/main/parser/recruit-scout.ts';
 import { RATING_BY_FIELD, type ScoutCriterion } from '../src/shared/ratings.ts';
-import { POSITION_GROUPS } from '../src/renderer/src/lib/format.ts';
+import { POSITION_GROUPS, SUB_POSITIONS, positionsFor } from '../src/renderer/src/lib/format.ts';
 
 const savePath = process.argv[2] ?? 'samples/DYNASTY-DUKETOND-AUTOSAVE';
 const schoolFilter = (process.argv[3] ?? 'notre').toLowerCase();
@@ -159,6 +159,55 @@ for (const r of spread) {
     card ? `card says ${card.name} (${card.position})` : 'no card returned',
   );
 }
+
+// ---- 9b. Sub-position roles cover their group with no overlap ----
+console.log('\nsub-position roles:');
+for (const [group, subs] of Object.entries(SUB_POSITIONS)) {
+  const groupPositions = POSITION_GROUPS[group] ?? [];
+  const covered = subs.flatMap((s) => s.positions);
+  const outside = covered.filter((p) => !groupPositions.includes(p));
+  const uncovered = groupPositions.filter((p) => !covered.includes(p));
+  const dupes = covered.filter((p, i) => covered.indexOf(p) !== i);
+  check(
+    `${group}: ${subs.map((s) => `${s.label}=${s.positions.join('/')}`).join('  ')}`,
+    outside.length === 0 && uncovered.length === 0 && dupes.length === 0,
+    [
+      outside.length ? `outside group: ${outside.join(',')}` : '',
+      uncovered.length ? `not reachable: ${uncovered.join(',')}` : '',
+      dupes.length ? `in two roles: ${dupes.join(',')}` : ''
+    ]
+      .filter(Boolean)
+      .join('; '),
+  );
+  // Each role must actually select the positions it claims.
+  for (const s of subs) {
+    const got = all.filter((r) => positionsFor(group, s.key).includes(r.position));
+    check(
+      `  ${group}/${s.label} (${got.length}) returns only ${s.positions.join('/')}`,
+      got.every((r) => s.positions.includes(r.position)),
+    );
+  }
+}
+
+// ---- 9c. Archetypes ----
+console.log('\narchetypes:');
+const withArch = all.filter((r) => r.archetype);
+check(`every recruit has an archetype (${withArch.length}/${all.length})`, withArch.length === all.length);
+const roleByPos = new Map<string, Set<string>>();
+for (const r of all) {
+  const role = r.archetype.includes('_') ? r.archetype.split('_')[0] : '';
+  if (!roleByPos.has(r.position)) roleByPos.set(r.position, new Set());
+  roleByPos.get(r.position)!.add(role);
+}
+const mixed = [...roleByPos.entries()].filter(([, roles]) => roles.size > 1);
+check(
+  `each position maps to one archetype family`,
+  mixed.length === 0,
+  mixed.map(([p, s]) => `${p}: ${[...s].join('/')}`).join('; '),
+);
+console.log(
+  `  families: ${[...new Set(all.map((r) => r.archetype.split('_')[0]))].sort().join(', ')}`,
+);
 
 // ---- 10. Scouting: attribute queries must hold their own thresholds ----
 console.log('\nscouting queries:');

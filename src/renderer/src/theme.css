@@ -1987,3 +1987,12 @@ table.tbl.tbl-wide {
   color: var(--ink-3);
   min-width: 42px;
 }
+.filter-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  align-self: center;
+  margin-right: 2px;
+}

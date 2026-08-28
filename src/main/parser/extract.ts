@@ -967,6 +967,7 @@ async function extractRecruiting(
         playerRow: playerRef!.row,
         name: `${String(val(p, 'FirstName') ?? '')} ${String(val(p, 'LastName') ?? '')}`.trim(),
         position,
+        archetype: String(val(p, 'PlayerType') ?? ''),
         stars: STAR_MAP[String(val(p, 'ProspectStarRating'))] ?? 0,
         quality: String(val(rec, 'QualityModifier') ?? 'NORMAL'),
         stage,

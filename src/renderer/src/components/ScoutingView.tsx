@@ -8,7 +8,18 @@ import {
   type ScoutHit,
   type ScoutOp
 } from '../../../shared/ratings.ts';
-import { POSITION_GROUPS, STAGE_LABELS, devClass, devLabel, fmt, spaceOut, stars } from '../lib/format.ts';
+import {
+  POSITION_GROUPS,
+  STAGE_LABELS,
+  SUB_POSITIONS,
+  archetypeLabel,
+  devClass,
+  devLabel,
+  fmt,
+  positionsFor,
+  spaceOut,
+  stars
+} from '../lib/format.ts';
 import RecruitCardRow from './RecruitCardRow.tsx';
 
 type Row = { r: ClassRecruit; values: Record<string, number> };
@@ -33,6 +44,8 @@ export default function ScoutingView({
 }) {
   const [criteria, setCriteria] = useState<ScoutCriterion[]>(DEFAULT_CRITERIA);
   const [group, setGroup] = useState('ALL');
+  const [sub, setSub] = useState('ALL');
+  const [archetype, setArchetype] = useState('ALL');
   const [pool, setPool] = useState<'all' | 'hs' | 'portal'>('all');
   const [minStars, setMinStars] = useState(0);
   const [openOnly, setOpenOnly] = useState(false);
@@ -77,7 +90,9 @@ export default function ScoutingView({
       if (pool === 'portal' && !r.isTransfer) continue;
       if (minStars && r.stars < minStars) continue;
       if (openOnly && r.committedTo) continue;
-      if (group !== 'ALL' && !(POSITION_GROUPS[group] ?? []).includes(r.position)) continue;
+      const allowed = positionsFor(group, sub);
+      if (allowed.length && !allowed.includes(r.position)) continue;
+      if (archetype !== 'ALL' && r.archetype !== archetype) continue;
       out.push({ r, values: h.values });
     }
     const dir = asc ? 1 : -1;
@@ -90,7 +105,18 @@ export default function ScoutingView({
       return (a.r.nationalRank || 1e9) - (b.r.nationalRank || 1e9);
     });
     return out;
-  }, [hits, byPlayerRow, pool, minStars, openOnly, group, sortField, asc, active]);
+  }, [hits, byPlayerRow, pool, minStars, openOnly, group, sub, archetype, sortField, asc, active]);
+
+  /** Archetypes actually present for the current position selection. */
+  const archetypeOptions = useMemo(() => {
+    const allowed = positionsFor(group, sub);
+    const seen = new Set<string>();
+    for (const r of recruits) {
+      if (allowed.length && !allowed.includes(r.position)) continue;
+      if (r.archetype) seen.add(r.archetype);
+    }
+    return [...seen].sort();
+  }, [recruits, group, sub]);
 
   const pageCount = Math.max(1, Math.ceil(rowsAll.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -99,7 +125,7 @@ export default function ScoutingView({
   useEffect(() => {
     setPage(0);
     setOpenRow(null);
-  }, [key, group, pool, minStars, openOnly, sortField, asc]);
+  }, [key, group, sub, archetype, pool, minStars, openOnly, sortField, asc]);
 
   const setC = (i: number, patch: Partial<ScoutCriterion>) =>
     setCriteria((cs) =>
@@ -120,7 +146,7 @@ export default function ScoutingView({
     );
 
   const columns = [...new Set(active.map((c) => c.field))];
-  const COLS = 8 + columns.length;
+  const COLS = 9 + columns.length;
 
   const sortBy = (f: string) => {
     if (sortField === f) setAsc(!asc);
@@ -197,10 +223,54 @@ export default function ScoutingView({
 
       <div className="filters" style={{ marginTop: 12 }}>
         {['ALL', ...Object.keys(POSITION_GROUPS)].map((g) => (
-          <button key={g} className={`filter ${group === g ? 'active' : ''}`} onClick={() => setGroup(g)}>
+          <button
+            key={g}
+            className={`filter ${group === g ? 'active' : ''}`}
+            onClick={() => {
+              setGroup(g);
+              setSub('ALL');
+              setArchetype('ALL');
+            }}
+          >
             {g}
           </button>
         ))}
+      </div>
+
+      {/* Sides collapse into roles: LT/RT are both tackles, LOLB is the Will. */}
+      {(SUB_POSITIONS[group]?.length ?? 0) > 0 && (
+        <div className="filters" style={{ marginTop: 0 }}>
+          <span className="filter-label">Role</span>
+          {['ALL', ...SUB_POSITIONS[group].map((s) => s.key)].map((k) => (
+            <button
+              key={k}
+              className={`filter ${sub === k ? 'active' : ''}`}
+              onClick={() => {
+                setSub(k);
+                setArchetype('ALL');
+              }}
+            >
+              {k === 'ALL' ? 'All' : (SUB_POSITIONS[group].find((s) => s.key === k)?.label ?? k)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="filters" style={{ marginTop: 0 }}>
+        <span className="filter-label">Archetype</span>
+        <select
+          className="scout-select"
+          value={archetype}
+          onChange={(e) => setArchetype(e.target.value)}
+          style={{ minWidth: 200 }}
+        >
+          <option value="ALL">Any archetype ({archetypeOptions.length})</option>
+          {archetypeOptions.map((a) => (
+            <option key={a} value={a}>
+              {archetypeLabel(a)}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="filters" style={{ marginTop: 0 }}>
         {[
@@ -249,6 +319,7 @@ export default function ScoutingView({
                   <th>Gem</th>
                   <th>Recruit &amp; School</th>
                   <th>Pos</th>
+                  <th>Archetype</th>
                   <th>Dev</th>
                   {columns.map((f) => (
                     <th
@@ -304,6 +375,9 @@ export default function ScoutingView({
                       </td>
                       <td>
                         <span className="pos-tag">{r.position}</span>
+                      </td>
+                      <td className="cell-clip" title={archetypeLabel(r.archetype)}>
+                        {archetypeLabel(r.archetype)}
                       </td>
                       <td>
                         <span className={devClass(r.devTrait)}>{devLabel(r.devTrait)}</span>

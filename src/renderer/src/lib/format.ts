@@ -136,6 +136,61 @@ export const POSITION_GROUPS: Record<string, string[]> = {
   ST: ['K', 'P', 'LS']
 };
 
+/**
+ * Sub-roles inside a position group. The save stores a side (LT vs RT, LOLB vs
+ * ROLB) where scouting cares about the role, so these collapse the sides into
+ * the names coaches actually use — tackles vs guards, Mike/Sam/Will.
+ */
+export interface SubPosition {
+  key: string;
+  label: string;
+  positions: string[];
+}
+
+export const SUB_POSITIONS: Record<string, SubPosition[]> = {
+  RB: [
+    { key: 'HB', label: 'HB', positions: ['HB'] },
+    { key: 'FB', label: 'FB', positions: ['FB'] }
+  ],
+  OL: [
+    { key: 'OT', label: 'OT', positions: ['LT', 'RT'] },
+    { key: 'OG', label: 'OG', positions: ['LG', 'RG'] },
+    { key: 'C', label: 'C', positions: ['C'] }
+  ],
+  DL: [
+    { key: 'EDGE', label: 'EDGE', positions: ['LE', 'RE'] },
+    { key: 'DT', label: 'DT', positions: ['DT', 'NT'] }
+  ],
+  LB: [
+    { key: 'MIKE', label: 'MIKE', positions: ['MLB'] },
+    { key: 'SAM', label: 'SAM', positions: ['ROLB'] },
+    { key: 'WILL', label: 'WILL', positions: ['LOLB'] }
+  ],
+  DB: [
+    { key: 'CB', label: 'CB', positions: ['CB'] },
+    { key: 'S', label: 'S', positions: ['FS', 'SS'] }
+  ],
+  ST: [
+    { key: 'K', label: 'K', positions: ['K'] },
+    { key: 'P', label: 'P', positions: ['P'] },
+    { key: 'LS', label: 'LS', positions: ['LS'] }
+  ]
+};
+
+/** Positions a group + optional sub-role selection resolves to. */
+export function positionsFor(group: string, sub: string): string[] {
+  if (!group || group === 'ALL') return [];
+  const base = POSITION_GROUPS[group] ?? [];
+  if (!sub || sub === 'ALL') return base;
+  const found = (SUB_POSITIONS[group] ?? []).find((s) => s.key === sub);
+  return found ? found.positions : base;
+}
+
+/** "WR_ShiftyRouteRunner" → "Shifty Route Runner"; also the role prefix. */
+export function archetypeRole(raw: string): string {
+  return raw.includes('_') ? raw.split('_')[0] : '';
+}
+
 export const DEPTH_SECTIONS: { title: string; positions: string[] }[] = [
   { title: 'Offense', positions: ['QB', 'HB', 'FB', 'WR', 'TE', 'LT', 'LG', 'C', 'RG', 'RT'] },
   { title: 'Defense', positions: ['LE', 'DT', 'NT', 'RE', 'LOLB', 'MLB', 'ROLB', 'CB', 'FS', 'SS'] },

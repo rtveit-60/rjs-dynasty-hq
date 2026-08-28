@@ -275,6 +275,8 @@ export interface ClassRecruit {
   playerRow: number;
   name: string;
   position: string;
+  /** Save archetype enum, e.g. "OT_Agile" — the prefix is the role family. */
+  archetype: string;
   stars: number;
   quality: string;
   stage: string;

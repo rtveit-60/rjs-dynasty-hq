@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ClassRecruit, TargetSchool } from '../../../shared/types.ts';
 import {
   POSITION_GROUPS,
+  SUB_POSITIONS,
+  positionsFor,
   STAGE_LABELS,
   devClass,
   devLabel,
@@ -79,6 +81,7 @@ export default function RecruitingView() {
   const [board, setBoard] = useState<Board>('hs');
   const [q, setQ] = useState('');
   const [group, setGroup] = useState('ALL');
+  const [sub, setSub] = useState('ALL');
   const [minStars, setMinStars] = useState(0);
   const [edgeOnly, setEdgeOnly] = useState(false);
   const [openOnly, setOpenOnly] = useState(false);
@@ -97,7 +100,8 @@ export default function RecruitingView() {
     const needle = q.trim().toLowerCase();
     return pool.filter((r) => {
       if (minStars && r.stars < minStars) return false;
-      if (group !== 'ALL' && !(POSITION_GROUPS[group] ?? []).includes(r.position)) return false;
+      const allowed = positionsFor(group, sub);
+      if (allowed.length && !allowed.includes(r.position)) return false;
       if (edgeOnly && !r.edges.length) return false;
       if (openOnly && r.committedTo) return false;
       if (boardOnly && !r.onBoard) return false;
@@ -107,7 +111,7 @@ export default function RecruitingView() {
       }
       return true;
     });
-  }, [pool, q, group, minStars, edgeOnly, openOnly, boardOnly]);
+  }, [pool, q, group, sub, minStars, edgeOnly, openOnly, boardOnly]);
 
   const sorted = useMemo(() => {
     const dir = asc ? 1 : -1;
@@ -158,7 +162,7 @@ export default function RecruitingView() {
   useEffect(() => {
     setPage(0);
     setOpenRow(null);
-  }, [board, q, group, minStars, edgeOnly, openOnly, boardOnly, sortKey, asc]);
+  }, [board, q, group, sub, minStars, edgeOnly, openOnly, boardOnly, sortKey, asc]);
 
   if (!rc) {
     return (
@@ -255,11 +259,30 @@ export default function RecruitingView() {
           onChange={(e) => setQ(e.target.value)}
         />
         {['ALL', ...Object.keys(POSITION_GROUPS)].map((g) => (
-          <button key={g} className={`filter ${group === g ? 'active' : ''}`} onClick={() => setGroup(g)}>
+          <button
+            key={g}
+            className={`filter ${group === g ? 'active' : ''}`}
+            onClick={() => {
+              setGroup(g);
+              setSub('ALL');
+            }}
+          >
             {g}
           </button>
         ))}
       </div>
+
+      {/* LT and RT are both tackles; LOLB is the Will. Let the side collapse. */}
+      {(SUB_POSITIONS[group]?.length ?? 0) > 0 && (
+        <div className="filters" style={{ marginTop: 0 }}>
+          <span className="filter-label">Role</span>
+          {['ALL', ...SUB_POSITIONS[group].map((s) => s.key)].map((k) => (
+            <button key={k} className={`filter ${sub === k ? 'active' : ''}`} onClick={() => setSub(k)}>
+              {k === 'ALL' ? 'All' : (SUB_POSITIONS[group].find((s) => s.key === k)?.label ?? k)}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="filters" style={{ marginTop: 0 }}>
         {STAR_FILTERS.map((f) => (
           <button
