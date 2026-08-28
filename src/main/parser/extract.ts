@@ -8,6 +8,7 @@ import type {
   Snapshot,
   TeamInfo
 } from '../../shared/types.ts';
+import { COACH_GOAL_LABELS } from '../data/coach-goals.ts';
 import { SCHOOL_LOCATIONS } from '../data/school-locations.ts';
 import { ensureCoachSchema } from './coach-schema.ts';
 import {
@@ -250,7 +251,8 @@ async function extractCoachContract(
     for (let slot = 1; slot <= 3; slot++) {
       const status = String(val(teamRec, `HCContractGoal${slot}Status`) ?? '').trim();
       if (!status || status === 'Count_' || status === 'Invalid') continue;
-      seasonGoals.push({ slot, status });
+      const id = goalRefId(refFromRecord(teamRec, `HCContractGoal${slot}`));
+      seasonGoals.push({ slot, status, id, label: (id && COACH_GOAL_LABELS[id]) || '' });
     }
     const expectedPts = Number(val(teamRec, 'ExpectedContractPoints_ThisYear'));
 
@@ -996,6 +998,19 @@ async function extractSeason(franchise: any): Promise<SeasonState | null> {
     weekType: String(val(rec, 'CurrentWeekType') ?? ''),
     stage: String(val(rec, 'CurrentStage') ?? '')
   };
+}
+
+/**
+ * Asset-space refs (goals, cities, stadiums, bowl trophies) carry a 0x4000 flag
+ * on the table id; the remainder indexes a table in the game's asset files
+ * rather than the save. Strip the flag to get a stable per-goal identifier.
+ */
+const ASSET_REF_FLAG = 0x4000;
+
+function goalRefId(ref: { tableId: number; row: number } | null): string {
+  if (!ref || (ref.tableId === 0 && ref.row === 0)) return '';
+  if (!(ref.tableId & ASSET_REF_FLAG)) return '';
+  return `${ref.tableId & (ASSET_REF_FLAG - 1)}:${ref.row}`;
 }
 
 /** How deep into the postseason a bowl slot sits — the deepest one is the story. */

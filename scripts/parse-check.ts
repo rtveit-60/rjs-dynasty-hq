@@ -54,6 +54,11 @@ console.log('height range:', Math.min(...roster.map((p) => p.heightIn)), '-', Ma
 
 console.log('\n== coach contract / AD goal ==');
 console.log(JSON.stringify(snap.school?.contract, null, 1));
+const goals = snap.school?.contract?.seasonGoals ?? [];
+if (goals.length) {
+  console.log('\nAD goal ids (add wording to src/main/data/coach-goals.ts):');
+  for (const g of goals) console.log(`  '${g.id}': '',   // slot ${g.slot}, ${g.status}${g.label ? ` — ${g.label}` : ''}`);
+}
 
 console.log('\n== season history ==');
 for (const s of snap.school?.seasonHistory ?? []) console.log(' ', JSON.stringify(s));

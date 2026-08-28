@@ -138,6 +138,10 @@ export interface ContractYear {
 export interface SeasonGoalSlot {
   slot: number;
   status: string;
+  /** Stable goal identifier, `<assetTable>:<row>` — same goal, same id, always. */
+  id: string;
+  /** Wording, once this goal has been identified; empty until then. */
+  label: string;
 }
 
 export interface CoachContract {

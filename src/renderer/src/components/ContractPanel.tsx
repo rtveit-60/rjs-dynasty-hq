@@ -138,10 +138,34 @@ export default function ContractPanel({ contract }: { contract: CoachContract })
               }}
             />
           </div>
-          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 12 }}>
-            The AD sets three goals a season; the save stores their status but keeps the wording in the
-            game's own files.
+          <div style={{ fontSize: 12.5, lineHeight: 1.7, marginBottom: 6 }}>
+            {contract.seasonGoals.map((g) => {
+              const st = /complete|achiev|met|success/i.test(g.status)
+                ? { text: 'done', color: 'var(--good)' }
+                : g.status === 'InProgress'
+                  ? { text: 'in progress', color: 'var(--ink-3)' }
+                  : { text: spaced(g.status).toLowerCase(), color: 'var(--ink-3)' };
+              return (
+                <div key={g.slot}>
+                  <span style={{ color: 'var(--ink-3)' }}>{g.slot}.</span>{' '}
+                  {g.label ? (
+                    <span>{g.label}</span>
+                  ) : (
+                    <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                      goal not yet identified
+                    </span>
+                  )}{' '}
+                  <span style={{ color: st.color, fontSize: 11.5 }}>· {st.text}</span>
+                </div>
+              );
+            })}
           </div>
+          {contract.seasonGoals.some((g) => !g.label) && (
+            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 12 }}>
+              The save references each goal but keeps its wording in the game's own files. Add the text
+              once in <code>coach-goals.ts</code> and it sticks for every team and season.
+            </div>
+          )}
         </>
       )}
 
