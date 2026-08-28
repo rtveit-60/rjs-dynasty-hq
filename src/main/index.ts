@@ -148,6 +148,12 @@ function registerIpc(): void {
     if (savePath) shell.showItemInFolder(savePath);
   });
 
+  // Expanded recruit detail, read on demand from the cached parse — the class is
+  // far too large to ship attributes for every prospect in each snapshot.
+  ipcMain.handle('recruit:card', (_e, playerRow: number) =>
+    Number.isInteger(playerRow) && playerRow >= 0 ? pipeline.recruitCard(playerRow) : null,
+  );
+
   // Returns the pre-extracted playbook the team runs (formations, plays, alignments,
   // routes): the coach's selected book by its playbook row, falling back to the scheme
   // archetype. null if nothing matches.

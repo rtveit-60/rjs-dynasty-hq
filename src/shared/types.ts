@@ -276,6 +276,8 @@ export interface ClassRecruit {
   quality: string;
   stage: string;
   classType: string;
+  /** True for portal transfers, which only appear in the offseason. */
+  isTransfer: boolean;
   devTrait: string;
   homeState: string;
   pipeline: string;
@@ -290,6 +292,34 @@ export interface ClassRecruit {
   onBoard: boolean;
   committedTo: string | null;
   edges: string[];
+}
+
+export interface AbilitySlot {
+  /** Ability name; empty for physical slots, which the save stores as tier only. */
+  name: string;
+  /** Bronze | Silver | Gold | Platinum. */
+  rank: string;
+}
+
+/**
+ * Detail for one recruit, fetched on demand rather than shipped in every
+ * snapshot — 4,101 recruits times 59 ratings is far too much to push per save.
+ */
+export interface RecruitCard {
+  row: number;
+  name: string;
+  position: string;
+  archetype: string;
+  heightIn: number;
+  weightLb: number;
+  overall: number;
+  devTrait: string;
+  homeTown: string;
+  homeState: string;
+  /** Position-relevant ratings, already ordered for display. */
+  ratings: { label: string; value: number }[];
+  mental: AbilitySlot[];
+  physical: AbilitySlot[];
 }
 
 export interface RecruitingData {

@@ -522,6 +522,19 @@ async function extractSplits(franchise: any, teamRec: any): Promise<import('../.
   return null;
 }
 
+/**
+ * `Recruit.Class` short label. Transfers only populate once the save reaches the
+ * offseason portal window — mid-season the class is high schoolers and JUCOs.
+ */
+function classLabel(raw: string): string {
+  if (raw.startsWith('JuniorCollege')) return 'JUCO';
+  if (raw.startsWith('Transfer')) {
+    const yr = raw.slice('Transfer_'.length);
+    return `TR ${yr.slice(0, 2)}`;
+  }
+  return 'HS';
+}
+
 const STAR_MAP: Record<string, number> = {
   FIVE_STAR: 5,
   FOUR_STAR: 4,
@@ -954,7 +967,8 @@ async function extractRecruiting(
         stars: STAR_MAP[String(val(p, 'ProspectStarRating'))] ?? 0,
         quality: String(val(rec, 'QualityModifier') ?? 'NORMAL'),
         stage,
-        classType: classRaw.startsWith('JuniorCollege') ? 'JUCO' : 'HS',
+        classType: classLabel(classRaw),
+        isTransfer: classRaw.startsWith('Transfer'),
         devTrait: String(val(p, 'TraitDevelopment') ?? ''),
         homeState,
         pipeline,

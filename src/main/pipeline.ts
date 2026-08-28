@@ -2,7 +2,8 @@ import { app } from 'electron';
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import type { MediaEvent, Snapshot, WatchStatus } from '../shared/types.ts';
+import type { MediaEvent, RecruitCard, Snapshot, WatchStatus } from '../shared/types.ts';
+import { extractRecruitCard } from './parser/recruit-card.ts';
 import { mergeSeasonHistory } from './history.ts';
 import { generateMedia, sortEvents, type MediaState } from './media/engine.ts';
 import { extractSnapshot } from './parser/extract.ts';
@@ -84,6 +85,12 @@ export class Pipeline {
         void this.refresh(savePath, schoolTeamRow);
       }
     }
+  }
+
+  /** Detail for one recruit, read straight from the cached parse. */
+  async recruitCard(playerRow: number): Promise<RecruitCard | null> {
+    if (!this.franchise) return null;
+    return extractRecruitCard(this.franchise, playerRow);
   }
 
   /** Re-scope to a different school without re-parsing the file. */

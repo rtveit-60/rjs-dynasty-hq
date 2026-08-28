@@ -5,6 +5,7 @@ import type {
   DetectedSave,
   MediaEvent,
   PlaybookBook,
+  RecruitCard,
   Settings,
   Snapshot,
   ThemeMode,
@@ -30,6 +31,7 @@ export interface HQBridge {
   installUpdate: () => Promise<void>;
   onUpdateReady: (cb: (version: string) => void) => () => void;
   revealSave: () => Promise<void>;
+  getRecruitCard: (playerRow: number) => Promise<RecruitCard | null>;
   openExternal: (url: string) => Promise<void>;
   getPlaybook: (
     side: 'offense' | 'defense',
@@ -53,6 +55,7 @@ const bridge: HQBridge = {
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateReady: subscribe<string>('update:ready'),
   revealSave: () => ipcRenderer.invoke('save:reveal'),
+  getRecruitCard: (playerRow) => ipcRenderer.invoke('recruit:card', playerRow),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   getPlaybook: (side, coachRow, schemeEnum) =>
     ipcRenderer.invoke('playbook:get', side, coachRow, schemeEnum),
