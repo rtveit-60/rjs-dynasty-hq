@@ -768,5 +768,63 @@ export async function decompressCasBlocks(
   return out;
 }
 
+/**
+ * Decompress a cas block stream without knowing the decompressed size up front
+ * — superbundle chunk entries carry only their compressed extent. Stops cleanly
+ * at the first thing that is not a block header instead of throwing.
+ */
+export async function decompressCasBlocksUnknownSize(
+  layout: GameLayout,
+  compressed: Buffer,
+): Promise<Buffer> {
+  const parts: Buffer[] = [];
+  let p = 0;
+  while (p + 8 <= compressed.length) {
+    const hi = compressed.readUInt32BE(p);
+    const lo = compressed.readUInt32BE(p + 4);
+    if (hi === 0 && lo === 0) {
+      p += 8;
+      continue;
+    }
+    const decompressedSize = hi & 0x00ffffff;
+    const compressionType = (lo >>> 24) & 0x7f;
+    if (((lo >>> 20) & 0xf) !== 7) break;
+    let bufferSize = lo & 0x000fffff;
+    if (compressionType === 0) bufferSize = decompressedSize;
+    if (p + 8 + bufferSize > compressed.length) break;
+    const block = compressed.subarray(p + 8, p + 8 + bufferSize);
+    p += 8 + bufferSize;
+    const dst = Buffer.alloc(decompressedSize);
+    switch (compressionType) {
+      case 0x00:
+        block.copy(dst);
+        break;
+      case 0x02:
+        zlib.inflateSync(block).copy(dst);
+        break;
+      case 0x0f: {
+        const zstd = (zlib as unknown as { zstdDecompressSync?: (b: Buffer) => Buffer })
+          .zstdDecompressSync;
+        if (!zstd) throw new Error('cas block: zstd not supported by this Node build');
+        zstd(block).copy(dst);
+        break;
+      }
+      case 0x11:
+      case 0x15:
+      case 0x19: {
+        const oodle = await getOodle(layout.gameRoot);
+        if (!oodle) throw new Error('oodle unavailable');
+        const n = oodle(block, dst, decompressedSize);
+        if (n !== decompressedSize) throw new Error(`oodle returned ${n}/${decompressedSize}`);
+        break;
+      }
+      default:
+        throw new Error(`cas block: unhandled compression type 0x${compressionType.toString(16)}`);
+    }
+    parts.push(dst);
+  }
+  return Buffer.concat(parts);
+}
+
 export const GAME_ROOT_DEFAULT =
   'C:/Program Files (x86)/Steam/steamapps/common/College Football 27';
