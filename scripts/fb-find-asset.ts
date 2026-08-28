@@ -17,12 +17,14 @@ import {
 
 const term = (process.argv[2] ?? 'goal').toLowerCase();
 const deep = process.argv.includes('--assets');
+const sbFilter = (process.argv.find((a) => a.startsWith('--sb=')) ?? '').slice(5).toLowerCase();
 
 const layout = loadLayout(GAME_ROOT_DEFAULT);
 let bundleHits = 0;
 let assetHits = 0;
 
 for (const sb of layout.superBundles) {
+  if (sbFilter && !sb.toLowerCase().includes(sbFilter)) continue;
   const tocPath = path.join(layout.gameRoot, 'Data', `${sb}.toc`);
   let toc;
   try {
