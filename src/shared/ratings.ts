@@ -106,11 +106,31 @@ export function formatRatingValue(field: string, value: number): string {
   return String(value);
 }
 
-/** Ratings for a position group, most relevant first. 'ALL' keeps source order. */
+const byName = (a: RatingDef, b: RatingDef) => a.name.localeCompare(b.name);
+
+/** 0 = scouted for this position, 1 = applies to everyone, 2 = another position. */
+const tierFor = (r: RatingDef, group: string) =>
+  r.groups.includes(group) ? 0 : r.groups.length === 0 ? 1 : 2;
+
+/** Ratings for a position group: relevant first, alphabetical within each tier. */
 export function ratingsFor(group: string): RatingDef[] {
-  if (!group || group === 'ALL') return RATINGS;
-  const rank = (r: RatingDef) => (r.groups.includes(group) ? 0 : r.groups.length === 0 ? 1 : 2);
-  return [...RATINGS].sort((a, b) => rank(a) - rank(b));
+  if (!group || group === 'ALL') return [...RATINGS].sort(byName);
+  return [...RATINGS].sort((a, b) => tierFor(a, group) - tierFor(b, group) || byName(a, b));
+}
+
+/**
+ * The same list split into labelled sections for a <select>. Alphabetical
+ * inside each section — a flat A-Z over 56 ratings buries Speed under S.
+ */
+export function ratingGroupsFor(group: string): { label: string; items: RatingDef[] }[] {
+  if (!group || group === 'ALL') return [{ label: '', items: [...RATINGS].sort(byName) }];
+  const tiers: RatingDef[][] = [[], [], []];
+  for (const r of RATINGS) tiers[tierFor(r, group)].push(r);
+  return [
+    { label: `Scouted for ${group}`, items: tiers[0].sort(byName) },
+    { label: 'Measurables & athleticism', items: tiers[1].sort(byName) },
+    { label: 'Other positions', items: tiers[2].sort(byName) }
+  ].filter((t) => t.items.length);
 }
 
 export type ScoutOp = 'gte' | 'lte';

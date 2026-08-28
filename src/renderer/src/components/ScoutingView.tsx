@@ -3,6 +3,7 @@ import type { ClassRecruit } from '../../../shared/types.ts';
 import {
   RATING_BY_FIELD,
   formatRatingValue,
+  ratingGroupsFor,
   ratingsFor,
   type ScoutCriterion,
   type ScoutHit,
@@ -157,6 +158,7 @@ export default function ScoutingView({
   };
 
   const options = ratingsFor(group);
+  const optionGroups = ratingGroupsFor(group);
 
   return (
     <>
@@ -170,11 +172,23 @@ export default function ScoutingView({
               value={c.field}
               onChange={(e) => setC(i, { field: e.target.value })}
             >
-              {options.map((r) => (
-                <option key={r.field} value={r.field}>
-                  {r.name} ({r.label})
-                </option>
-              ))}
+              {optionGroups.map((g) =>
+                g.label ? (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.items.map((r) => (
+                      <option key={r.field} value={r.field}>
+                        {r.name} ({r.label})
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : (
+                  g.items.map((r) => (
+                    <option key={r.field} value={r.field}>
+                      {r.name} ({r.label})
+                    </option>
+                  ))
+                )
+              )}
             </select>
             <div className="seg-ops">
               {OPS.map((o) => (
