@@ -1,3 +1,5 @@
+import { ARCHETYPE_LABELS } from '../../../shared/archetypes.ts';
+
 export function schemeLabel(raw: string): string {
   if (!raw) return '—';
   const parts = raw.replace(/^(OFF|DEF)_/, '').split('_');
@@ -42,10 +44,13 @@ export function yearAbbrev(schoolYear: string, redshirt: string): string {
   return yr + rs;
 }
 
-/** "WR_ShiftyRouteRunner" → "Shifty Route Runner" */
+/**
+ * The game's own archetype name where we know it, otherwise the enum made
+ * readable: "WR_ShiftyRouteRunner" → "Shifty Route Runner".
+ */
 export function archetypeLabel(raw: string): string {
   if (!raw) return '—';
-  return spaceOut(raw.replace(/^[A-Z]+_/, ''));
+  return ARCHETYPE_LABELS[raw] ?? spaceOut(raw.replace(/^[A-Z]+_/, ''));
 }
 
 export function devLabel(raw: string): string {
