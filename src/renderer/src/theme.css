@@ -1805,3 +1805,126 @@ table.tbl.tbl-wide {
   color: var(--ink-3);
   margin-top: 6px;
 }
+
+/* Condensed layout for the wide recruiting board, so more columns fit before
+   the horizontal scroll starts. */
+.tbl.tbl-wide thead th {
+  padding: 7px 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+}
+
+.tbl.tbl-wide tbody td {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.tbl.tbl-wide .stars-cell {
+  font-size: 10px;
+  letter-spacing: -0.5px;
+}
+
+.tbl.tbl-wide .pos-tag,
+.tbl.tbl-wide .q,
+.tbl.tbl-wide .edge {
+  font-size: 9.5px;
+  padding: 1px 5px;
+}
+
+.tbl.tbl-wide .dev {
+  font-size: 9.5px;
+  padding: 1px 6px;
+}
+
+/* Long free-text columns get a ceiling rather than pushing everything else off. */
+.tbl.tbl-wide .cell-clip {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tbl.tbl-wide .cell-clip.race {
+  max-width: 230px;
+}
+
+.tbl.tbl-wide .cell-clip.name {
+  max-width: 210px;
+}
+
+/* The board scrolls sideways - make that bar actually visible, since the
+   global thumb colour is nearly invisible on the dark panel. */
+.tbl-wrap {
+  scrollbar-color: var(--ink-3) transparent;
+}
+
+.tbl-wrap::-webkit-scrollbar {
+  height: 11px;
+}
+
+.tbl-wrap::-webkit-scrollbar-thumb {
+  background: var(--ink-3);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.tbl-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-2);
+  background-clip: content-box;
+}
+
+.tbl-wrap::-webkit-scrollbar-track {
+  background: var(--sunken);
+  border-radius: 6px;
+}
+
+/* A 200-row table would park its horizontal scrollbar hundreds of pixels below
+   the fold. Bounding the box keeps that bar on screen and the header sticky.
+   Height itself comes from the flex rules below, not from viewport math. */
+.tbl-wrap.tbl-scroll {
+  overflow: auto;
+}
+
+/* ——— Dynamic board layout ———
+   A data-dense page fills the content area and lets the table take whatever
+   height is left, so the pager and the horizontal scrollbar stay on screen at
+   any window size. Beats guessing the chrome height with a 100vh calc. */
+.page.page-fill {
+  box-sizing: border-box;
+  height: 100%;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.page-fill > * {
+  flex: none;
+}
+
+.page-fill .tbl-wrap.tbl-scroll {
+  flex: 1 1 auto;
+  min-height: 140px;
+  max-height: none;
+  overflow: auto;
+}
+
+.page-fill .empty {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+/* Text columns scale with the window instead of sitting at fixed pixels. */
+.tbl.tbl-wide .cell-clip {
+  max-width: clamp(84px, 11vw, 190px);
+}
+
+.tbl.tbl-wide .cell-clip.name {
+  max-width: clamp(140px, 17vw, 280px);
+}
+
+.tbl.tbl-wide .cell-clip.race {
+  max-width: clamp(130px, 21vw, 340px);
+}

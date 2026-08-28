@@ -203,7 +203,7 @@ export default function RecruitingView() {
   };
 
   return (
-    <div className="page">
+    <div className="page page-fill">
       <div className="page-kicker">Class of {rc.classYear}</div>
       <h1 className="page-title">
         Recruiting <span className="nick">Board</span>
@@ -276,21 +276,21 @@ export default function RecruitingView() {
         </div>
       ) : (
         <>
-          <div className="tbl-wrap">
+          <div className="tbl-wrap tbl-scroll">
             <table className="tbl tbl-wide">
               <thead>
                 <tr>
                   {th('Rating', 'rating')}
-                  {th('Gem/Bust', 'gem')}
+                  {th('Gem', 'gem')}
                   {th('Recruit & School', 'name', { defaultAsc: true })}
                   {th('Pos', 'pos', { defaultAsc: true })}
                   {th('Dev', 'dev')}
                   {th('Pipeline', 'pipeline', { defaultAsc: true })}
                   {th('Status', 'status')}
-                  {th('Pos Rank', 'posrk', { num: true, defaultAsc: true })}
-                  {th('Natl Rank', 'natlrk', { num: true, defaultAsc: true })}
-                  {th('Your Edge', 'edge')}
-                  {th('Offers', 'offers', { num: true })}
+                  {th('Pos Rk', 'posrk', { num: true, defaultAsc: true })}
+                  {th('Natl Rk', 'natlrk', { num: true, defaultAsc: true })}
+                  {th('Edge', 'edge')}
+                  {th('Off', 'offers', { num: true })}
                   {th('The Race', 'race')}
                 </tr>
               </thead>
@@ -311,7 +311,7 @@ export default function RecruitingView() {
                           <span style={{ color: 'var(--ink-3)' }}>—</span>
                         )}
                       </td>
-                      <td className="pname">
+                      <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
                         {r.onBoard && <span className="fav" title="On your board">▣ </span>}
                         {r.name}
@@ -327,11 +327,13 @@ export default function RecruitingView() {
                       <td>
                         <span className={devClass(r.devTrait)}>{devLabel(r.devTrait)}</span>
                       </td>
-                      <td style={{ color: 'var(--ink-2)' }}>{spaceOut(r.pipeline)}</td>
+                      <td className="cell-clip" style={{ color: 'var(--ink-2)' }} title={spaceOut(r.pipeline)}>
+                        {spaceOut(r.pipeline)}
+                      </td>
                       <td>{statusCell(r)}</td>
                       <td className="num">{r.positionRank || '—'}</td>
                       <td className="num">{r.nationalRank || '—'}</td>
-                      <td>
+                      <td className="cell-clip" title={r.edges.join(', ')}>
                         {r.edges.length
                           ? r.edges.map((e) => (
                               <span key={e} className="edge">
@@ -341,7 +343,7 @@ export default function RecruitingView() {
                           : <span style={{ color: 'var(--ink-3)' }}>—</span>}
                       </td>
                       <td className="num">{r.offers}</td>
-                      <td>
+                      <td className="cell-clip race" title={r.race.map((s) => `${s.name} ${s.influence}`).join(' · ')}>
                         <Race race={r.race} />
                       </td>
                     </tr>
