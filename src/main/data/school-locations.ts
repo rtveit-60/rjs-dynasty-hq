@@ -3,6 +3,15 @@
  * Static public data - the save references its city database through game
  * asset files rather than storing readable strings, so we ship our own.
  * Custom/TeamBuilder schools simply won't match and show no location.
+ *
+ * VERIFIED against the game's own CITY table (extracted from its FTC container
+ * - see docs/RESEARCH.md): 134 of 137 entries match the game exactly. The three
+ * that differ are deliberate, because we list the campus and the game lists the
+ * team's broadcast city:
+ *   Miami            campus Coral Gables   / game "Miami"
+ *   UConn            campus Storrs         / game "East Hartford" (its stadium)
+ *   Central Michigan Mount Pleasant        / game "Mt. Pleasant" (abbreviated)
+ * Keep the campus spelling - this renders as school identity, not a game venue.
  */
 export const SCHOOL_LOCATIONS: Record<string, [city: string, state: string, founded: number]> = {
   'Air Force': ['Colorado Springs', 'Colorado', 1954],
