@@ -1,32 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { PlaybookBook, Snapshot } from '../../../shared/types.ts';
 import { prestigeLabel, schemeLabel } from '../lib/format.ts';
-import PlayArt, { personnelLabel } from './PlayArt.tsx';
+import { personnelLabel } from './PlayArt.tsx';
 
 type School = NonNullable<Snapshot['school']>;
-
-/** Civil.GG team slugs, where they differ from a plain slug of the school name. */
-const CIVIL_SLUGS: Record<string, string> = {
-  California: 'cal',
-  'Miami University': 'miami-oh',
-  'UL Monroe': 'louisiana-monroe',
-  "Hawai'i": 'hawaii',
-  'Florida International': 'fiu',
-  USF: 'south-florida',
-  'Southern Mississippi': 'southern-miss'
-};
-
-function civilSlug(longName: string): string {
-  return (
-    CIVIL_SLUGS[longName] ??
-    longName
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-  );
-}
 
 type Side = 'offense' | 'defense';
 
@@ -109,17 +86,6 @@ export default function PlaybookView({ school }: { school: School }) {
                 {prestigeLabel(s.caller.prestige)} prestige)
               </p>
             )}
-            <button
-              className="btn"
-              style={{ marginTop: 10 }}
-              onClick={() =>
-                void window.hq.openExternal(
-                  `https://www.civil.gg/playbooks/team/college/${s.key}/${civilSlug(team.longName)}`
-                )
-              }
-            >
-              Open on Civil.GG ↗
-            </button>
           </div>
           );
         })}
@@ -129,8 +95,7 @@ export default function PlaybookView({ school }: { school: School }) {
 
       <p className="foot-note">
         Scheme and playbook selections are read live from the save; every formation and play here is
-        drawn from your book's own data, fully offline. The Civil.GG links open the same books in your
-        browser for cross-reference.
+        pulled from your book's own data, fully offline. Play diagrams are coming soon.
       </p>
     </>
   );
@@ -199,7 +164,7 @@ function PlaybookBrowser({
 
       {loaded && !book && (
         <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '24px 0' }}>
-          This {side} book isn't bundled yet. Use the Civil.GG link above to view it.
+          This {side} book isn't bundled yet.
         </div>
       )}
 
@@ -281,7 +246,38 @@ function PlaybookBrowser({
                 </span>
               )}
             </div>
-            {play && <PlayArt formation={formation} play={play} side={side} />}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                minHeight: 240,
+                marginTop: 10,
+                padding: 24,
+                border: '1px dashed var(--line)',
+                borderRadius: 8,
+                background: 'var(--sunken)',
+                textAlign: 'center'
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 700,
+                  fontSize: 15,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  color: 'var(--ink-2)'
+                }}
+              >
+                Play Art — Coming Soon
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', maxWidth: 320 }}>
+                Every formation and play is loaded from your book; the diagrams are on the way.
+              </div>
+            </div>
           </div>
         </div>
       )}
