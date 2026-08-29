@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { GameInfo, LeagueLeaders, TeamInfo } from '../../../shared/types.ts';
+import { AWARD_SHORT } from '../../../shared/awards.ts';
 import { NameLink } from './ProfileModal.tsx';
 
 type Mode = 'top25' | 'leaders' | 'awards';
@@ -11,17 +12,18 @@ const MODE_LABEL: Record<Mode, string> = {
 };
 
 /**
- * Projection watch lists for the award races. Award names follow the save's
- * own award vocabulary; the standings are ours, computed from season stats —
- * the game crowns real winners at the awards show.
+ * Projection watch lists for the award races. The names are the game's own
+ * (AWARD_SHORT, generated from its data); the standings are ours, computed
+ * from season stats — the game crowns real winners at the awards show.
  */
-const AWARD_WATCH: { label: string; cat: LeagueLeaders['categories'][number]['key'] }[] = [
-  { label: 'Best Quarterback', cat: 'pass' },
-  { label: 'Best Running Back', cat: 'rush' },
-  { label: 'Best Receiver', cat: 'recv' },
-  { label: 'Tackles', cat: 'tackles' },
-  { label: 'Sacks', cat: 'sacks' },
-  { label: 'Interceptions', cat: 'ints' }
+const AWARD_WATCH: { enumKey: string; cat: LeagueLeaders['categories'][number]['key'] }[] = [
+  { enumKey: 'HEISMAN', cat: 'total' },
+  { enumKey: 'BEST_QB', cat: 'pass' },
+  { enumKey: 'BEST_RB', cat: 'rush' },
+  { enumKey: 'BEST_REC', cat: 'recv' },
+  { enumKey: 'BEST_LB', cat: 'tackles' },
+  { enumKey: 'BEST_DE', cat: 'sacks' },
+  { enumKey: 'BEST_DB', cat: 'ints' }
 ];
 
 function shortTeam(t: TeamInfo | undefined): string {
@@ -119,7 +121,7 @@ export default function Ticker({
       if (!r) return [];
       return [
         <span key={a.cat} className="tk-item">
-          <span className="rk">{a.label.toUpperCase()}</span>
+          <span className="rk">{(AWARD_SHORT[a.enumKey] ?? a.enumKey).toUpperCase()}</span>
           <NameLink req={{ kind: 'player', row: r.playerRow }} className="tk-team">
             {r.name}
           </NameLink>

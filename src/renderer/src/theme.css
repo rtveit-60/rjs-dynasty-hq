@@ -3435,6 +3435,42 @@ table.tbl.tbl-wide {
   margin-top: 12px;
 }
 
+/* Headlines rail: story cards in a horizontal, snap-scrolling strip. */
+.hq-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 10px 12px 12px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-3) transparent;
+}
+
+.hq-scroll::-webkit-scrollbar {
+  height: 9px;
+}
+
+.hq-card {
+  flex: 0 0 300px;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.hq-card .story {
+  height: 100%;
+  margin: 0;
+}
+
+/* The full Top 25 flows down two columns. */
+.hq-top25 {
+  columns: 2;
+  column-gap: 20px;
+}
+
+.hq-top25 .hqm-row {
+  break-inside: avoid;
+}
+
 .hq-award-cols {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

@@ -465,16 +465,29 @@ export interface LeaderRow {
 }
 
 export interface LeaderCategory {
-  key: 'pass' | 'rush' | 'recv' | 'tackles' | 'sacks' | 'ints';
+  key: 'pass' | 'rush' | 'recv' | 'total' | 'tackles' | 'sacks' | 'ints';
   label: string;
   /** Ticker shorthand: PASS, RUSH, REC, TKL, SACK, INT. */
   short: string;
   rows: LeaderRow[];
 }
 
+/** One team's season totals, summed from its players' stat rows. */
+export interface TeamSeasonTotals {
+  teamRow: number;
+  passYds: number;
+  rushYds: number;
+  /** Offensive touchdowns: passing + rushing (receiving TDs are the same scores). */
+  offTds: number;
+  fgs: number;
+  sacks: number;
+  ints: number;
+}
+
 export interface LeagueLeaders {
   seasonYear: number;
   categories: LeaderCategory[];
+  teams: TeamSeasonTotals[];
 }
 
 // --- Profiles (on-demand pop-up detail for a player, coach or school) ---

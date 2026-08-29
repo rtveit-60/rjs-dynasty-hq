@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { LeagueLeaders, MediaEvent } from '../../../shared/types.ts';
-import { brandName } from '../lib/brands.ts';
+import { AWARD_NAMES } from '../../../shared/awards.ts';
 import { useHQ } from '../store.ts';
 import InfoDot from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
@@ -45,10 +45,18 @@ function LeaderList({
   );
 }
 
+/** The awards module: the game's own award names over stat-projected watch lists. */
+const AWARD_BAND: { enumKey: string; cat: 'total' | 'pass' | 'rush' | 'recv' }[] = [
+  { enumKey: 'HEISMAN', cat: 'total' },
+  { enumKey: 'BEST_QB', cat: 'pass' },
+  { enumKey: 'BEST_RB', cat: 'rush' },
+  { enumKey: 'BEST_REC', cat: 'recv' }
+];
+
 /**
- * The league dashboard: ticker up top, the lead story beside your program's
- * numbers, then movers, leaders and the award watch. Everything reads from
- * the snapshot except the leaders sweep, fetched once per parse.
+ * The league dashboard: ticker up top, headlines beside your program's season
+ * numbers, then the full Top 25, leaders and the award watch. Everything reads
+ * from the snapshot except the leaders sweep, fetched once per parse.
  */
 export default function MediaHQ({
   media,
@@ -59,7 +67,6 @@ export default function MediaHQ({
 }) {
   const snapshot = useHQ((s) => s.snapshot);
   const parsedAt = useHQ((s) => s.snapshot?.parsedAt);
-  const pack = useHQ((s) => s.settings?.brandPack ?? 'real');
   const [leaders, setLeaders] = useState<LeagueLeaders | null>(null);
 
   useEffect(() => {
@@ -78,16 +85,18 @@ export default function MediaHQ({
   const school = snapshot?.school;
   const userRow = school?.team.row ?? null;
 
-  const record = useMemo(() => {
+  const season = useMemo(() => {
     let w = 0;
     let l = 0;
+    let pf = 0;
     for (const g of games) {
       if (g.status === 'unplayed' || userRow === null) continue;
       if (g.homeRow !== userRow && g.awayRow !== userRow) continue;
       const won = (g.status === 'home') === (g.homeRow === userRow);
       won ? w++ : l++;
+      pf += g.homeRow === userRow ? g.homeScore : g.awayScore;
     }
-    return { w, l };
+    return { w, l, pf, games: w + l };
   }, [games, userRow]);
 
   const nextGame = useMemo(() => {
@@ -101,36 +110,56 @@ export default function MediaHQ({
     return { at: mine.homeRow !== userRow, opp, week: mine.week };
   }, [games, teams, userRow]);
 
-  const movers = useMemo(
-    () =>
-      teams
-        .filter((t) => (t.rank > 0 && t.rank <= 25) || (t.lastWeekRank > 0 && t.lastWeekRank <= 25))
-        .map((t) => ({ t, delta: t.lastWeekRank > 0 && t.rank > 0 ? t.lastWeekRank - t.rank : t.rank > 0 ? 99 : -99 }))
-        .filter((m) => m.delta !== 0)
-        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-        .slice(0, 7),
+  const top25 = useMemo(
+    () => teams.filter((t) => t.rank > 0 && t.rank <= 25).sort((a, b) => a.rank - b.rank),
     [teams]
   );
+  const records = useMemo(() => {
+    const out = new Map<number, { w: number; l: number }>();
+    for (const g of games) {
+      if (g.status === 'unplayed') continue;
+      const bump = (row: number, won: boolean) => {
+        const r = out.get(row) ?? { w: 0, l: 0 };
+        won ? r.w++ : r.l++;
+        out.set(row, r);
+      };
+      bump(g.homeRow, g.status === 'home');
+      bump(g.awayRow, g.status === 'away');
+    }
+    return out;
+  }, [games]);
 
   const me = userRow !== null ? teams.find((t) => t.row === userRow) : null;
   const rankDelta = me && me.rank > 0 && me.lastWeekRank > 0 ? me.lastWeekRank - me.rank : 0;
-  const commits = (school?.recruiting?.recruits ?? []).filter(
-    (r) => r.committedTo === school?.team.longName
-  ).length;
-  const boardCount = school?.board?.targets.length ?? 0;
-  const lead = media[0] ?? null;
-  const wire = media.slice(lead ? 1 : 0, (lead ? 1 : 0) + 4);
+  const mine = userRow !== null ? leaders?.teams.find((t) => t.teamRow === userRow) : null;
+  const per = (v: number): string => (season.games > 0 ? (v / season.games).toFixed(1) : '—');
+  const stat = (v: number | undefined, f: (n: number) => string = String): string =>
+    leaders && mine ? f(v ?? 0) : '…';
 
   return (
     <>
       <Ticker teams={teams} games={games} leaders={leaders} />
 
       <div className="hq-cols">
-        <div className="hq-lead">
-          {lead ? (
-            <Story e={lead} lead />
+        <div className="hqm hq-heads">
+          <div className="hqm-h">
+            <span>HEADLINES</span>
+            <button className="hqm-link" onClick={onOpenWire}>
+              OPEN THE WIRE →
+            </button>
+          </div>
+          {media.length ? (
+            <div className="hq-scroll">
+              {media.slice(0, 8).map((e) => (
+                <div key={e.id} className="hq-card">
+                  <Story e={e} lead={false} />
+                </div>
+              ))}
+            </div>
           ) : (
-            <div className="empty">The wire fills in after your next save write.</div>
+            <div className="hqm-wait" style={{ padding: '14px 12px' }}>
+              The wire fills in after your next save write.
+            </div>
           )}
         </div>
         <div className="hqm">
@@ -142,7 +171,7 @@ export default function MediaHQ({
             <span className="k">RECORD</span>
             <span className="dots" />
             <span className="v">
-              {record.w}–{record.l}
+              {season.w}–{season.l}
             </span>
             <span className="k">AP POLL</span>
             <span className="dots" />
@@ -166,12 +195,27 @@ export default function MediaHQ({
                 '—'
               )}
             </span>
-            <span className="k">COMMITS</span>
+            <span className="k">PPG</span>
             <span className="dots" />
-            <span className="v">{commits}</span>
-            <span className="k">BOARD</span>
+            <span className="v">{season.games > 0 ? (season.pf / season.games).toFixed(1) : '—'}</span>
+            <span className="k">PASS YPG</span>
             <span className="dots" />
-            <span className="v">{boardCount}</span>
+            <span className="v">{stat(mine?.passYds, per)}</span>
+            <span className="k">RUSH YPG</span>
+            <span className="dots" />
+            <span className="v">{stat(mine?.rushYds, per)}</span>
+            <span className="k">OFF TDS</span>
+            <span className="dots" />
+            <span className="v">{stat(mine?.offTds)}</span>
+            <span className="k">FGS</span>
+            <span className="dots" />
+            <span className="v">{stat(mine?.fgs)}</span>
+            <span className="k">SACKS</span>
+            <span className="dots" />
+            <span className="v">{stat(mine?.sacks, (n) => String(Math.round(n * 10) / 10))}</span>
+            <span className="k">INTS</span>
+            <span className="dots" />
+            <span className="v">{stat(mine?.ints)}</span>
           </div>
         </div>
       </div>
@@ -179,30 +223,39 @@ export default function MediaHQ({
       <div className="hq-mods">
         <div className="hqm">
           <div className="hqm-h">
-            <span>POLL MOVERS</span>
+            <span>AP TOP 25</span>
             <span className="r">WK {snapshot?.season?.week ?? ''}</span>
           </div>
-          <div className="hqm-body">
-            {movers.length === 0 && <div className="hqm-wait">No movement this week.</div>}
-            {movers.map(({ t, delta }) => (
-              <div key={t.row} className="hqm-row">
-                <span className="i">{t.rank > 0 ? t.rank : '–'}</span>
-                <span className="n">
-                  <NameLink req={{ kind: 'school', row: t.row }}>{t.displayName}</NameLink>
-                </span>
-                <span className="v">
-                  {delta === 99 ? (
-                    <span className="up">NEW</span>
-                  ) : delta === -99 ? (
-                    <span className="dn">OUT</span>
-                  ) : delta > 0 ? (
-                    <span className="up">▲{delta}</span>
-                  ) : (
-                    <span className="dn">▼{-delta}</span>
-                  )}
-                </span>
-              </div>
-            ))}
+          <div className="hqm-body hq-top25">
+            {top25.map((t) => {
+              const rec = records.get(t.row);
+              const delta = t.lastWeekRank > 0 ? t.lastWeekRank - t.rank : 0;
+              return (
+                <div key={t.row} className="hqm-row">
+                  <span className="i">{t.rank}</span>
+                  <span className="n">
+                    <NameLink req={{ kind: 'school', row: t.row }}>{t.displayName}</NameLink>
+                    {rec && (
+                      <span className="t">
+                        {' '}
+                        {rec.w}–{rec.l}
+                      </span>
+                    )}
+                  </span>
+                  <span className="v">
+                    {t.lastWeekRank === 0 ? (
+                      <span className="up">NEW</span>
+                    ) : delta > 0 ? (
+                      <span className="up">▲{delta}</span>
+                    ) : delta < 0 ? (
+                      <span className="dn">▼{-delta}</span>
+                    ) : (
+                      <span style={{ color: 'var(--ink-3)' }}>—</span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
         <div className="hqm">
@@ -229,61 +282,36 @@ export default function MediaHQ({
             AWARD RACES{' '}
             <InfoDot title="Award races">
               <p>
-                Watch lists projected from this season's stats, using the game's own award names.
-                The game itself crowns winners at the national awards show; until then these
-                standings are the app's read, not the game's.
+                The award names are the game's own, read from its data. The standings are watch
+                lists projected from this season's stats; the game crowns real winners at the
+                national awards show.
               </p>
             </InfoDot>
           </span>
           <span className="r">PROJECTED</span>
         </div>
         <div className="hq-award-cols">
-          {(
-            [
-              ['Best Quarterback', 'pass'],
-              ['Best Running Back', 'rush'],
-              ['Best Receiver', 'recv']
-            ] as const
-          ).map(([label, key]) => {
-            const cat = leaders?.categories.find((c) => c.key === key);
+          {AWARD_BAND.map(({ enumKey, cat }) => {
+            const c = leaders?.categories.find((x) => x.key === cat);
             return (
-              <div key={key} className="hqm-block">
-                <div className="hqm-sub">{label}</div>
-                {(cat?.rows ?? []).slice(0, 3).map((r, i) => (
+              <div key={enumKey} className="hqm-block">
+                <div className="hqm-sub">{AWARD_NAMES[enumKey] ?? enumKey}</div>
+                {(c?.rows ?? []).slice(0, 3).map((r, i) => (
                   <div key={r.playerRow} className="hqm-row">
                     <span className="i">{i + 1}</span>
                     <span className="n">
                       <NameLink req={{ kind: 'player', row: r.playerRow }}>{r.name}</NameLink>
                       <span className="t"> · {r.team}</span>
                     </span>
-                    <span className="v">{fmtVal(key, r.value)}</span>
+                    <span className="v">{fmtVal(cat, r.value)}</span>
                   </div>
                 ))}
-                {!cat?.rows.length && <div className="hqm-wait">Computing…</div>}
+                {!c?.rows.length && <div className="hqm-wait">Computing…</div>}
               </div>
             );
           })}
         </div>
       </div>
-
-      {wire.length > 0 && (
-        <div className="hqm hq-wirefeed">
-          <div className="hqm-h">
-            <span>LATEST FROM THE WIRE</span>
-            <button className="hqm-link" onClick={onOpenWire}>
-              OPEN THE WIRE →
-            </button>
-          </div>
-          <div className="hqm-body">
-            {wire.map((e) => (
-              <button key={e.id} className="hq-headline" onClick={onOpenWire}>
-                <span className="o">{e.byline ? e.byline.outletName : brandName(e.outlet, pack)}</span>
-                <span className="h">{e.headline}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -3,7 +3,7 @@
  * player's current-season stat row — a few thousand ref follows, so the
  * pipeline computes it once per parse and caches the result.
  */
-import type { LeaderCategory, LeaderRow, LeagueLeaders } from '../../shared/types.ts';
+import type { LeaderCategory, LeaderRow, LeagueLeaders, TeamSeasonTotals } from '../../shared/types.ts';
 import {
   isNullRef,
   mainTable,
@@ -41,6 +41,7 @@ interface Tally {
   tfl: number;
   sacks: number;
   ints: number;
+  fgs: number;
 }
 
 const PLAYER_FIELDS = ['FirstName', 'LastName', 'Position', 'TeamIndex', 'SeasonStats'];
@@ -97,7 +98,8 @@ export async function extractLeagueLeaders(franchise: any): Promise<LeagueLeader
             tackles: 0,
             tfl: 0,
             sacks: 0,
-            ints: 0
+            ints: 0,
+            fgs: 0
           };
         }
         // A year can hold more than one row (offense beside returns) carrying
@@ -112,6 +114,7 @@ export async function extractLeagueLeaders(franchise: any): Promise<LeagueLeader
         t.tfl += num(srec, 'DEFTACKLESFORLOSS');
         t.sacks += num(srec, 'DLINESACKS') + num(srec, 'DLINEHALFSACK') / 2;
         t.ints += num(srec, 'DSECINTS');
+        t.fgs += num(srec, 'KICKFGMADE');
       }
       if (t) tallies.push(t);
     }
@@ -144,16 +147,35 @@ export async function extractLeagueLeaders(franchise: any): Promise<LeagueLeader
         })
     });
 
+    // Per-team season totals, for the program panel and league context.
+    const teamTotals = new Map<number, TeamSeasonTotals>();
+    for (const t of tallies) {
+      const team = teamByIndex.get(t.teamIndex);
+      if (!team) continue;
+      const agg =
+        teamTotals.get(team.row) ??
+        ({ teamRow: team.row, passYds: 0, rushYds: 0, offTds: 0, fgs: 0, sacks: 0, ints: 0 } as TeamSeasonTotals);
+      agg.passYds += t.passYds;
+      agg.rushYds += t.rushYds;
+      agg.offTds += t.passTds + t.rushTds;
+      agg.fgs += t.fgs;
+      agg.sacks += t.sacks;
+      agg.ints += t.ints;
+      teamTotals.set(team.row, agg);
+    }
+
     return {
       seasonYear,
       categories: [
         top('pass', 'Passing yards', 'PASS', (t) => t.passYds, (t) => `${t.passTds} TD`),
         top('rush', 'Rushing yards', 'RUSH', (t) => t.rushYds, (t) => `${t.rushTds} TD`),
         top('recv', 'Receiving yards', 'REC', (t) => t.recvYds, (t) => `${t.recvCatches} rec`),
+        top('total', 'Total yards', 'ALL', (t) => t.passYds + t.rushYds + t.recvYds, (t) => `${t.passTds + t.rushTds} TD`),
         top('tackles', 'Tackles', 'TKL', (t) => t.tackles, (t) => `${t.tfl} TFL`),
         top('sacks', 'Sacks', 'SACK', (t) => t.sacks, (t) => `${t.tackles} tkl`),
         top('ints', 'Interceptions', 'INT', (t) => t.ints, (t) => `${t.tackles} tkl`)
-      ]
+      ],
+      teams: [...teamTotals.values()]
     };
   } catch {
     return null;
