@@ -310,7 +310,7 @@ export default function RecruitingView() {
                   {th('Pos Rk', 'posrk', { num: true, defaultAsc: true })}
                   {th('Natl Rk', 'natlrk', { num: true, defaultAsc: true })}
                   {th('Edge', 'edge')}
-                  {th('Off', 'offers', { num: true })}
+                  {th('Offers', 'offers', { num: true })}
                   {th('Board', 'board')}
                 </tr>
               </thead>
