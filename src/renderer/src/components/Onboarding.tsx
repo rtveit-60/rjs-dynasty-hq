@@ -23,8 +23,8 @@ export default function Onboarding() {
           Dynasty HQ
         </div>
         <p className="hero-tag">
-          Your dynasty, live from the save file. Pick a College Football 27 dynasty save and this
-          dashboard stays in sync every time the game writes it.
+          Pick a College Football 27 dynasty save. The dashboard follows it from then on,
+          refreshing every time the game writes.
         </p>
 
         {detected.length > 0 && (
@@ -46,7 +46,7 @@ export default function Onboarding() {
         </div>
 
         <p className="foot-note">
-          Read-only: the app copies the save before reading it and never writes to your game files.
+          Read-only. The app parses a copy of the save and never touches your game files.
         </p>
       </div>
     </div>

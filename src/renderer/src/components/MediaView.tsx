@@ -3,6 +3,7 @@ import type { MediaEvent } from '../../../shared/types.ts';
 import { brandName } from '../lib/brands.ts';
 import { spaceOut } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import InfoDot from './InfoDot.tsx';
 
 const FILTERS: { key: string; label: string; match: (e: MediaEvent) => boolean }[] = [
   { key: 'all', label: 'ALL', match: () => true },
@@ -116,6 +117,17 @@ export default function MediaView() {
         <span className="chip">
           <span className="k">ABOUT YOU</span> <b>{media.filter((e) => e.aboutUser).length}</b>
         </span>
+        <InfoDot title="Dynasty Media">
+          <p>
+            Coverage written from what actually changed between saves: results, rankings, commits,
+            transfers, coaching moves. Nothing here is canned; every line is built from your
+            dynasty's own numbers.
+          </p>
+          <p>
+            <b>The Wire</b> filter shows the press corps' running feed: rumors, scoops and takes
+            from the outlets and personalities that cover your league.
+          </p>
+        </InfoDot>
       </div>
 
       <div className="filters" style={{ marginTop: 16 }}>
@@ -132,7 +144,7 @@ export default function MediaView() {
 
       {!filtered.length && (
         <div className="empty">
-          No stories yet — play or sim a week and the wire lights up when the save updates.
+          No stories yet. Play or sim a week; the wire fills in when the save updates.
         </div>
       )}
 

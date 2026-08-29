@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { RecruitTargetEntry, Snapshot, TeamNeed } from '../../../shared/types.ts';
 import { STAGE_LABELS, spaceOut, stars } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 
 type School = NonNullable<Snapshot['school']>;
@@ -123,7 +124,25 @@ function NeedsBoard({ needs }: { needs: TeamNeed[] }) {
   return (
     <div className="needs-strip">
       <div className="needs-row">
-        <span className="needs-row-label">OFFENSIVE TARGETS</span>
+        <span className="needs-row-label">
+          OFFENSIVE TARGETS
+          <InfoDot title="Team Needs">
+            <p>
+              The game's own targets panel, copied: <b>targeted/needed</b> at every position, red
+              while a need is unfilled.
+            </p>
+            <InfoRow term="Targeted">Board targets still being chased at the position.</InfoRow>
+            <InfoRow term="Needed">
+              How far next season's projected roster sits under the game's 57-man minimum
+              composition.
+            </InfoRow>
+            <InfoRow term="+n">Commits already inbound at the position.</InfoRow>
+            <p>
+              One difference: seniors and draft entries leave the projection here immediately. The
+              game itself carries them until week 4 of the offseason.
+            </p>
+          </InfoDot>
+        </span>
         <div className="needs-cells">
           {off.map((n) => (
             <NeedCell key={n.group} n={n} />
@@ -143,10 +162,6 @@ function NeedsBoard({ needs }: { needs: TeamNeed[] }) {
             <NeedCell key={n.group} n={n} />
           ))}
         </div>
-      </div>
-      <div className="needs-foot">
-        targeted/needed · <span className="plus-note">+n</span> commits inbound · needs already count
-        seniors and draft entries out — the game itself waits until week 4 of the offseason
       </div>
     </div>
   );
@@ -276,6 +291,25 @@ export default function TargetsView({ school }: { school: School }) {
         <span className="chip">
           <span className="k">BUSTS</span> <b>{busts}</b>
         </span>
+        <InfoDot title="Recruiting Office">
+          <p>Your board, with everything the game knows about each pursuit.</p>
+          <InfoRow term="Standing">
+            Your rank among the schools chasing the recruit; hover for raw influence. The full race
+            is in the profile.
+          </InfoRow>
+          <InfoRow term="Visit">
+            Scheduled visit week. Green is upcoming; hover shows the planned activity.
+          </InfoRow>
+          <InfoRow term="NIL">
+            Your offer. A ▾ marks an offer sitting under the recruit's expectation; hover for the
+            number.
+          </InfoRow>
+          <InfoRow term="Dealbreaker">
+            What the recruit will not budge on. A tinted dot flags two of your own targets demanding
+            playing time at the same spot; hover names the rivals.
+          </InfoRow>
+          <InfoRow term="♥">Board favorite.</InfoRow>
+        </InfoDot>
       </div>
 
       <div className="tbl-wrap">
@@ -344,12 +378,6 @@ export default function TargetsView({ school }: { school: School }) {
           </tbody>
         </table>
       </div>
-      <p className="foot-note">
-        Standing is your rank among the schools pursuing the recruit (hover for raw influence); the
-        full race is in each recruit&apos;s profile. Visit weeks in green are upcoming; hover shows the
-        planned activity. A tinted dot in Dealbreaker marks two of your targets demanding playing time
-        at the same spot — hover to see who. ♥ marks board favorites.
-      </p>
     </>
   );
 }

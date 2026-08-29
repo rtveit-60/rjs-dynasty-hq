@@ -30,6 +30,7 @@ export interface HQBridge {
   useSave: (path: string) => Promise<Settings>;
   setSchool: (row: number | null) => Promise<Settings>;
   setTheme: (theme: ThemeMode) => Promise<Settings>;
+  setUiScale: (scale: number) => Promise<Settings>;
   setAutoUpdate: (enabled: boolean) => Promise<Settings>;
   installUpdate: () => Promise<void>;
   onUpdateReady: (cb: (version: string) => void) => () => void;
@@ -56,6 +57,7 @@ const bridge: HQBridge = {
   useSave: (path) => ipcRenderer.invoke('save:use', path),
   setSchool: (row) => ipcRenderer.invoke('school:set', row),
   setTheme: (theme) => ipcRenderer.invoke('theme:set', theme),
+  setUiScale: (scale) => ipcRenderer.invoke('zoom:set', scale),
   setAutoUpdate: (enabled) => ipcRenderer.invoke('autoupdate:set', enabled),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateReady: subscribe<string>('update:ready'),

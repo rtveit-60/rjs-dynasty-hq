@@ -14,6 +14,7 @@ import {
   stars
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
 import ScoutingView from './ScoutingView.tsx';
@@ -219,6 +220,24 @@ export default function RecruitingView() {
         <button className={`tab ${board === 'scout' ? 'active' : ''}`} onClick={() => setBoard('scout')}>
           SCOUTING REPORTS
         </button>
+        <InfoDot title="Recruiting Board">
+          <p>
+            Every prospect in the class, straight from the save. Sort any column, click a row for the
+            skills their position lives on, and click a name for the full profile.
+          </p>
+          <InfoRow term="Gem / Bust">
+            The save's own quality flag. Gems outplay their stars; busts fall short of them.
+          </InfoRow>
+          <InfoRow term="Ovr">True overall. The game hides it until you scout.</InfoRow>
+          <InfoRow term="Edge">
+            Where your program holds a clear advantage over the schools actually pursuing the
+            recruit: pipeline, pro potential, home state, or leading the race.
+          </InfoRow>
+          <InfoRow term="Board">Already on your recruiting board.</InfoRow>
+          <InfoRow term="The race">
+            Every pursuing school and its influence, in the recruit's profile.
+          </InfoRow>
+        </InfoDot>
       </div>
 
       {board === 'scout' ? (
@@ -290,8 +309,8 @@ export default function RecruitingView() {
 
       {board === 'portal' && portalCount === 0 ? (
         <div className="empty" style={{ marginTop: 18 }}>
-          The transfer portal is empty right now — it fills during the offseason, and players appear
-          here as soon as your save reaches that window.
+          The portal is empty. It opens in the offseason and fills in as your save reaches that
+          window.
         </div>
       ) : (
         <>
@@ -403,11 +422,6 @@ export default function RecruitingView() {
             </button>
           </div>
 
-          <p className="foot-note">
-            Click any recruit for an at-a-glance read on the skills their position lives on; the full
-            ratings sheet and the recruiting race are in their profile — click the name. Edges compare
-            your pipelines and program grades against each recruit's actual pursuers.
-          </p>
         </>
       )}
       </>

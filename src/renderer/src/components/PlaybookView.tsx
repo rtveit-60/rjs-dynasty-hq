@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { PlaybookBook, Snapshot } from '../../../shared/types.ts';
 import { prestigeLabel, schemeLabel } from '../lib/format.ts';
+import InfoDot from './InfoDot.tsx';
 import { personnelLabel } from './PlayArt.tsx';
 
 type School = NonNullable<Snapshot['school']>;
@@ -92,11 +93,6 @@ export default function PlaybookView({ school }: { school: School }) {
       </div>
 
       <PlaybookBrowser book={activeBook} side={side} onSide={setSide} loaded={loaded} />
-
-      <p className="foot-note">
-        Scheme and playbook selections are read live from the save; every formation and play here is
-        pulled from your book's own data, fully offline. Play diagrams are coming soon.
-      </p>
     </>
   );
 }
@@ -146,6 +142,12 @@ function PlaybookBrowser({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div className="panel-title" style={{ margin: 0 }}>
           Playbook Browser
+          <InfoDot title="Playbook Browser">
+            <p>
+              Your selected schemes and playbooks, read live from the save. Every formation, play
+              and personnel package comes from the book's own data, fully offline.
+            </p>
+          </InfoDot>
         </div>
         <div className="seg-toggle">
           {(['offense', 'defense'] as Side[]).map((s) => (
@@ -272,10 +274,10 @@ function PlaybookBrowser({
                   color: 'var(--ink-2)'
                 }}
               >
-                Play Art — Coming Soon
+                Play Art
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-3)', maxWidth: 320 }}>
-                Every formation and play is loaded from your book; the diagrams are on the way.
+                Diagrams aren't drawn yet. The names and structure above are live from your book.
               </div>
             </div>
           </div>

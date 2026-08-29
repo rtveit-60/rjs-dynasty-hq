@@ -1,5 +1,6 @@
 import type { Snapshot, StaffTendency } from '../../../shared/types.ts';
 import { fmt, pct, prestigeLabel } from '../lib/format.ts';
+import InfoDot from './InfoDot.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -33,7 +34,7 @@ function StaffCard({ s }: { s: StaffTendency }) {
   return (
     <div className="panel">
       <div className="panel-title">
-        {s.role} — {s.name} <span className="grade good" style={{ marginLeft: 6 }}>{prestigeLabel(s.prestige)}</span>
+        {s.role} · {s.name} <span className="grade good" style={{ marginLeft: 6 }}>{prestigeLabel(s.prestige)}</span>
       </div>
       {showOff && s.offRunPass !== null && (
         <Meter left="Pass" right="Run" value={s.offRunPass} />
@@ -62,6 +63,12 @@ export default function TendenciesView({ school }: { school: School }) {
         <>
           <div className="section-h">
             <h3>On the field</h3>
+            <InfoDot title="On the field">
+              <p>
+                Splits accumulate from the game's own box scores: the current season once you have
+                played, last season before kickoff.
+              </p>
+            </InfoDot>
             <div className="rule" />
             <span className="count">
               {sp.scope === 'current'
@@ -94,7 +101,7 @@ export default function TendenciesView({ school }: { school: School }) {
               <div className="lbl">4th Down</div>
               <div className="num">{pct(sp.fourthConv, sp.fourthDowns)}%</div>
               <div className="sub">
-                {sp.fourthConv} of {sp.fourthDowns} — {sp.fourthDowns > 0 && sp.fourthDowns / Math.max(sp.games, 1) >= 1.5 ? 'goes for it' : 'selective'}
+                {sp.fourthConv} of {sp.fourthDowns} · {sp.fourthDowns > 0 && sp.fourthDowns / Math.max(sp.games, 1) >= 1.5 ? 'goes for it' : 'selective'}
               </div>
             </div>
             <div className="stat">
@@ -127,13 +134,23 @@ export default function TendenciesView({ school }: { school: School }) {
           </div>
         </>
       ) : (
-        <div className="empty">No season stats yet — sim a game and this fills in.</div>
+        <div className="empty">No season stats yet. They fill in after your first game.</div>
       )}
 
       {school.staff.length > 0 && (
         <>
           <div className="section-h">
             <h3>Coaching identity</h3>
+            <InfoDot title="Coaching identity">
+              <p>
+                Each meter is a temperament slider read straight from the coach record: run lean and
+                aggression on offense, aggression and run focus on defense.
+              </p>
+              <p>
+                The save keeps no per-play man/zone or blitz counts, so sliders and scheme identity
+                are the closest signal the game stores.
+              </p>
+            </InfoDot>
             <div className="rule" />
           </div>
           <div
@@ -147,10 +164,6 @@ export default function TendenciesView({ school }: { school: School }) {
               <StaffCard key={s.role} s={s} />
             ))}
           </div>
-          <p className="foot-note">
-            Per-play man/zone and blitz rates aren't stored in the save — coach temperament sliders and
-            scheme identity are the closest signal the game keeps.
-          </p>
         </>
       )}
     </>

@@ -21,6 +21,7 @@ import {
   spaceOut,
   stars
 } from '../lib/format.ts';
+import InfoDot from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
 
@@ -173,7 +174,19 @@ export default function ScoutingView({
   return (
     <>
       <div className="scout-builder">
-        <div className="scout-title">Attribute filters</div>
+        <div className="scout-title">
+          Attribute filters
+          <InfoDot title="Scouting Reports">
+            <p>
+              Set attribute thresholds and every recruit who clears all of them appears below. Each
+              attribute you filter on becomes a sortable column.
+            </p>
+            <p>
+              Searches the whole class, and the portal once it opens. Click a row for the
+              at-a-glance card; the full ratings sheet is in the profile.
+            </p>
+          </InfoDot>
+        </div>
         <div className="scout-rows">
         {criteria.map((c, i) => (
           <div className="scout-row" key={i}>
@@ -444,11 +457,6 @@ export default function ScoutingView({
             </button>
           </div>
 
-          <p className="foot-note">
-            Every attribute you filter on becomes a sortable column. Searches the recruiting class
-            {portalActive ? ' and the transfer portal' : ' (the portal fills in the offseason)'}. Click a
-            recruit for their at-a-glance card; the full ratings sheet is in their profile.
-          </p>
         </>
       )}
     </>

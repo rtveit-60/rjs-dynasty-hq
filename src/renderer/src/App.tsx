@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { contrastOn } from './lib/format.ts';
 import { useEffectiveTheme, useHQ } from './store.ts';
+import { SCALE_STEP, clampScale } from './components/ScaleControl.tsx';
 import CarouselView from './components/CarouselView.tsx';
 import MediaView from './components/MediaView.tsx';
 import Onboarding from './components/Onboarding.tsx';
@@ -23,6 +24,22 @@ export default function App() {
   useEffect(() => {
     void init();
   }, [init]);
+
+  // Ctrl+= / Ctrl+− / Ctrl+0 step the app-wide zoom, browser style.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.altKey) return;
+      const s = useHQ.getState();
+      const cur = s.settings?.uiScale ?? 1;
+      if (e.key === '=' || e.key === '+') void s.setUiScale(clampScale(cur + SCALE_STEP));
+      else if (e.key === '-' || e.key === '_') void s.setUiScale(clampScale(cur - SCALE_STEP));
+      else if (e.key === '0') void s.setUiScale(1);
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

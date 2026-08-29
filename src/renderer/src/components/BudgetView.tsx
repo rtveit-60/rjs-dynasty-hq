@@ -1,5 +1,7 @@
 import type { Snapshot } from '../../../shared/types.ts';
 import { fmt, stars } from '../lib/format.ts';
+import InfoDot from './InfoDot.tsx';
+import { NameLink } from './ProfileModal.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -59,7 +61,19 @@ export default function BudgetView({ school }: { school: School }) {
           ))}
         </div>
         <div className="panel">
-          <div className="panel-title">Where it goes</div>
+          <div className="panel-title">
+            Where it goes
+            <InfoDot title="Spending">
+              <p>
+                Each line's percentage is its share of your total budget. <b>lg avg</b> is what the
+                other 137 programs put on the same line, as a benchmark.
+              </p>
+              <p>
+                Weekly staff points are each coach's recruiting-hours allowance, refreshed every
+                week.
+              </p>
+            </InfoDot>
+          </div>
           {b.spending.map((s) => {
             const pct = Math.round((s.points / Math.max(b.total, 1)) * 100);
             return (
@@ -76,10 +90,6 @@ export default function BudgetView({ school }: { school: School }) {
               </div>
             );
           })}
-          <p className="foot-note" style={{ marginTop: 8 }}>
-            Percentages are shares of your total budget; "lg avg" is what the other 137 programs
-            spend on the same line, as a benchmark.
-          </p>
           <div className="section-h" style={{ margin: '14px 0 6px' }}>
             <h3>Weekly staff points</h3>
             <div className="rule" />
@@ -121,7 +131,9 @@ export default function BudgetView({ school }: { school: School }) {
                   .sort((a, b2) => b2.nilOffer - a.nilOffer)
                   .map((t) => (
                     <tr key={`${t.name}-${t.nationalRank}`}>
-                      <td className="pname">{t.name}</td>
+                      <td className="pname">
+                        <NameLink req={{ kind: 'player', row: t.playerRow }}>{t.name}</NameLink>
+                      </td>
                       <td>
                         <span className="stars-cell">{stars(t.stars).slice(0, t.stars)}</span>
                       </td>

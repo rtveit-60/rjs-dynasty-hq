@@ -10,6 +10,8 @@ export interface Settings {
   portraitsDir: string | null;
   logosDir: string | null;
   autoUpdate: boolean;
+  /** Renderer zoom factor; 1 = 100%. Clamped to 0.7–1.5. */
+  uiScale: number;
   windowBounds?: { x: number; y: number; width: number; height: number };
 }
 

@@ -143,6 +143,13 @@ function registerIpc(): void {
     return getSettings();
   });
 
+  ipcMain.handle('zoom:set', (_e, scale: number) => {
+    const clamped = Math.min(1.5, Math.max(0.7, Number(scale)));
+    const settings = updateSettings({ uiScale: Number.isFinite(clamped) ? clamped : 1 });
+    win?.webContents.setZoomFactor(settings.uiScale);
+    return settings;
+  });
+
   ipcMain.handle('save:reveal', () => {
     const { savePath } = getSettings();
     if (savePath) shell.showItemInFolder(savePath);
@@ -309,8 +316,10 @@ function createWindow(): void {
     height: bounds?.height ?? 880,
     x: bounds?.x,
     y: bounds?.y,
-    minWidth: 1080,
-    minHeight: 700,
+    // Companion-app posture: allow a narrow footprint beside the game or on a
+    // second monitor. Layout collapses gracefully well below the old floor.
+    minWidth: 720,
+    minHeight: 560,
     icon: existsSync(join(app.getAppPath(), 'build/icon.png'))
       ? join(app.getAppPath(), 'build/icon.png')
       : undefined,
@@ -327,6 +336,9 @@ function createWindow(): void {
   });
 
   win.once('ready-to-show', () => win?.show());
+  win.webContents.on('did-finish-load', () => {
+    win?.webContents.setZoomFactor(getSettings().uiScale ?? 1);
+  });
   win.on('close', () => {
     if (win && !win.isMaximized()) updateSettings({ windowBounds: win.getBounds() });
   });
@@ -401,6 +413,14 @@ function createWindow(): void {
                 })()`
               );
               await new Promise((r) => setTimeout(r, 700));
+            }
+            // HQ_CAPTURE_INFO=<n> opens the nth info dot on the page.
+            const infoIndex = process.env['HQ_CAPTURE_INFO'];
+            if (infoIndex) {
+              await win!.webContents.executeJavaScript(
+                `document.querySelectorAll('.info-dot')[${Number(infoIndex)}]?.click()`
+              );
+              await new Promise((r) => setTimeout(r, 500));
             }
             // HQ_CAPTURE_ROW=<n> expands the nth table row (for detail cards).
             const rowIndex = process.env['HQ_CAPTURE_ROW'];

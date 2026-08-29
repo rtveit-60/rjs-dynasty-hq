@@ -1,4 +1,6 @@
 import { useHQ } from '../store.ts';
+import InfoDot from './InfoDot.tsx';
+import ScaleControl from './ScaleControl.tsx';
 import ThemeToggle from './ThemeToggle.tsx';
 
 export default function Setup() {
@@ -13,13 +15,18 @@ export default function Setup() {
       <h1 className="page-title">Setup</h1>
 
       <div className="section-h">
-        <h3>Dynasty Save</h3>
+        <h3>Dynasty save</h3>
+        <InfoDot title="Dynasty save">
+          <p>
+            The app watches this file and refreshes every view when the game writes a new save. It
+            reads a copy, never the file itself, so the game can save freely at any time.
+          </p>
+          <p>Saves live under Documents\EA SPORTS College Football 27\saves.</p>
+        </InfoDot>
         <div className="rule" />
       </div>
-      <p style={{ color: 'var(--ink-2)', fontSize: 12.5, wordBreak: 'break-all' }}>
-        {settings?.savePath ?? 'No save selected'}
-      </p>
-      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+      <p className="set-value">{settings?.savePath ?? 'No save selected'}</p>
+      <div className="set-actions">
         <button className="btn" onClick={() => void pickSave()}>
           Change save file…
         </button>
@@ -32,10 +39,10 @@ export default function Setup() {
         <h3>School</h3>
         <div className="rule" />
       </div>
-      <p style={{ color: 'var(--ink-2)', fontSize: 12.5 }}>
+      <p className="set-value">
         {snapshot?.school ? `${snapshot.school.team.longName} ${snapshot.school.team.nickName}` : '—'}
       </p>
-      <div style={{ marginTop: 10 }}>
+      <div className="set-actions">
         <button
           className="btn"
           onClick={() => {
@@ -49,19 +56,35 @@ export default function Setup() {
 
       <div className="section-h">
         <h3>Appearance</h3>
+        <InfoDot title="Appearance">
+          <p>
+            <b>Theme</b> follows Windows in Auto, or stays fixed on Light or Dark.
+          </p>
+          <p>
+            <b>Size</b> scales the whole interface. Ctrl+= and Ctrl+− step it from anywhere;
+            Ctrl+0 resets. Handy when the app sits on a second monitor across the room.
+          </p>
+        </InfoDot>
         <div className="rule" />
       </div>
-      <ThemeToggle />
+      <div className="set-actions">
+        <ThemeToggle />
+        <ScaleControl />
+      </div>
 
       <div className="section-h">
         <h3>App updates</h3>
+        <InfoDot title="App updates">
+          <p>
+            With automatic updates on, the app checks GitHub Releases once at launch. A new version
+            downloads in the background and installs only when you click the restart button in the
+            side rail.
+          </p>
+          <p>With updates off, the app makes no network requests at all.</p>
+        </InfoDot>
         <div className="rule" />
       </div>
       <AutoUpdateToggle />
-      <p className="foot-note">
-        With automatic updates on, the app checks GitHub Releases once at launch. Updates download in
-        the background and never install until you click "Restart to update".
-      </p>
     </div>
   );
 }
@@ -70,7 +93,7 @@ function AutoUpdateToggle() {
   const enabled = useHQ((s) => s.settings?.autoUpdate ?? true);
   const setAutoUpdate = useHQ((s) => s.setAutoUpdate);
   return (
-    <div style={{ display: 'flex', gap: 6 }}>
+    <div className="set-actions">
       <button className={`filter ${enabled ? 'active' : ''}`} onClick={() => void setAutoUpdate(true)}>
         Automatic
       </button>

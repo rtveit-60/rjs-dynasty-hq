@@ -34,6 +34,7 @@ interface HQStore {
   refreshDetected: () => Promise<void>;
   setSchool: (row: number | null) => Promise<void>;
   setTheme: (theme: ThemeMode) => Promise<void>;
+  setUiScale: (scale: number) => Promise<void>;
   setAutoUpdate: (enabled: boolean) => Promise<void>;
 }
 
@@ -96,6 +97,11 @@ export const useHQ = create<HQStore>((set, get) => ({
 
   setTheme: async (theme) => {
     const settings = await window.hq.setTheme(theme);
+    set({ settings });
+  },
+
+  setUiScale: async (scale) => {
+    const settings = await window.hq.setUiScale(scale);
     set({ settings });
   },
 

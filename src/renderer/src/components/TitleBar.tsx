@@ -14,12 +14,12 @@ export default function TitleBar() {
       </div>
       {settings?.savePath && (
         <div className="titlebar-meta">
-          <span>{snapshot?.fileName ?? '…'}</span>
+          <span className="file">{snapshot?.fileName ?? '…'}</span>
           {season && (
             <>
-              <span>·</span>
+              <span className="file">·</span>
               <span>
-                {season.seasonYear} — Year {season.dynastyYear}, Week {season.week}
+                {season.seasonYear} · Year {season.dynastyYear}, Week {season.week}
               </span>
             </>
           )}

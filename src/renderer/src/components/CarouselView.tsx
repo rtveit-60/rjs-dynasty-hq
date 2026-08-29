@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { CarouselEntry } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
+import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 
@@ -233,7 +234,7 @@ export default function CarouselView() {
 
       {openings.length > 0 && (
         <div className="panel" style={{ marginTop: 16 }}>
-          <div className="panel-title">Open Jobs — Carousel Live</div>
+          <div className="panel-title">Open Jobs · Carousel Live</div>
           {openings.map((o) => {
             const team = teams.get(o.teamRow);
             const reason = REASON_LABEL[o.reason] ?? { label: o.reason.toUpperCase() };
@@ -289,9 +290,22 @@ export default function CarouselView() {
             {r}
           </button>
         ))}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-3)', alignSelf: 'center' }}>
-          The flame marks a hot seat. Likely open = hot seat; at risk = low security with an expiring
-          deal or an impatient AD. Open jobs appear here live once the season ends.
+        <span style={{ marginLeft: 'auto', alignSelf: 'center', display: 'inline-flex' }}>
+          <InfoDot title="Coaching Carousel">
+            <p>
+              Job security for every head coach and coordinator in the country, read straight from
+              each coach's record.
+            </p>
+            <InfoRow term="Flame">The game's own hot-seat designation.</InfoRow>
+            <InfoRow term="Likely open">The sitting coach is on the hot seat.</InfoRow>
+            <InfoRow term="At risk">
+              Low security paired with an expiring deal or an impatient, reactionary AD.
+            </InfoRow>
+            <InfoRow term="Outlook">
+              Every save fact feeding the forecast: seat status, security, contract, AD temperament.
+            </InfoRow>
+            <p>Open jobs list live once the season ends and the carousel starts turning.</p>
+          </InfoDot>
         </span>
       </div>
 

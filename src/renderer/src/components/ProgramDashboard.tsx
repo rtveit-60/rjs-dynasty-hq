@@ -159,14 +159,14 @@ function tooltip(s: SeasonRecord): string {
     s.bowl ? `${s.bowl.name} (${s.bowl.won ? 'W' : 'L'})` : s.bowlWon && 'Bowl win',
     s.inProgress && 'In progress'
   ].filter(Boolean);
-  return `${s.year} — ${s.wins}–${s.losses}${notes.length ? ` · ${notes.join(' · ')}` : ''}`;
+  return `${s.year}: ${s.wins}–${s.losses}${notes.length ? ` · ${notes.join(' · ')}` : ''}`;
 }
 
 function RecordGraph({ seasons, color }: { seasons: SeasonRecord[]; color: string }) {
   if (!seasons.length) {
     return (
       <div style={{ color: 'var(--ink-3)', fontSize: 12.5, padding: '18px 0' }}>
-        No games on record yet — the graph starts with your first result.
+        No games on record yet. The graph starts with your first result.
       </div>
     );
   }
@@ -266,7 +266,7 @@ export default function ProgramDashboard({
         )}
         {truncated && (
           <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8 }}>
-            The game keeps five seasons of records — earlier years stay on the graph once they have
+            The game keeps five seasons of records. Earlier years stay on the graph once they have
             appeared here.
           </div>
         )}
@@ -279,7 +279,7 @@ export default function ProgramDashboard({
             <span
               key={p.pipeline}
               className="chip"
-              title={`Tier ${p.tier} of 5 — ${spaceOut(p.level)} · influence ${p.value}`}
+              title={`Tier ${p.tier} of 5 · ${spaceOut(p.level)} · influence ${p.value}`}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}
             >
               <b>{p.label}</b>
