@@ -8,14 +8,24 @@ import Story, { weekLabel } from './Story.tsx';
 const FILTERS: { key: string; label: string; match: (e: MediaEvent) => boolean }[] = [
   { key: 'all', label: 'ALL', match: () => true },
   { key: 'mine', label: 'MY TEAM', match: (e) => e.aboutUser },
-  { key: 'results', label: 'RESULTS', match: (e) => e.type === 'userGame' || e.type === 'bigGame' },
+  {
+    key: 'results',
+    label: 'RESULTS',
+    match: (e) => e.type === 'userGame' || e.type === 'bigGame' || e.type === 'statLine' || e.type === 'streak'
+  },
   { key: 'recruiting', label: 'RECRUITING', match: (e) => e.type === 'commit' },
   {
     key: 'coaching',
     label: 'COACHING & ROSTER',
-    match: (e) => e.type === 'coachChange' || e.type === 'rosterMove' || e.type === 'hotSeat'
+    match: (e) =>
+      e.type === 'coachChange' || e.type === 'rosterMove' || e.type === 'hotSeat' || e.type === 'draftPick'
   },
   { key: 'polls', label: 'POLLS', match: (e) => e.type === 'pollMove' },
+  {
+    key: 'awards',
+    label: 'AWARDS',
+    match: (e) => e.type === 'weeklyAward' || e.type === 'awardShow' || e.type === 'awardWin'
+  },
   { key: 'wire', label: 'THE WIRE', match: (e) => e.format === 'post' }
 ];
 
