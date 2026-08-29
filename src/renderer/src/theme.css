@@ -2110,3 +2110,420 @@ table.tbl.tbl-wide {
   margin: 2px 4px;
   background: var(--line);
 }
+
+/* ————————————————————————————————————————————————
+   Profile pop-ups — the card behind any clicked name.
+   ———————————————————————————————————————————————— */
+
+.name-link {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: inherit;
+  border-bottom: 1px solid transparent;
+}
+
+.name-link:hover {
+  border-bottom-color: var(--ink-3);
+}
+
+.pf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 20px 40px;
+  background: color-mix(in srgb, var(--sunken) 62%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.pf-panel {
+  position: relative;
+  width: min(880px, 100%);
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.pf-controls {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 10px 12px 0;
+  pointer-events: none;
+}
+
+.pf-controls .pf-btn {
+  pointer-events: auto;
+}
+
+.pf-btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 600 11.5px var(--font-ui);
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.pf-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+.pf-close {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.pf-wait {
+  padding: 60px 24px 70px;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.pf-body {
+  padding: 0 28px 30px;
+  margin-top: -22px; /* tuck under the sticky controls row */
+}
+
+.pf-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 0 14px;
+}
+
+.pf-id {
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-name {
+  font: 600 30px/1.05 var(--font-display);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.pf-nick {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.pf-jersey {
+  margin-left: 10px;
+  color: var(--ink-3);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.pf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+
+.pf-ovr {
+  font-size: 26px;
+  padding: 8px 12px;
+}
+
+.pf-season-rec {
+  text-align: right;
+}
+
+.pf-season-rec b {
+  display: block;
+  font: 600 26px/1 var(--font-display);
+}
+
+.pf-season-rec span {
+  color: var(--ink-3);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pf-rule {
+  display: flex;
+  height: 4px;
+}
+
+.pf-rule span {
+  flex: 1;
+}
+
+.pf-rule span + span {
+  flex: 0 0 25%;
+}
+
+.pf-section {
+  margin: 22px 0 8px;
+  font: 600 12px var(--font-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 5px;
+}
+
+.pf-scroll {
+  overflow-x: auto;
+}
+
+.pf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pf-table th {
+  font: 600 10.5px var(--font-ui);
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  text-align: right;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pf-table td {
+  text-align: right;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.pf-table th.l,
+.pf-table td.l {
+  text-align: left;
+}
+
+.pf-table .pf-career td {
+  font-weight: 650;
+  border-top: 1px solid var(--line);
+}
+
+.pf-va {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.pf-res.w {
+  color: var(--good);
+  font-weight: 600;
+}
+
+.pf-res.ls {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.pf-bowl {
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+
+.pf-recruit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-size: 12.5px;
+}
+
+.pf-stars {
+  color: var(--warn);
+  letter-spacing: 0.12em;
+}
+
+.pf-commit {
+  color: var(--good);
+  font-weight: 600;
+}
+
+.pf-stops {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.pf-arrow {
+  margin: 0 8px;
+  color: var(--ink-3);
+}
+
+.pf-since {
+  color: var(--ink-3);
+}
+
+.pf-none {
+  margin-top: 16px;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+
+.pf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.pf-contract {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.pf-sec {
+  font-weight: 600;
+  color: var(--good);
+}
+
+.pf-sec.low {
+  color: var(--warn);
+}
+
+.pf-sec.hot {
+  color: var(--bad);
+}
+
+.pf-ledger {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 1px;
+  background: var(--line-soft);
+  border: 1px solid var(--line-soft);
+}
+
+.pf-ledger > div {
+  background: var(--surface);
+  padding: 10px 12px;
+}
+
+.pf-ledger b {
+  display: block;
+  font: 600 20px/1.1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-ledger span {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.pf-staffline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin-top: 12px;
+  font-size: 12.5px;
+}
+
+.pf-staffline .k {
+  color: var(--ink-3);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.pf-hurt {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+/* Season browser inside the school profile. */
+.pf-seasnav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pf-seasnav .pf-btn {
+  font-size: 14px;
+  line-height: 1;
+  padding: 3px 11px;
+}
+
+.pf-seasnav .pf-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pf-seaslabel {
+  font: 600 17px var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pf-live {
+  color: var(--good);
+  font: 600 11px var(--font-ui);
+  letter-spacing: 0.08em;
+}
+
+.pf-seassum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.pf-seassum b {
+  font: 600 20px/1 var(--font-display);
+  color: var(--ink);
+}
+
+.pf-post {
+  color: var(--dev-elite);
+  font-weight: 600;
+}
+
+.pf-yearrow {
+  cursor: pointer;
+}
+
+.pf-yearrow:hover td {
+  background: var(--line-soft);
+}
+
+.pf-yearrow.sel td {
+  background: color-mix(in srgb, var(--team) 10%, transparent);
+  font-weight: 600;
+}

@@ -2,11 +2,13 @@ import { app } from 'electron';
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import type { MediaEvent, RecruitCard, Snapshot, WatchStatus } from '../shared/types.ts';
+import type { MediaEvent, Profile, ProfileRequest, RecruitCard, Snapshot, WatchStatus } from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
+import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from './parser/profile.ts';
 import { scoutRecruits } from './parser/recruit-scout.ts';
 import { mergeSeasonHistory } from './history.ts';
+import { bankSeasonGames, readBankedGames } from './schedule-bank.ts';
 import { generateMedia, sortEvents, type MediaState } from './media/engine.ts';
 import { extractSnapshot } from './parser/extract.ts';
 import { loadFranchise } from './parser/franchise.ts';
@@ -101,6 +103,15 @@ export class Pipeline {
     return scoutRecruits(this.franchise, criteria);
   }
 
+  /** Pop-up profile for a clicked name — player, coach or school. */
+  async profile(req: ProfileRequest): Promise<Profile | null> {
+    if (!this.franchise) return null;
+    if (req.kind === 'player') return extractPlayerProfile(this.franchise, req.row);
+    if (req.kind === 'coach') return extractCoachProfile(this.franchise, req.row);
+    if (req.kind === 'school') return extractSchoolProfile(this.franchise, req.row, readBankedGames());
+    return null;
+  }
+
   /** Re-scope to a different school without re-parsing the file. */
   async rescope(savePath: string, schoolTeamRow: number | null): Promise<void> {
     if (!this.franchise) {
@@ -124,6 +135,9 @@ export class Pipeline {
       snapshot.school.team.row,
       snapshot.school.seasonHistory
     );
+    // And the league schedule: the save recycles SeasonGame every year, so the
+    // bank is the only game-by-game record a finished season will ever have.
+    if (snapshot.season) bankSeasonGames(snapshot.season.seasonYear, snapshot.games);
   }
 
   /** Diff against the stored per-school media state, append fresh stories, push the feed. */

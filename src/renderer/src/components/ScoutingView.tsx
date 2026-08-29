@@ -21,6 +21,7 @@ import {
   spaceOut,
   stars
 } from '../lib/format.ts';
+import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
 
 type Row = { r: ClassRecruit; values: Record<string, number> };
@@ -387,7 +388,7 @@ export default function ScoutingView({
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
                         {r.onBoard && <span className="fav" title="On your board">▣ </span>}
-                        {r.name}
+                        <NameLink req={{ kind: 'player', row: r.playerRow }}>{r.name}</NameLink>
                         <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
                           {' · '}
                           {spaceOut(r.homeState)}

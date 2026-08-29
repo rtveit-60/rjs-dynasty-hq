@@ -187,6 +187,7 @@ async function staffTendencies(
     out.push({
       role,
       name: member.name,
+      coachRow: member.row,
       prestige: String(val(rec, 'CoachPrestige') ?? '') || null,
       careerWins,
       careerLosses,
@@ -403,7 +404,9 @@ async function extractCarousel(
     const table = mainTable(franchise, 'Coach');
     if (!(await ensureCoachSchema(franchise, table))) return out;
     await table.readRecords(COACH_FIELDS);
+    let coachRow = -1;
     for (const rec of table.records as any[]) {
+      coachRow++;
       if (rec.isEmpty) continue;
       const role = STAFF_ROLE[String(val(rec, 'Position'))];
       if (!role) continue;
@@ -419,6 +422,7 @@ async function extractCarousel(
         teamRow,
         role: role.toUpperCase() as 'HC' | 'OC' | 'DC',
         name,
+        coachRow,
         age: Number.isFinite(age) && age > 0 ? age : null,
         securityStatus: status,
         securityPct: Number(val(rec, 'CurrentJobSecurityPercentage') ?? 0),
@@ -462,8 +466,11 @@ async function extractGames(
       'IsGameOfTheWeek',
       'IsOvertimeGame',
       'BroadcastNetwork',
-      'Attendance'
+      'Attendance',
+      'BowlGame'
     ]);
+    // Bowl slots repeat the same few BowlGame rows; resolve each name once.
+    const bowlNames = new Map<string, string | null>();
     for (const rec of table.records) {
       if (rec.isEmpty) continue;
       if (Number(val(rec, 'SeasonYear')) !== currentYearIndex) continue;
@@ -472,6 +479,16 @@ async function extractGames(
       const home = refFromRecord(rec, 'HomeTeam');
       const away = refFromRecord(rec, 'AwayTeam');
       if (isNullRef(home) || isNullRef(away) || home.tableId !== teamTableId || away.tableId !== teamTableId) continue;
+      let bowlName: string | null = null;
+      const bowlRef = refFromRecord(rec, 'BowlGame');
+      if (!isNullRef(bowlRef)) {
+        const key = `${bowlRef.tableId}:${bowlRef.row}`;
+        if (!bowlNames.has(key)) {
+          const bowlRec = (await tableById(franchise, bowlRef.tableId))?.records?.[bowlRef.row];
+          bowlNames.set(key, bowlRec ? String(val(bowlRec, 'Name') ?? '').trim() || null : null);
+        }
+        bowlName = bowlNames.get(key) ?? null;
+      }
       games.push({
         week: Number(val(rec, 'SeasonWeek') ?? 0),
         weekType: String(val(rec, 'SeasonWeekType') ?? ''),
@@ -483,7 +500,8 @@ async function extractGames(
         gotw: val(rec, 'IsGameOfTheWeek') === true,
         overtime: val(rec, 'IsOvertimeGame') === true,
         network: String(val(rec, 'BroadcastNetwork') ?? ''),
-        attendance: Number(val(rec, 'Attendance') ?? 0)
+        attendance: Number(val(rec, 'Attendance') ?? 0),
+        bowlName
       });
     }
   } catch {
@@ -801,6 +819,7 @@ async function extractBoard(
 
         targets.push({
           recruitRow: recruitRef!.row,
+          playerRow: playerRef!.row,
           name: `${String(val(playerRec, 'FirstName') ?? '')} ${String(val(playerRec, 'LastName') ?? '')}`.trim(),
           position: String(val(playerRec, 'Position') ?? ''),
           stars: STAR_MAP[String(val(playerRec, 'ProspectStarRating'))] ?? 0,

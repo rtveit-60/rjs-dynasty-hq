@@ -160,6 +160,18 @@ function registerIpc(): void {
     Array.isArray(criteria) ? pipeline.scout(criteria as never) : [],
   );
 
+  // Pop-up profile for any clicked name (player, coach or school), read on
+  // demand from the cached parse — game logs and season splits are far too
+  // heavy to ship in the snapshot.
+  ipcMain.handle('profile:get', (_e, req: unknown) => {
+    const r = req as { kind?: unknown; row?: unknown };
+    const kinds = ['player', 'coach', 'school'];
+    if (!r || !kinds.includes(String(r.kind)) || !Number.isInteger(r.row) || (r.row as number) < 0) {
+      return null;
+    }
+    return pipeline.profile({ kind: r.kind, row: r.row } as never);
+  });
+
   // Returns the pre-extracted playbook the team runs (formations, plays, alignments,
   // routes): the coach's selected book by its playbook row, falling back to the scheme
   // archetype. null if nothing matches.
@@ -383,6 +395,29 @@ function createWindow(): void {
                 `document.querySelectorAll('.tbl tbody tr')[${Number(rowIndex)}]?.click()`
               );
               await new Promise((r) => setTimeout(r, 900));
+            }
+            // HQ_CAPTURE_NAME=<n> clicks the nth clickable name (opens its profile).
+            const nameIndex = process.env['HQ_CAPTURE_NAME'];
+            if (nameIndex) {
+              await win!.webContents.executeJavaScript(
+                `document.querySelectorAll('.name-link')[${Number(nameIndex)}]?.click()`
+              );
+              await new Promise((r) => setTimeout(r, 1800));
+            }
+            // HQ_CAPTURE_NAME2=<n> clicks a name inside the open pop-up (stacks a second profile).
+            const nameIndex2 = process.env['HQ_CAPTURE_NAME2'];
+            if (nameIndex2) {
+              await win!.webContents.executeJavaScript(
+                `document.querySelectorAll('.pf-panel .name-link')[${Number(nameIndex2)}]?.click()`
+              );
+              await new Promise((r) => setTimeout(r, 1800));
+            }
+            // HQ_CAPTURE_PFCLICK="‹,‹" clicks pop-up buttons by text, in order.
+            for (const label of (process.env['HQ_CAPTURE_PFCLICK'] ?? '').split(',').filter(Boolean)) {
+              await win!.webContents.executeJavaScript(
+                `[...document.querySelectorAll('.pf-panel button')].find((b) => b.textContent.trim() === ${JSON.stringify(label.trim())})?.click()`
+              );
+              await new Promise((r) => setTimeout(r, 400));
             }
             const image = await win!.webContents.capturePage();
             writeFileSync(capturePath, image.toPNG());

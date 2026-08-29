@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Snapshot } from '../../../shared/types.ts';
 import { DEPTH_LABELS, DEPTH_SECTIONS, ovrTier, yearAbbrev } from '../lib/format.ts';
+import { NameLink } from './ProfileModal.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -45,7 +46,9 @@ export default function DepthChartView({ school }: { school: School }) {
                         <div key={`${row}-${i}`} className={`dc-row ${i === 0 ? 'starter' : ''}`}>
                           <span className="dc-depth">{i + 1}</span>
                           <span className="nm">
-                            {p.firstName} {p.lastName}{' '}
+                            <NameLink req={{ kind: 'player', row }}>
+                              {p.firstName} {p.lastName}
+                            </NameLink>{' '}
                             <span className="dc-year">{yearAbbrev(p.schoolYear, p.redshirt)}</span>
                           </span>
                           <span className={ovrTier(p.overall)}>{p.overall}</span>

@@ -12,6 +12,7 @@ import {
   stars
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
 import ScoutingView from './ScoutingView.tsx';
 
@@ -349,7 +350,7 @@ export default function RecruitingView() {
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
                         {r.onBoard && <span className="fav" title="On your board">▣ </span>}
-                        {r.name}
+                        <NameLink req={{ kind: 'player', row: r.playerRow }}>{r.name}</NameLink>
                         <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
                           {' · '}
                           {spaceOut(r.homeState)}

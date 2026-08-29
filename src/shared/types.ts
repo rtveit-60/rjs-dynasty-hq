@@ -71,6 +71,8 @@ export interface CarouselEntry {
   teamRow: number;
   role: 'HC' | 'OC' | 'DC';
   name: string;
+  /** Coach table row — the handle profile pop-ups open with. */
+  coachRow: number;
   age: number | null;
   /** Save enum: Safe / SafeForNow / Low / HotSeat. */
   securityStatus: string;
@@ -94,6 +96,8 @@ export interface GameInfo {
   overtime: boolean;
   network: string;
   attendance: number;
+  /** Bowl name when the game is a bowl/CFP slot; null otherwise. */
+  bowlName?: string | null;
 }
 
 export interface RosterPlayer {
@@ -288,6 +292,8 @@ export interface SeasonSplits {
 export interface StaffTendency {
   role: 'HC' | 'OC' | 'DC';
   name: string;
+  /** Coach table row — the handle profile pop-ups open with. */
+  coachRow: number;
   prestige: string | null;
   careerWins: number | null;
   careerLosses: number | null;
@@ -308,6 +314,8 @@ export interface TargetSchool {
 export interface RecruitTargetEntry {
   /** Row in the Recruit table — joins board targets to class recruits. */
   recruitRow: number;
+  /** Row in the Player table, where names/ratings/abilities live. */
+  playerRow: number;
   name: string;
   position: string;
   stars: number;
@@ -407,6 +415,290 @@ export interface RecruitCard {
   mental: AbilitySlot[];
   physical: AbilitySlot[];
 }
+
+// --- Profiles (on-demand pop-up detail for a player, coach or school) ---
+
+/**
+ * One stat cell as it should read on screen. Values arrive pre-formatted
+ * because the sensible rendering differs per stat — "18-of-27" and "7.4" and
+ * "1,240" all need different treatment and the renderer shouldn't have to know.
+ */
+export interface StatCell {
+  label: string;
+  value: string;
+}
+
+/** A labelled block of stat cells — Passing, Rushing, Defense, and so on. */
+export interface StatLine {
+  category: string;
+  cells: StatCell[];
+}
+
+/** One season of a player's career, as the save's per-season stat rows record it. */
+export interface SeasonStatRow {
+  /** Calendar year (SEAS_YEAR resolved against the save's current season). */
+  year: number;
+  /** The school the player suited up for that year, from the stat row itself. */
+  team: string;
+  teamRow: number | null;
+  gamesPlayed: number;
+  gamesStarted: number;
+  lines: StatLine[];
+}
+
+/** One game from a player's log. */
+export interface GameLogRow {
+  year: number;
+  week: number;
+  weekType: string;
+  opponent: string;
+  opponentRow: number | null;
+  home: boolean;
+  /** "W 45–14"; empty when the save has no result for the game. */
+  result: string;
+  lines: StatLine[];
+}
+
+/** A school change visible in a player's own season-by-season stat rows. */
+export interface PlayerStop {
+  fromYear: number;
+  team: string;
+  teamRow: number | null;
+}
+
+export interface PlayerProfile {
+  kind: 'player';
+  row: number;
+  name: string;
+  position: string;
+  archetype: string;
+  jersey: number | null;
+  heightIn: number;
+  weightLb: number;
+  overall: number;
+  devTrait: string;
+  schoolYear: string;
+  redshirt: string;
+  homeTown: string;
+  homeState: string;
+  teamRow: number | null;
+  teamName: string | null;
+  /** Save enum — "Uninjured" when healthy. */
+  injury: string;
+  yearsWithTeam: number;
+  awards: number;
+  ratings: { label: string; value: number }[];
+  mental: AbilitySlot[];
+  physical: AbilitySlot[];
+  /** Career totals, empty for a player who has never taken a snap. */
+  career: StatLine[];
+  /** Newest season first. */
+  seasons: SeasonStatRow[];
+  /** Newest game first. */
+  games: GameLogRow[];
+  /** Schools worn, oldest first — derived from the season rows' own team fields. */
+  stops: PlayerStop[];
+  /** Set for a prospect still on the recruiting board. */
+  recruit: {
+    stars: number;
+    nationalRank: number;
+    positionRank: number;
+    stateRank: number;
+    stage: string;
+    offers: number;
+    committedTo: string | null;
+  } | null;
+}
+
+/** A coach's career ledger, from the save's CareerCoachStats row. */
+export interface CoachCareerStats {
+  wins: number;
+  losses: number;
+  winsAtSchool: number;
+  lossesAtSchool: number;
+  bowlWins: number;
+  bowlLosses: number;
+  playoffWins: number;
+  playoffLosses: number;
+  confChampWins: number;
+  confChampLosses: number;
+  natlChampWins: number;
+  natlChampLosses: number;
+  rivalWins: number;
+  rivalLosses: number;
+  top25Wins: number;
+  top25Losses: number;
+  draftPicks: number;
+  firstRoundPicks: number;
+  top5Classes: number;
+  timesFired: number;
+  prestigeGains: number;
+}
+
+/**
+ * One stint on a coach's résumé. Head-coach stints are reconstructed from the
+ * teams' own year-by-year history rows (which name each season's coach of
+ * record), so they carry seasons and a record; other roles come from the
+ * coach's current job and the save's previous-job fields, which carry no
+ * dates — those render as "Earlier".
+ */
+export interface CoachStop {
+  teamRow: number | null;
+  team: string;
+  /** Save enum: HeadCoach / OffensiveCoordinator / DefensiveCoordinator. */
+  role: string;
+  fromYear: number | null;
+  /** null = still there. */
+  toYear: number | null;
+  wins: number | null;
+  losses: number | null;
+  current: boolean;
+}
+
+export interface CoachProfile {
+  kind: 'coach';
+  row: number;
+  name: string;
+  /** Save enum: HeadCoach / OffensiveCoordinator / DefensiveCoordinator. */
+  role: string;
+  teamRow: number | null;
+  teamName: string | null;
+  age: number;
+  yearsCoaching: number;
+  seasonsWithTeam: number;
+  /** School name resolved from AlmaMater (a PresentationId); null when the id
+   * points outside the save's team list. */
+  almaMater: string | null;
+  almaMaterRow: number | null;
+  homeState: string | null;
+  prestige: string;
+  personality: string;
+  backstory: string;
+  specialty: string;
+  pipeline: string;
+  archetype: string;
+  wasPlayer: boolean;
+  offScheme: string;
+  defScheme: string;
+  contractYears: number;
+  contractLength: number;
+  contractStatus: string;
+  securityStatus: string;
+  securityPct: number;
+  seasonWins: number;
+  seasonLosses: number;
+  career: CoachCareerStats | null;
+  stops: CoachStop[];
+}
+
+/** One game on a school's schedule. */
+export interface ScheduleGame {
+  week: number;
+  weekType: string;
+  opponent: string;
+  opponentRow: number | null;
+  home: boolean;
+  neutral: boolean;
+  /** 'W' | 'L' | 'T' | '' when unplayed. */
+  outcome: string;
+  scoreUs: number;
+  scoreThem: number;
+  bowlName: string | null;
+  network: string;
+  attendance: number;
+}
+
+/**
+ * One season of a school, as deep as the save (plus the app's own banked
+ * schedules) can tell it. Three tiers of depth:
+ *  - every year: record, conference finish, final rank, coach, postseason
+ *    (from the team's year-by-year history rows);
+ *  - the save's rolling five-season stat window: a team stat panel;
+ *  - the current season, and any season the app banked while it was being
+ *    played: full schedule and points for/against.
+ */
+export interface SchoolSeason {
+  year: number;
+  current: boolean;
+  wins: number;
+  losses: number;
+  ties: number;
+  conference: string;
+  confWins: number;
+  confLosses: number;
+  confStanding: number;
+  finalRank: number;
+  coachName: string;
+  /** Deepest postseason result recorded that year; empty when none. */
+  postseason: string;
+  /** Summed from the schedule; null when no game-by-game record exists. */
+  pointsFor: number | null;
+  pointsAgainst: number | null;
+  /** Empty when the game-by-game record is gone (save keeps one season). */
+  schedule: ScheduleGame[];
+  /** Team stat panel; empty outside the save's five-season window. */
+  stats: StatLine[];
+}
+
+/** The program's all-time ledger, from Team.TeamHistoricalData. */
+export interface SchoolAllTime {
+  wins: number;
+  losses: number;
+  ties: number;
+  homeWins: number;
+  homeLosses: number;
+  bowlsMade: number;
+  bowlsWon: number;
+  cfpMade: number;
+  cfpWon: number;
+  ny6Made: number;
+  ny6Won: number;
+  natlChampsMade: number;
+  natlChampsWon: number;
+  rivalryWins: number;
+  rivalryLosses: number;
+  heismans: number;
+  allAmericans: number;
+  playersDrafted: number;
+  weeksRankedTop25: number;
+  top5Classes: number;
+  top10Classes: number;
+  top25Classes: number;
+  longestHomeWinStreak: number;
+  currentHomeWinStreak: number;
+}
+
+export interface SchoolProfile {
+  kind: 'school';
+  row: number;
+  name: string;
+  nickName: string;
+  city: string | null;
+  state: string | null;
+  founded: number | null;
+  colors: TeamColors;
+  conference: string;
+  stadium: string | null;
+  rank: number;
+  prestigeRank: number;
+  confStanding: number;
+  offenseRank: number;
+  defenseRank: number;
+  staff: { role: string; name: string; row: number }[];
+  wins: number;
+  losses: number;
+  /** Newest first; [0] is the season underway. */
+  seasons: SchoolSeason[];
+  allTime: SchoolAllTime | null;
+}
+
+export type Profile = PlayerProfile | CoachProfile | SchoolProfile;
+
+/** What the UI asks for when a name is clicked. */
+export type ProfileRequest =
+  | { kind: 'player'; row: number }
+  | { kind: 'coach'; row: number }
+  | { kind: 'school'; row: number };
 
 export interface RecruitingData {
   classYear: number;
