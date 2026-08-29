@@ -1807,7 +1807,6 @@ table.tbl.tbl-wide {
   font-weight: 700;
   font-size: 21px;
   line-height: 1.1;
-  margin-bottom: 4px;
 }
 
 .rc-skill-v.t1 {
@@ -1825,20 +1824,6 @@ table.tbl.tbl-wide {
 
 .rc-skill-v.t5 {
   color: var(--ink-3);
-}
-
-.rc-bar {
-  display: block;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--line-soft);
-  overflow: hidden;
-}
-
-.rc-bar > span {
-  display: block;
-  height: 100%;
-  background: var(--team-bright, var(--ink-3));
 }
 
 .rc-abilities {
