@@ -1,43 +1,12 @@
 import type { Snapshot } from '../../../shared/types.ts';
 import { NameLink } from './ProfileModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
+import { AWARD_NAMES } from '../../../shared/awards.ts';
 
 type School = NonNullable<Snapshot['school']>;
 
-/**
- * Display names derived from the save's award enums — plain readings of the
- * tokens, not invented trophy brands. BEST_HC/BEST_AC follow the game's own
- * phrasing ("Coach of the Year" appears verbatim in its goal text).
- */
-const AWARD_LABELS: Record<string, string> = {
-  HEISMAN: 'Heisman',
-  BEST_POTY: 'Player of the Year',
-  BEST_FRESHMAN_POTY: 'Freshman of the Year',
-  BEST_PLAYER: 'Best Player',
-  MOST_VERSATILE: 'Most Versatile',
-  BEST_ACADEMIC: 'Academic Award',
-  BEST_HC: 'Coach of the Year',
-  BEST_AC: 'Assistant Coach of the Year',
-  BEST_SR: 'Best Senior',
-  BEST_SR_QB: 'Best Senior QB',
-  BEST_QB: 'Best Quarterback',
-  BEST_RB: 'Best Running Back',
-  BEST_REC: 'Best Receiver',
-  BEST_TE: 'Best Tight End',
-  BEST_C: 'Best Center',
-  BEST_IL: 'Best Interior Lineman',
-  BEST_DL: 'Best Defensive Lineman',
-  BEST_DE: 'Best Edge Rusher',
-  BEST_LB: 'Best Linebacker',
-  BEST_DB: 'Best Defensive Back',
-  BEST_DEF_1: 'Best Defender I',
-  BEST_DEF_2: 'Best Defender II',
-  BEST_KICK: 'Best Kicker',
-  BEST_PUNT: 'Best Punter'
-};
-
 const awardLabel = (t: string) =>
-  AWARD_LABELS[t] ??
+  AWARD_NAMES[t] ??
   t
     .toLowerCase()
     .split('_')

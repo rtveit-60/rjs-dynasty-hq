@@ -10,6 +10,10 @@ export interface Settings {
   portraitsDir: string | null;
   logosDir: string | null;
   autoUpdate: boolean;
+  /** Renderer zoom factor; 1 = 100%. Clamped to 0.7–1.5. */
+  uiScale: number;
+  /** Scale the UI with window width (uiScale becomes a bias on the fit). */
+  uiFit: boolean;
   windowBounds?: { x: number; y: number; width: number; height: number };
 }
 
@@ -444,6 +448,46 @@ export interface RecruitCard {
   glance: { label: string; value: number }[];
   mental: AbilitySlot[];
   physical: AbilitySlot[];
+}
+
+// --- League leaders (Media HQ ticker + modules, computed on demand) ---
+
+export interface LeaderRow {
+  playerRow: number;
+  name: string;
+  position: string;
+  team: string;
+  teamRow: number | null;
+  /** Category value — yards, tackles, sacks (half-precision), picks. */
+  value: number;
+  /** Companion figure, pre-formatted: "24 TD", "48 rec". */
+  sub: string;
+}
+
+export interface LeaderCategory {
+  key: 'pass' | 'rush' | 'recv' | 'total' | 'tackles' | 'sacks' | 'ints';
+  label: string;
+  /** Ticker shorthand: PASS, RUSH, REC, TKL, SACK, INT. */
+  short: string;
+  rows: LeaderRow[];
+}
+
+/** One team's season totals, summed from its players' stat rows. */
+export interface TeamSeasonTotals {
+  teamRow: number;
+  passYds: number;
+  rushYds: number;
+  /** Offensive touchdowns: passing + rushing (receiving TDs are the same scores). */
+  offTds: number;
+  fgs: number;
+  sacks: number;
+  ints: number;
+}
+
+export interface LeagueLeaders {
+  seasonYear: number;
+  categories: LeaderCategory[];
+  teams: TeamSeasonTotals[];
 }
 
 // --- Profiles (on-demand pop-up detail for a player, coach or school) ---

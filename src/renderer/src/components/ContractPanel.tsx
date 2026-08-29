@@ -149,7 +149,7 @@ export default function ContractPanel({ contract }: { contract: CoachContract })
                     <span>{g.label}</span>
                   ) : (
                     <span style={{ color: 'var(--ink-3)', fontStyle: 'italic' }} title={`goal id ${g.id}`}>
-                      unrecognized goal — regenerate coach-goals.ts
+                      goal text unavailable
                     </span>
                   )}{' '}
                   <span style={{ color: st.color, fontSize: 11.5 }}>· {st.text}</span>

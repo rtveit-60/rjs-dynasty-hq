@@ -1,8 +1,9 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webFrame } from 'electron';
 import type {
   AppState,
   BrandPack,
   DetectedSave,
+  LeagueLeaders,
   MediaEvent,
   PlaybookBook,
   Profile,
@@ -30,11 +31,16 @@ export interface HQBridge {
   useSave: (path: string) => Promise<Settings>;
   setSchool: (row: number | null) => Promise<Settings>;
   setTheme: (theme: ThemeMode) => Promise<Settings>;
+  setUiScale: (scale: number) => Promise<Settings>;
+  setUiFit: (on: boolean) => Promise<Settings>;
+  onZoom: (cb: (effective: number) => void) => () => void;
+  getZoom: () => number;
   setAutoUpdate: (enabled: boolean) => Promise<Settings>;
   installUpdate: () => Promise<void>;
   onUpdateReady: (cb: (version: string) => void) => () => void;
   revealSave: () => Promise<void>;
   getRecruitCard: (playerRow: number) => Promise<RecruitCard | null>;
+  getLeagueLeaders: () => Promise<LeagueLeaders | null>;
   getProfile: (req: ProfileRequest) => Promise<Profile | null>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
@@ -56,11 +62,16 @@ const bridge: HQBridge = {
   useSave: (path) => ipcRenderer.invoke('save:use', path),
   setSchool: (row) => ipcRenderer.invoke('school:set', row),
   setTheme: (theme) => ipcRenderer.invoke('theme:set', theme),
+  setUiScale: (scale) => ipcRenderer.invoke('zoom:set', scale),
+  setUiFit: (on) => ipcRenderer.invoke('zoomfit:set', on),
+  onZoom: subscribe<number>('ui:zoom'),
+  getZoom: () => webFrame.getZoomFactor(),
   setAutoUpdate: (enabled) => ipcRenderer.invoke('autoupdate:set', enabled),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateReady: subscribe<string>('update:ready'),
   revealSave: () => ipcRenderer.invoke('save:reveal'),
   getRecruitCard: (playerRow) => ipcRenderer.invoke('recruit:card', playerRow),
+  getLeagueLeaders: () => ipcRenderer.invoke('league:leaders'),
   getProfile: (req) => ipcRenderer.invoke('profile:get', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),

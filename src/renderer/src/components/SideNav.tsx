@@ -1,22 +1,30 @@
 import { initials } from '../lib/format.ts';
 import { useHQ, type NavKey } from '../store.ts';
+import ScaleControl from './ScaleControl.tsx';
 import TeamLogo from './TeamLogo.tsx';
 import ThemeToggle from './ThemeToggle.tsx';
 
-const ITEMS: { key: NavKey; label: string; soon?: boolean }[] = [
-  { key: 'team', label: 'TEAM HQ' },
-  { key: 'recruiting', label: 'RECRUITING' },
-  { key: 'media', label: 'DYNASTY MEDIA' },
-  { key: 'carousel', label: 'COACHING CAROUSEL' },
-  { key: 'setup', label: 'SETUP' }
+/* Full labels for the wide rail; short marks when the window narrows. */
+const ITEMS: { key: NavKey; label: string; abbr: string }[] = [
+  { key: 'team', label: 'TEAM HQ', abbr: 'HQ' },
+  { key: 'recruiting', label: 'RECRUITING', abbr: 'REC' },
+  { key: 'media', label: 'DYNASTY MEDIA', abbr: 'MED' },
+  { key: 'carousel', label: 'COACHING CAROUSEL', abbr: 'CAR' },
+  { key: 'setup', label: 'SETUP', abbr: 'SET' }
 ];
 
 function UpdateBanner() {
   const updateReady = useHQ((s) => s.updateReady);
   if (!updateReady) return null;
   return (
-    <button className="btn primary" style={{ width: '100%' }} onClick={() => void window.hq.installUpdate()}>
-      v{updateReady} ready — Restart to update
+    <button
+      className="btn primary update-btn"
+      style={{ width: '100%', justifyContent: 'center' }}
+      title={`Version ${updateReady} downloaded. Restart to install.`}
+      onClick={() => void window.hq.installUpdate()}
+    >
+      <span className="up-full">Restart to update · v{updateReady}</span>
+      <span className="up-abbr">↻</span>
     </button>
   );
 }
@@ -55,18 +63,21 @@ export default function SideNav() {
           <button
             key={item.key}
             className={`nav-item ${nav === item.key ? 'active' : ''}`}
-            disabled={item.soon}
+            title={item.label}
             onClick={() => setNav(item.key)}
           >
-            {item.label}
-            {item.soon && <span className="soon">SOON</span>}
+            <span className="nav-full">{item.label}</span>
+            <span className="nav-abbr">{item.abbr}</span>
           </button>
         ))}
       </nav>
       <div className="rail-foot">
         <UpdateBanner />
-        <ThemeToggle />
-        <span>Read-only — your save file is never modified.</span>
+        <div className="rail-controls">
+          <ThemeToggle />
+          <ScaleControl />
+        </div>
+        <span className="rail-note">Read-only. Your save file is never modified.</span>
       </div>
     </aside>
   );

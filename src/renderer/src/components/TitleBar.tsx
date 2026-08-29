@@ -6,20 +6,32 @@ export default function TitleBar() {
   const settings = useHQ((s) => s.settings);
 
   const season = snapshot?.season;
+  const team = snapshot?.school?.team;
+  const sp = snapshot?.school?.splits;
 
   return (
     <header className="titlebar">
       <div className="wordmark">
         <span className="rj">RJ&rsquo;S</span> DYNASTY HQ
       </div>
+      {team && (
+        <span className="bug-plate">
+          <span>{team.displayName || team.longName}</span>
+          {sp && sp.scope === 'current' && sp.games > 0 && (
+            <span className="rec">
+              {sp.wins}–{sp.losses}
+            </span>
+          )}
+        </span>
+      )}
       {settings?.savePath && (
         <div className="titlebar-meta">
-          <span>{snapshot?.fileName ?? '…'}</span>
+          <span className="file">{snapshot?.fileName ?? '…'}</span>
           {season && (
             <>
-              <span>·</span>
+              <span className="file">·</span>
               <span>
-                {season.seasonYear} — Year {season.dynastyYear}, Week {season.week}
+                {season.seasonYear} · Year {season.dynastyYear}, Week {season.week}
               </span>
             </>
           )}

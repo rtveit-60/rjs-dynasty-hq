@@ -12,7 +12,9 @@ const DEFAULTS: Settings = {
   brandPack: 'real',
   portraitsDir: null,
   logosDir: null,
-  autoUpdate: true
+  autoUpdate: true,
+  uiScale: 1,
+  uiFit: true
 };
 
 let current: Settings | null = null;

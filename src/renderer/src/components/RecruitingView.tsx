@@ -14,6 +14,8 @@ import {
   stars
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import BoardMark from './BoardMark.tsx';
+import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
 import ScoutingView from './ScoutingView.tsx';
@@ -22,7 +24,6 @@ type Board = 'hs' | 'portal' | 'scout';
 
 type SortKey =
   | 'rating'
-  | 'gem'
   | 'name'
   | 'pos'
   | 'dev'
@@ -32,10 +33,8 @@ type SortKey =
   | 'posrk'
   | 'natlrk'
   | 'edge'
-  | 'offers'
-  | 'board';
+  | 'offers';
 
-const GEM_ORDER: Record<string, number> = { BUST: 0, NORMAL: 1, GEM: 2 };
 const DEV_ORDER: Record<string, number> = {
   Normal: 0,
   College_Impact: 1,
@@ -52,7 +51,7 @@ const STAGE_ORDER: Record<string, number> = {
 };
 const BIG = Number.MAX_SAFE_INTEGER;
 const PAGE_SIZE = 200;
-const COLS = 13;
+const COLS = 11;
 
 const STAR_FILTERS = [
   { label: 'All', min: 0 },
@@ -110,8 +109,6 @@ export default function RecruitingView() {
       switch (sortKey) {
         case 'rating':
           return (a.stars - b.stars) * dir || rank(a.nationalRank) - rank(b.nationalRank);
-        case 'gem':
-          return ((GEM_ORDER[a.quality] ?? 1) - (GEM_ORDER[b.quality] ?? 1)) * dir || byName(a, b);
         case 'name':
           return byName(a, b) * dir;
         case 'pos':
@@ -139,8 +136,6 @@ export default function RecruitingView() {
           return (a.edges.length - b.edges.length) * dir || byName(a, b);
         case 'offers':
           return (a.offers - b.offers) * dir || byName(a, b);
-        case 'board':
-          return (Number(a.onBoard) - Number(b.onBoard)) * dir || byName(a, b);
         default:
           return 0;
       }
@@ -219,6 +214,26 @@ export default function RecruitingView() {
         <button className={`tab ${board === 'scout' ? 'active' : ''}`} onClick={() => setBoard('scout')}>
           SCOUTING REPORTS
         </button>
+        <InfoDot title="Recruiting Board">
+          <p>
+            Every prospect in the class, straight from the save. Sort any column, click a row for the
+            skills their position lives on, and click a name for the full profile.
+          </p>
+          <InfoRow term="Gem / Bust">
+            The save's own quality flag. Gems outplay their stars; busts fall short of them.
+          </InfoRow>
+          <InfoRow term="Ovr">True overall. The game hides it until you scout.</InfoRow>
+          <InfoRow term="Edge">
+            Where your program holds a clear advantage over the schools actually pursuing the
+            recruit: pipeline, pro potential, home state, or leading the race.
+          </InfoRow>
+          <InfoRow term="Crosshair">
+            The mark beside a name: that recruit is already on your recruiting board.
+          </InfoRow>
+          <InfoRow term="The race">
+            Every pursuing school and its influence, in the recruit's profile.
+          </InfoRow>
+        </InfoDot>
       </div>
 
       {board === 'scout' ? (
@@ -290,8 +305,8 @@ export default function RecruitingView() {
 
       {board === 'portal' && portalCount === 0 ? (
         <div className="empty" style={{ marginTop: 18 }}>
-          The transfer portal is empty right now — it fills during the offseason, and players appear
-          here as soon as your save reaches that window.
+          The portal is empty. It opens in the offseason and fills in as your save reaches that
+          window.
         </div>
       ) : (
         <>
@@ -299,19 +314,17 @@ export default function RecruitingView() {
             <table className="tbl tbl-wide">
               <thead>
                 <tr>
-                  {th('Rating', 'rating')}
-                  {th('Gem', 'gem')}
+                  {th('Rk', 'natlrk', { defaultAsc: true })}
                   {th('Recruit & School', 'name', { defaultAsc: true, cls: 'col-name' })}
                   {th('Pos', 'pos', { defaultAsc: true })}
+                  {th('Stars', 'rating')}
+                  {th('Ovr', 'ovr')}
                   {th('Dev', 'dev')}
                   {th('Pipeline', 'pipeline', { defaultAsc: true })}
                   {th('Status', 'status')}
-                  {th('Ovr', 'ovr')}
                   {th('Pos Rk', 'posrk', { num: true, defaultAsc: true })}
-                  {th('Natl Rk', 'natlrk', { num: true, defaultAsc: true })}
                   {th('Edge', 'edge')}
                   {th('Offers', 'offers', { num: true })}
-                  {th('Board', 'board')}
                 </tr>
               </thead>
               <tbody>
@@ -321,15 +334,8 @@ export default function RecruitingView() {
                       onClick={() => setOpenRow(openRow === r.row ? null : r.row)}
                       className={`clickable ${openRow === r.row ? 'expanded' : ''}`}
                     >
-                      <td>
-                        <span className="stars-cell">{stars(r.stars).slice(0, r.stars)}</span>
-                      </td>
-                      <td>
-                        {r.quality === 'GEM' && <span className="q gem">GEM</span>}
-                        {r.quality === 'BUST' && <span className="q bust">BUST</span>}
-                        {r.quality !== 'GEM' && r.quality !== 'BUST' && (
-                          <span style={{ color: 'var(--ink-3)' }}>—</span>
-                        )}
+                      <td className={`rk-lead ${r.nationalRank > 0 && r.nationalRank <= 5 ? 'hot' : ''}`}>
+                        {r.nationalRank || '—'}
                       </td>
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
@@ -339,9 +345,21 @@ export default function RecruitingView() {
                           {spaceOut(r.homeState)}
                           {board === 'portal' && r.classType !== 'HS' ? ` · ${r.classType}` : ''}
                         </span>
+                        {r.onBoard && <BoardMark />}
+                        {r.quality === 'GEM' && <span className="btag gem">Gem</span>}
+                        {r.quality === 'BUST' && <span className="btag bust">Bust</span>}
                       </td>
                       <td>
                         <span className="pos-tag">{recruitPos(r.position)}</span>
+                      </td>
+                      <td>
+                        <span className="stars-cell" title={`${r.stars} stars`}>
+                          {stars(r.stars).slice(0, r.stars)}
+                          <span className="off">{stars(r.stars).slice(r.stars)}</span>
+                        </span>
+                      </td>
+                      <td>
+                        <span className={ovrTier(r.overall)}>{r.overall}</span>
                       </td>
                       <td>
                         <span className={devClass(r.devTrait)}>{devLabel(r.devTrait)}</span>
@@ -352,30 +370,19 @@ export default function RecruitingView() {
                       <td className="cell-clip" title={r.committedTo ?? undefined}>
                         {statusCell(r)}
                       </td>
-                      <td>
-                        <span className={ovrTier(r.overall)}>{r.overall}</span>
-                      </td>
                       <td className="num">{r.positionRank || '—'}</td>
-                      <td className="num">{r.nationalRank || '—'}</td>
                       {/* One chip keeps the column narrow; hover lists every edge. */}
                       <td className="cell-clip" title={r.edges.join(', ')}>
                         {r.edges.length ? (
                           <>
-                            <span className="edge">{r.edges[0]}</span>
-                            {r.edges.length > 1 && <span className="edge">+{r.edges.length - 1}</span>}
+                            <span className="btag">{r.edges[0]}</span>
+                            {r.edges.length > 1 && <span className="btag">+{r.edges.length - 1}</span>}
                           </>
                         ) : (
                           <span style={{ color: 'var(--ink-3)' }}>—</span>
                         )}
                       </td>
                       <td className="num">{r.offers}</td>
-                      <td>
-                        {r.onBoard ? (
-                          <span className="fav" title="On your recruiting board">▣ On Board</span>
-                        ) : (
-                          <span style={{ color: 'var(--ink-3)' }}>—</span>
-                        )}
-                      </td>
                     </tr>
                     {openRow === r.row && <RecruitCardRow playerRow={r.playerRow} span={COLS} />}
                   </Fragment>
@@ -403,11 +410,6 @@ export default function RecruitingView() {
             </button>
           </div>
 
-          <p className="foot-note">
-            Click any recruit for an at-a-glance read on the skills their position lives on; the full
-            ratings sheet and the recruiting race are in their profile — click the name. Edges compare
-            your pipelines and program grades against each recruit's actual pursuers.
-          </p>
         </>
       )}
       </>

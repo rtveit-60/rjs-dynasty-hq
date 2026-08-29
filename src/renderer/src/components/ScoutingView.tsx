@@ -21,6 +21,8 @@ import {
   spaceOut,
   stars
 } from '../lib/format.ts';
+import BoardMark from './BoardMark.tsx';
+import InfoDot from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
 
@@ -173,7 +175,19 @@ export default function ScoutingView({
   return (
     <>
       <div className="scout-builder">
-        <div className="scout-title">Attribute filters</div>
+        <div className="scout-title">
+          Attribute filters
+          <InfoDot title="Scouting Reports">
+            <p>
+              Set attribute thresholds and every recruit who clears all of them appears below. Each
+              attribute you filter on becomes a sortable column.
+            </p>
+            <p>
+              Searches the whole class, and the portal once it opens. Click a row for the
+              at-a-glance card; the full ratings sheet is in the profile.
+            </p>
+          </InfoDot>
+        </div>
         <div className="scout-rows">
         {criteria.map((c, i) => (
           <div className="scout-row" key={i}>
@@ -365,7 +379,10 @@ export default function ScoutingView({
                       onClick={() => setOpenRow(openRow === r.row ? null : r.row)}
                     >
                       <td>
-                        <span className="stars-cell">{stars(r.stars).slice(0, r.stars)}</span>
+                        <span className="stars-cell" title={`${r.stars} stars`}>
+                          {stars(r.stars).slice(0, r.stars)}
+                          <span className="off">{stars(r.stars).slice(r.stars)}</span>
+                        </span>
                       </td>
                       <td>
                         {r.quality === 'GEM' && <span className="q gem">GEM</span>}
@@ -376,13 +393,13 @@ export default function ScoutingView({
                       </td>
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
-                        {r.onBoard && <span className="fav" title="On your board">▣ </span>}
                         <NameLink req={{ kind: 'player', row: r.playerRow }}>{r.name}</NameLink>
                         <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
                           {' · '}
                           {spaceOut(r.homeState)}
                           {r.isTransfer ? ` · ${r.classType}` : ''}
                         </span>
+                        {r.onBoard && <BoardMark />}
                       </td>
                       <td>
                         <span className="pos-tag">{recruitPos(r.position)}</span>
@@ -444,11 +461,6 @@ export default function ScoutingView({
             </button>
           </div>
 
-          <p className="foot-note">
-            Every attribute you filter on becomes a sortable column. Searches the recruiting class
-            {portalActive ? ' and the transfer portal' : ' (the portal fills in the offseason)'}. Click a
-            recruit for their at-a-glance card; the full ratings sheet is in their profile.
-          </p>
         </>
       )}
     </>

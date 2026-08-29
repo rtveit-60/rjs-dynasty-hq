@@ -54,8 +54,8 @@ function effectiveTheme(): 'light' | 'dark' {
 }
 
 const OVERLAY = {
-  light: { color: '#f4f2ee', symbolColor: '#22211f', height: 44 },
-  dark: { color: '#101214', symbolColor: '#e9e7e2', height: 44 }
+  light: { color: '#fafbfc', symbolColor: '#16181d', height: 44 },
+  dark: { color: '#11141a', symbolColor: '#e9ecf2', height: 44 }
 };
 
 function applyOverlay(): void {
@@ -143,6 +143,19 @@ function registerIpc(): void {
     return getSettings();
   });
 
+  ipcMain.handle('zoom:set', (_e, scale: number) => {
+    const clamped = Math.min(1.5, Math.max(0.7, Number(scale)));
+    const settings = updateSettings({ uiScale: Number.isFinite(clamped) ? clamped : 1 });
+    applyZoom();
+    return settings;
+  });
+
+  ipcMain.handle('zoomfit:set', (_e, on: boolean) => {
+    const settings = updateSettings({ uiFit: on === true });
+    applyZoom();
+    return settings;
+  });
+
   ipcMain.handle('save:reveal', () => {
     const { savePath } = getSettings();
     if (savePath) shell.showItemInFolder(savePath);
@@ -153,6 +166,9 @@ function registerIpc(): void {
   ipcMain.handle('recruit:card', (_e, playerRow: number) =>
     Number.isInteger(playerRow) && playerRow >= 0 ? pipeline.recruitCard(playerRow) : null,
   );
+
+  // League stat leaders for Media HQ — one sweep per parse, cached in the pipeline.
+  ipcMain.handle('league:leaders', () => pipeline.leagueLeaders());
 
   // Attribute search over the recruiting class. Runs against the cached parse,
   // so it is cheap enough to re-run as the user types a threshold.
@@ -302,6 +318,23 @@ function registerPortraitProtocol(): void {
   });
 }
 
+/**
+ * The width the interface is designed at. With fit on, the zoom factor tracks
+ * window width against this, so a maximized second monitor fills edge to edge
+ * and a tucked-away half window shrinks to match; uiScale biases the result.
+ */
+const ZOOM_BASE_WIDTH = 1380;
+
+function applyZoom(): void {
+  if (!win) return;
+  const s = getSettings();
+  const bias = Number.isFinite(s.uiScale) ? s.uiScale : 1;
+  const fit = s.uiFit ? win.getContentBounds().width / ZOOM_BASE_WIDTH : 1;
+  const effective = Math.min(1.6, Math.max(0.6, bias * fit));
+  win.webContents.setZoomFactor(effective);
+  win.webContents.send('ui:zoom', effective);
+}
+
 function createWindow(): void {
   const bounds = getSettings().windowBounds;
   win = new BrowserWindow({
@@ -309,13 +342,15 @@ function createWindow(): void {
     height: bounds?.height ?? 880,
     x: bounds?.x,
     y: bounds?.y,
-    minWidth: 1080,
-    minHeight: 700,
+    // Companion-app posture: allow a narrow footprint beside the game or on a
+    // second monitor. Layout collapses gracefully well below the old floor.
+    minWidth: 720,
+    minHeight: 560,
     icon: existsSync(join(app.getAppPath(), 'build/icon.png'))
       ? join(app.getAppPath(), 'build/icon.png')
       : undefined,
     show: false,
-    backgroundColor: effectiveTheme() === 'dark' ? '#101214' : '#f4f2ee',
+    backgroundColor: effectiveTheme() === 'dark' ? '#0b0d11' : '#eef0f3',
     titleBarStyle: 'hidden',
     titleBarOverlay: OVERLAY[effectiveTheme()],
     webPreferences: {
@@ -327,6 +362,18 @@ function createWindow(): void {
   });
 
   win.once('ready-to-show', () => win?.show());
+  win.webContents.on('did-finish-load', applyZoom);
+  // Zoom tracks the drag frame by frame — a trailing one-frame throttle keeps
+  // IPC sane while the window is in motion and still lands on the final size.
+  let zoomPending = false;
+  win.on('resize', () => {
+    if (zoomPending) return;
+    zoomPending = true;
+    setTimeout(() => {
+      zoomPending = false;
+      if (win && !win.isMinimized()) applyZoom();
+    }, 16);
+  });
   win.on('close', () => {
     if (win && !win.isMaximized()) updateSettings({ windowBounds: win.getBounds() });
   });
@@ -401,6 +448,14 @@ function createWindow(): void {
                 })()`
               );
               await new Promise((r) => setTimeout(r, 700));
+            }
+            // HQ_CAPTURE_INFO=<n> opens the nth info dot on the page.
+            const infoIndex = process.env['HQ_CAPTURE_INFO'];
+            if (infoIndex) {
+              await win!.webContents.executeJavaScript(
+                `document.querySelectorAll('.info-dot')[${Number(infoIndex)}]?.click()`
+              );
+              await new Promise((r) => setTimeout(r, 500));
             }
             // HQ_CAPTURE_ROW=<n> expands the nth table row (for detail cards).
             const rowIndex = process.env['HQ_CAPTURE_ROW'];

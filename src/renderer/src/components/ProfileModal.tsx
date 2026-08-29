@@ -272,7 +272,7 @@ function GameLog({ games }: { games: GameLogRow[] }) {
         return (
           <div key={cat}>
             <SectionTitle>
-              {year ? `${year} Game Log — ${cat}` : `Game Log — ${cat}`}
+              {year ? `${year} Game Log · ${cat}` : `Game Log · ${cat}`}
             </SectionTitle>
             <div className="pf-scroll">
               <table className="pf-table">
@@ -372,7 +372,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
               <span className="pf-va">Dealbreaker</span> {spaceOut(p.recruit.dealbreaker)}
             </span>
           )}
-          {p.recruit.committedTo && <span className="pf-commit">Committed — {p.recruit.committedTo}</span>}
+          {p.recruit.committedTo && <span className="pf-commit">Committed · {p.recruit.committedTo}</span>}
         </div>
       )}
 

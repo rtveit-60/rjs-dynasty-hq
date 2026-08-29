@@ -52,7 +52,7 @@ export default function SchoolPicker() {
         </div>
         <p className="hero-tag">
           {snapshot
-            ? 'Pick your school — search by school, mascot, or coach name.'
+            ? 'Pick your school. Search by school, mascot, or coach name.'
             : status.kind === 'error'
               ? 'Could not read the save.'
               : 'Reading your dynasty save…'}

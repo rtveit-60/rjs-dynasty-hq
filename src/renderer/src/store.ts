@@ -21,6 +21,8 @@ interface HQStore {
   systemDark: boolean;
   nav: NavKey;
   detectedSaves: DetectedSave[];
+  /** The zoom factor actually applied (fit x bias), for the rail readout. */
+  effectiveZoom: number;
   /** Open profile pop-ups, oldest first — click a name inside one and it stacks. */
   profileStack: ProfileRequest[];
 
@@ -34,6 +36,8 @@ interface HQStore {
   refreshDetected: () => Promise<void>;
   setSchool: (row: number | null) => Promise<void>;
   setTheme: (theme: ThemeMode) => Promise<void>;
+  setUiScale: (scale: number) => Promise<void>;
+  setUiFit: (on: boolean) => Promise<void>;
   setAutoUpdate: (enabled: boolean) => Promise<void>;
 }
 
@@ -49,6 +53,7 @@ export const useHQ = create<HQStore>((set, get) => ({
   systemDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
   nav: 'team',
   detectedSaves: [],
+  effectiveZoom: 1,
   profileStack: [],
 
   init: async () => {
@@ -59,8 +64,9 @@ export const useHQ = create<HQStore>((set, get) => ({
     window.hq.onMedia((media) => set({ media }));
     window.hq.onUpdateReady((updateReady) => set({ updateReady }));
     window.hq.onSystemTheme((t) => set({ systemDark: t === 'dark' }));
+    window.hq.onZoom((effectiveZoom) => set({ effectiveZoom }));
     const state = await window.hq.getState();
-    set({ ...state, ready: true });
+    set({ ...state, ready: true, effectiveZoom: window.hq.getZoom() });
     if (!state.settings.savePath) void get().refreshDetected();
   },
 
@@ -96,6 +102,16 @@ export const useHQ = create<HQStore>((set, get) => ({
 
   setTheme: async (theme) => {
     const settings = await window.hq.setTheme(theme);
+    set({ settings });
+  },
+
+  setUiScale: async (scale) => {
+    const settings = await window.hq.setUiScale(scale);
+    set({ settings });
+  },
+
+  setUiFit: async (on) => {
+    const settings = await window.hq.setUiFit(on);
     set({ settings });
   },
 

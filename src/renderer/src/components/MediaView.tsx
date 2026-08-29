@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { MediaEvent } from '../../../shared/types.ts';
-import { brandName } from '../lib/brands.ts';
-import { spaceOut } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import InfoDot, { InfoRow } from './InfoDot.tsx';
+import MediaHQ from './MediaHQ.tsx';
+import Story, { weekLabel } from './Story.tsx';
 
 const FILTERS: { key: string; label: string; match: (e: MediaEvent) => boolean }[] = [
   { key: 'all', label: 'ALL', match: () => true },
@@ -20,73 +21,9 @@ const FILTERS: { key: string; label: string; match: (e: MediaEvent) => boolean }
 
 const STORY_CAP = 60;
 
-function Masthead({ outlet }: { outlet: string }) {
-  const pack = useHQ((s) => s.settings?.brandPack ?? 'real');
-  const name = brandName(outlet, pack);
-  if (outlet === 'gameday') {
-    const parts = name.split(' ');
-    return (
-      <span className={`mast mast-${outlet}`}>
-        {parts[0]} <span className="accent">{parts.slice(1).join(' ')}</span>
-      </span>
-    );
-  }
-  return <span className={`mast mast-${outlet}`}>{name}</span>;
-}
-
-function weekLabel(e: MediaEvent): string {
-  if (e.weekType === 'RegularSeason') return `Week ${e.week} · ${e.seasonYear}`;
-  if (/OffSeason|Offseason/.test(e.weekType)) return `Offseason · ${e.seasonYear}`;
-  if (e.weekType === 'Preseason') return `Preseason · ${e.seasonYear}`;
-  return `${spaceOut(e.weekType)} · ${e.seasonYear}`;
-}
-
-/** A short social-style post from one of the wire's fictional personalities. */
-function WirePost({ e }: { e: MediaEvent }) {
-  const b = e.byline!;
-  return (
-    <article className={`story wire-post ${e.aboutUser ? 'user-story' : ''}`}>
-      <div className="post-head">
-        <b>{b.name}</b>
-        <span className="post-handle">{b.handle}</span>
-        <span className="post-outlet">{b.outletName}</span>
-      </div>
-      <p className="post-text">{e.headline}</p>
-      <div className="meta">
-        <span>{weekLabel(e)}</span>
-        <span className="tag">{b.role}</span>
-      </div>
-    </article>
-  );
-}
-
-function Story({ e, lead }: { e: MediaEvent; lead: boolean }) {
-  if (e.format === 'post' && e.byline) return <WirePost e={e} />;
-  return (
-    <article className={`story ${lead ? 'lead' : ''} ${e.aboutUser ? 'user-story' : ''}`}>
-      <Masthead outlet={e.outlet} />
-      <h2>{e.headline}</h2>
-      <div className="dek">{e.dek}</div>
-      {(lead ? e.body : e.body.slice(0, 1)).map((p, i) => (
-        <p key={i}>{p}</p>
-      ))}
-      <div className="meta">
-        <span>{weekLabel(e)}</span>
-        {e.tags
-          .filter(Boolean)
-          .slice(0, 3)
-          .map((t) => (
-            <span key={t} className="tag">
-              {t}
-            </span>
-          ))}
-      </div>
-    </article>
-  );
-}
-
 export default function MediaView() {
   const media = useHQ((s) => s.media);
+  const [tab, setTab] = useState<'hq' | 'wire'>('hq');
   const [filter, setFilter] = useState('all');
 
   const active = FILTERS.find((f) => f.key === filter) ?? FILTERS[0];
@@ -109,48 +46,83 @@ export default function MediaView() {
       <h1 className="page-title">
         Dynasty <span className="nick">Media</span>
       </h1>
-      <div className="page-sub">
-        <span className="chip">
-          <span className="k">STORIES</span> <b>{media.length}</b>
-        </span>
-        <span className="chip">
-          <span className="k">ABOUT YOU</span> <b>{media.filter((e) => e.aboutUser).length}</b>
-        </span>
+
+      <div className="tabs">
+        <button className={`tab ${tab === 'hq' ? 'active' : ''}`} onClick={() => setTab('hq')}>
+          MEDIA HQ
+        </button>
+        <button className={`tab ${tab === 'wire' ? 'active' : ''}`} onClick={() => setTab('wire')}>
+          THE WIRE
+          {media.length > 0 && <span className="tab-count">{media.length}</span>}
+        </button>
+        <InfoDot title="Dynasty Media">
+          <p>
+            Coverage written from what actually changed between saves: results, rankings, commits,
+            transfers, coaching moves. Every line is built from your dynasty's own numbers.
+          </p>
+          <InfoRow term="Media HQ">
+            The league desk. The ticker's cap switches between the Top 25, stat leaders and award
+            races; the modules read polls, schedules and season stats straight from the save.
+          </InfoRow>
+          <InfoRow term="The Wire">
+            The full story feed, plus the press corps' running posts: rumors, scoops and takes from
+            the outlets that cover your league.
+          </InfoRow>
+          <p>
+            Award races are the app's stat-based projections until the game's own awards show
+            crowns the winners.
+          </p>
+        </InfoDot>
       </div>
 
-      <div className="filters" style={{ marginTop: 16 }}>
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            className={`filter ${filter === f.key ? 'active' : ''}`}
-            onClick={() => setFilter(f.key)}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {!filtered.length && (
-        <div className="empty">
-          No stories yet — play or sim a week and the wire lights up when the save updates.
-        </div>
-      )}
-
-      {groups.map((g, gi) => (
-        <div key={g.label}>
-          <div className="section-h">
-            <h3>{g.label}</h3>
-            <div className="rule" />
+      {tab === 'hq' ? (
+        <MediaHQ media={media} onOpenWire={() => setTab('wire')} />
+      ) : (
+        <>
+          <div className="page-sub" style={{ marginTop: 14 }}>
+            <span className="chip">
+              <span className="k">STORIES</span> <b>{media.length}</b>
+            </span>
+            <span className="chip">
+              <span className="k">ABOUT YOU</span> <b>{media.filter((e) => e.aboutUser).length}</b>
+            </span>
           </div>
-          <div className="wire-grid">
-            {g.stories.map((e, si) => (
-              <Story key={e.id} e={e} lead={gi === 0 && si === 0} />
+
+          <div className="filters" style={{ marginTop: 12 }}>
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                className={`filter ${filter === f.key ? 'active' : ''}`}
+                onClick={() => setFilter(f.key)}
+              >
+                {f.label}
+              </button>
             ))}
           </div>
-        </div>
-      ))}
-      {filtered.length > STORY_CAP && (
-        <p className="foot-note">Showing the {STORY_CAP} most recent stories.</p>
+
+          {!filtered.length && (
+            <div className="empty">
+              No stories yet. Play or sim a week; the wire fills in when the save updates.
+            </div>
+          )}
+
+          {groups.map((g, gi) => (
+            <div key={g.label}>
+              <div className="section-h">
+                <h3>{g.label}</h3>
+                <div className="rule" />
+              </div>
+              <div className="wire-grid">
+                {g.stories.map((e, si) => (
+                  <Story key={e.id} e={e} lead={gi === 0 && si === 0} />
+                ))}
+              </div>
+            </div>
+          ))}
+          {filtered.length > STORY_CAP && (
+            <p className="foot-note">Showing the {STORY_CAP} most recent stories.</p>
+          )}
+        </>
       )}
     </div>
   );

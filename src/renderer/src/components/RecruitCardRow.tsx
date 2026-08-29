@@ -109,9 +109,6 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                 </div>
               )}
 
-              <div className="rc-note">
-                Full ratings, measurables and the recruiting race are in the profile — click the name.
-              </div>
             </>
           )}
         </div>
