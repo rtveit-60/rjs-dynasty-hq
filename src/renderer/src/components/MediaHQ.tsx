@@ -60,10 +60,12 @@ const AWARD_BAND: { enumKey: string; cat: 'total' | 'pass' | 'rush' | 'recv' }[]
  */
 export default function MediaHQ({
   media,
-  onOpenWire
+  onOpenWire,
+  onOpenStory
 }: {
   media: MediaEvent[];
   onOpenWire: () => void;
+  onOpenStory?: (e: MediaEvent) => void;
 }) {
   const snapshot = useHQ((s) => s.snapshot);
   const parsedAt = useHQ((s) => s.snapshot?.parsedAt);
@@ -157,25 +159,25 @@ export default function MediaHQ({
         <div className="hqm hq-heads">
           <div className="hqm-h">
             <span>HEADLINES</span>
-            <span className="hq-pager">
-              <button className="hqm-link" onClick={() => page(-1)} aria-label="Previous story">
-                ←
-              </button>
-              <button className="hqm-link" onClick={() => page(1)} aria-label="Next story">
-                →
-              </button>
-              <button className="hqm-link" onClick={onOpenWire}>
-                OPEN THE WIRE →
-              </button>
-            </span>
+            <button className="hqm-link" onClick={onOpenWire}>
+              OPEN THE WIRE →
+            </button>
           </div>
           {media.length ? (
-            <div className="hq-scroll" ref={railRef}>
-              {media.slice(0, 8).map((e) => (
-                <div key={e.id} className="hq-card">
-                  <Story e={e} lead={false} />
-                </div>
-              ))}
+            <div className="hq-stage">
+              <button className="hq-chev" onClick={() => page(-1)} aria-label="Previous story">
+                ‹
+              </button>
+              <div className="hq-scroll" ref={railRef}>
+                {media.slice(0, 8).map((e) => (
+                  <div key={e.id} className="hq-card">
+                    <Story e={e} lead={false} onOpen={onOpenStory} />
+                  </div>
+                ))}
+              </div>
+              <button className="hq-chev" onClick={() => page(1)} aria-label="Next story">
+                ›
+              </button>
             </div>
           ) : (
             <div className="hqm-wait" style={{ padding: '14px 12px' }}>

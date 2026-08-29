@@ -3,7 +3,7 @@ import { brandName } from '../lib/brands.ts';
 import { spaceOut } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 
-function Masthead({ outlet }: { outlet: string }) {
+export function Masthead({ outlet }: { outlet: string }) {
   const pack = useHQ((s) => s.settings?.brandPack ?? 'real');
   const name = brandName(outlet, pack);
   if (outlet === 'gameday') {
@@ -24,35 +24,66 @@ export function weekLabel(e: MediaEvent): string {
   return `${spaceOut(e.weekType)} · ${e.seasonYear}`;
 }
 
-/** A short social-style post from one of the wire's fictional personalities. */
-function WirePost({ e }: { e: MediaEvent }) {
+/** A social post from one of the wire's personalities — the social timeline row. */
+export function WirePost({ e }: { e: MediaEvent }) {
   const b = e.byline!;
+  const initials = b.name
+    .split(' ')
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('');
   return (
-    <article className={`story wire-post ${e.aboutUser ? 'user-story' : ''}`}>
-      <div className="post-head">
-        <b>{b.name}</b>
-        <span className="post-handle">{b.handle}</span>
-        <span className="post-outlet">{b.outletName}</span>
+    <article className={`soc-post ${e.aboutUser ? 'user-story' : ''}`}>
+      <div className="soc-avatar" aria-hidden="true">
+        {initials}
       </div>
-      <p className="post-text">{e.headline}</p>
-      <div className="meta">
-        <span>{weekLabel(e)}</span>
-        <span className="tag">{b.role}</span>
+      <div className="soc-main">
+        <div className="soc-head">
+          <b>{b.name}</b>
+          <span className="soc-handle">{b.handle}</span>
+          <span className="soc-dot">·</span>
+          <span className="soc-outlet">{b.outletName}</span>
+        </div>
+        <p className="soc-text">{e.headline}</p>
+        <div className="soc-meta">
+          <span>{weekLabel(e)}</span>
+          <span className="tag">{b.role}</span>
+        </div>
       </div>
     </article>
   );
 }
 
-export default function Story({ e, lead }: { e: MediaEvent; lead: boolean }) {
+export default function Story({
+  e,
+  lead,
+  onOpen
+}: {
+  e: MediaEvent;
+  lead: boolean;
+  onOpen?: (e: MediaEvent) => void;
+}) {
   if (e.format === 'post' && e.byline) return <WirePost e={e} />;
+  const open = onOpen ? () => onOpen(e) : undefined;
   return (
-    <article className={`story ${lead ? 'lead' : ''} ${e.aboutUser ? 'user-story' : ''}`}>
+    <article
+      className={`story ${lead ? 'lead' : ''} ${e.aboutUser ? 'user-story' : ''} ${open ? 'openable' : ''}`}
+      onClick={open}
+      onKeyDown={open ? (ev) => (ev.key === 'Enter' || ev.key === ' ') && (ev.preventDefault(), open()) : undefined}
+      role={open ? 'button' : undefined}
+      tabIndex={open ? 0 : undefined}
+    >
       <Masthead outlet={e.outlet} />
       <h2>{e.headline}</h2>
       <div className="dek">{e.dek}</div>
       {(lead ? e.body : e.body.slice(0, 1)).map((p, i) => (
         <p key={i}>{p}</p>
       ))}
+      {e.byline && (
+        <div className="story-by">
+          By {e.byline.name} · {e.byline.role}
+        </div>
+      )}
       <div className="meta">
         <span>{weekLabel(e)}</span>
         {e.tags
@@ -63,6 +94,7 @@ export default function Story({ e, lead }: { e: MediaEvent; lead: boolean }) {
               {t}
             </span>
           ))}
+        {open && <span className="read-cue">READ →</span>}
       </div>
     </article>
   );

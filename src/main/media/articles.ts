@@ -1,9 +1,26 @@
-import type { ClassRecruit, GameInfo, MediaEvent, TeamInfo } from '../../shared/types.ts';
+/**
+ * The wire's article desk. Every story picks its headline and dek from the
+ * template banks in banks.ts through the season-cycle variety ledger, so no
+ * two stories in one cycle share a line. Facts come from the save; templates
+ * that need a missing fact simply never render.
+ */
+import type {
+  AnnualAwardWinner,
+  ClassRecruit,
+  GameInfo,
+  MediaEvent,
+  TeamInfo,
+  WeeklyAward
+} from '../../shared/types.ts';
+import { AWARD_NAMES } from '../../shared/awards.ts';
 import type { MediaContext } from './engine.ts';
+import { BEATS, DEKS, HEADLINES } from './banks.ts';
+import { sayFresh, type VarietyLedger } from './voices.ts';
+import { reporterFor } from './press.ts';
 
 export type RawEvent =
-  | { kind: 'userGame'; id: string; game: GameInfo; ctx: MediaContext }
-  | { kind: 'bigGame'; id: string; game: GameInfo; ctx: MediaContext }
+  | { kind: 'userGame'; id: string; game: GameInfo; rivalryName?: string | null; ctx: MediaContext }
+  | { kind: 'bigGame'; id: string; game: GameInfo; rivalryName?: string | null; ctx: MediaContext }
   | { kind: 'pollMove'; id: string; from: number; to: number; teamRow: number; ctx: MediaContext }
   | { kind: 'commit'; id: string; recruit: ClassRecruit; flipFrom: string | null; seeded?: boolean; ctx: MediaContext }
   | {
@@ -19,7 +36,25 @@ export type RawEvent =
     }
   | { kind: 'rosterMove'; id: string; departures: string[][]; arrivals: string[][]; ctx: MediaContext }
   | { kind: 'hotSeat'; id: string; teamRow: number; coach: string; pct: number; yearsRemaining: number; ctx: MediaContext }
-  | { kind: 'seasonSoFar'; id: string; ctx: MediaContext };
+  | { kind: 'seasonSoFar'; id: string; ctx: MediaContext }
+  | {
+      kind: 'statLine';
+      id: string;
+      cat: 'pass' | 'rush' | 'recv';
+      playerRow: number;
+      name: string;
+      position: string;
+      teamRow: number;
+      oppRow: number;
+      yards: number;
+      week: number;
+      ctx: MediaContext;
+    }
+  | { kind: 'streak'; id: string; n: number; wins: number; losses: number; unbeaten: boolean; ctx: MediaContext }
+  | { kind: 'weeklyAward'; id: string; award: WeeklyAward; ctx: MediaContext }
+  | { kind: 'awardShow'; id: string; year: number; winners: AnnualAwardWinner[]; ctx: MediaContext }
+  | { kind: 'awardWin'; id: string; year: number; winner: AnnualAwardWinner; ctx: MediaContext }
+  | { kind: 'draftPick'; id: string; name: string; position: string; round: number; ctx: MediaContext };
 
 const AFFINITY: Record<RawEvent['kind'], string[]> = {
   userGame: ['fox', 'cbs', 'espn'],
@@ -29,7 +64,22 @@ const AFFINITY: Record<RawEvent['kind'], string[]> = {
   coachChange: ['espn', 'si'],
   hotSeat: ['espn', 'si'],
   rosterMove: ['espn', 'cbs'],
-  seasonSoFar: ['si', 'gameday']
+  seasonSoFar: ['si', 'gameday'],
+  statLine: ['espn', 'fox', 'gameday'],
+  streak: ['gameday', 'cbs', 'si'],
+  weeklyAward: ['espn', 'cbs'],
+  awardShow: ['gameday', 'espn'],
+  awardWin: ['si', 'espn'],
+  draftPick: ['espn', 'cbs']
+};
+
+/** Each masthead leans toward a template tone. */
+const OUTLET_TONE: Record<string, string> = {
+  espn: 'network',
+  fox: 'network',
+  cbs: 'analytic',
+  gameday: 'hype',
+  si: 'column'
 };
 
 function hash(s: string): number {
@@ -41,25 +91,9 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-const pick = <T,>(arr: T[], seed: string, salt = 0): T => arr[(hash(seed) + salt) % arr.length];
+const pickArr = <T,>(arr: T[], seed: string, salt = 0): T => arr[(hash(seed) + salt) % arr.length];
 
-function label(t: TeamInfo | undefined, opts: { nick?: boolean } = {}): string {
-  if (!t) return 'an unknown program';
-  const base = opts.nick && t.nickName ? `${t.longName} ${t.nickName}` : t.longName;
-  // The save ranks every team; only the top 25 is a "ranking" in media parlance.
-  return t.rank > 0 && t.rank <= 25 ? `No. ${t.rank} ${base}` : base;
-}
-
-function winVerb(margin: number, ot: boolean, upset: boolean, seed: string): string {
-  if (ot) return pick(['outlasts', 'survives', 'escapes'], seed);
-  if (upset) return pick(['stuns', 'shocks', 'upsets'], seed);
-  if (margin >= 28) return pick(['demolishes', 'blows out', 'annihilates'], seed);
-  if (margin >= 21) return pick(['routs', 'blasts', 'overwhelms'], seed);
-  if (margin >= 14) return pick(['rolls past', 'pounds', 'handles'], seed);
-  if (margin >= 8) return pick(['beats', 'takes down', 'controls'], seed);
-  if (margin >= 4) return pick(['holds off', 'fends off', 'turns back'], seed);
-  return pick(['edges', 'survives', 'sneaks past'], seed);
-}
+const ORDINAL = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'];
 
 function recordThrough(ctx: MediaContext, row: number, week: number): { w: number; l: number } {
   let w = 0;
@@ -78,10 +112,36 @@ function nextOpponent(ctx: MediaContext, row: number, afterWeek: number): { name
     .sort((a, b) => a.week - b.week)[0];
   if (!upcoming) return null;
   const oppRow = upcoming.homeRow === row ? upcoming.awayRow : upcoming.homeRow;
-  return { name: label(ctx.teamsByRow.get(oppRow)), week: upcoming.week };
+  const opp = ctx.teamsByRow.get(oppRow);
+  return { name: rankedLabel(opp), week: upcoming.week };
 }
 
-function base(r: RawEvent, priority: number, aboutUser: boolean, tags: string[]) {
+function rankedLabel(t: TeamInfo | undefined): string {
+  if (!t) return 'an unknown program';
+  return t.rank > 0 && t.rank <= 25 ? `No. ${t.rank} ${t.longName}` : t.longName;
+}
+
+/** Which desk covers each event family, for byline assignment. */
+const BEAT_OF: Record<RawEvent['kind'], string> = {
+  userGame: 'games',
+  bigGame: 'games',
+  pollMove: 'polls',
+  commit: 'recruiting',
+  coachChange: 'coaching',
+  rosterMove: 'coaching',
+  hotSeat: 'coaching',
+  seasonSoFar: 'feature',
+  statLine: 'numbers',
+  streak: 'feature',
+  weeklyAward: 'awards',
+  awardShow: 'awards',
+  awardWin: 'awards',
+  draftPick: 'draft'
+};
+
+function base(r: RawEvent, priority: number, aboutUser: boolean, tags: string[], beat?: string) {
+  const outlet = pickArr(AFFINITY[r.kind], r.id);
+  const rep = reporterFor(outlet, beat ?? BEAT_OF[r.kind], hash(`${r.id}:rep`));
   return {
     id: r.id,
     createdAt: Date.now(),
@@ -91,11 +151,40 @@ function base(r: RawEvent, priority: number, aboutUser: boolean, tags: string[])
     priority,
     aboutUser,
     tags,
-    outlet: pick(AFFINITY[r.kind], r.id)
+    outlet,
+    byline: rep ? { name: rep.name, handle: rep.handle, role: rep.role, outletName: '' } : undefined,
+    tone: rep?.tone ?? OUTLET_TONE[outlet]
   };
 }
 
-function gameStory(r: Extract<RawEvent, { kind: 'userGame' | 'bigGame' }>): MediaEvent {
+type Tokens = Record<string, string>;
+
+/** Headline from a bank; the last-resort fallback keeps the wire alive. */
+function head(
+  ledger: VarietyLedger,
+  key: string,
+  seed: string,
+  tokens: Tokens,
+  tone?: string,
+  fallback = ''
+): string {
+  return sayFresh(ledger, `h:${key}`, HEADLINES[key] ?? [], seed, tokens, tone) ?? fallback;
+}
+
+function dek(ledger: VarietyLedger, key: string, seed: string, tokens: Tokens): string {
+  return sayFresh(ledger, `d:${key}`, DEKS[key] ?? [], seed, tokens) ?? '';
+}
+
+function beat(ledger: VarietyLedger, key: string, seed: string, tokens: Tokens): string {
+  return sayFresh(ledger, `b:${key}`, BEATS[key] ?? [], seed, tokens) ?? '';
+}
+
+// ---------------------------------------------------------------------------
+
+function gameStory(
+  r: Extract<RawEvent, { kind: 'userGame' | 'bigGame' }>,
+  ledger: VarietyLedger
+): MediaEvent {
   const { game: g, ctx } = r;
   const home = ctx.teamsByRow.get(g.homeRow);
   const away = ctx.teamsByRow.get(g.awayRow);
@@ -108,191 +197,212 @@ function gameStory(r: Extract<RawEvent, { kind: 'userGame' | 'bigGame' }>): Medi
   const upset = (winner?.rank ?? 0) === 0 && (loser?.rank ?? 99) <= 15;
   const isUser = r.kind === 'userGame';
   const userWon = isUser && winner?.row === ctx.userRow;
-  const verb = winVerb(margin, g.overtime, upset, r.id);
-  const scoreline = `${winScore}-${loseScore}${g.overtime ? ' in overtime' : ''}`;
+  const userTeam = ctx.teamsByRow.get(ctx.userRow);
 
-  const headline = pick(
-    [
-      `${label(winner)} ${verb} ${label(loser)}, ${winScore}-${loseScore}`,
-      `${label(winner)} ${verb} ${label(loser)} ${winScore}-${loseScore}`,
-      margin >= 21
-        ? `${label(winner)} leaves no doubt against ${label(loser)}`
-        : `${label(winner)} ${verb} ${label(loser)} in ${g.gotw ? 'the week’s marquee matchup' : 'a ' + (margin <= 7 ? 'thriller' : 'statement')}`
-    ],
-    r.id,
-    1
-  );
+  const natty = /NationalChampionship/i.test(g.weekType) || /National Championship/i.test(g.bowlName ?? '');
+  const playoff = !natty && !!g.bowlName && /CFP|Playoff|Quarterfinal|Semifinal|First Round/i.test(g.bowlName);
+  const bowl = !natty && !playoff && !!g.bowlName;
 
-  const rec = winner ? recordThrough(ctx, winner.row, g.week) : null;
-  const p1Bits = [
-    `${winner?.longName ?? 'The winner'} ${homeWon ? 'defended home turf' : 'went on the road and won'}, beating ${loser?.longName ?? 'their opponent'} ${scoreline}${g.week ? ` in Week ${g.week}` : ''}.`
-  ];
-  if (g.gotw) p1Bits.push('The matchup had top billing as the Game of the Week, and it delivered an audience to match.');
-  if (g.attendance > 78000) p1Bits.push(`${g.attendance.toLocaleString('en-US')} packed the stands.`);
-  if (upset) p1Bits.push(`Nobody outside the ${winner?.nickName ?? ''} locker room saw it coming.`.replace('  ', ' '));
-
-  const p2Bits: string[] = [];
-  if (rec) p2Bits.push(`The win moves ${winner?.longName} to ${rec.w}–${rec.l} on the season.`);
+  // Angle resolution, most specific first.
+  let angle: string;
   if (isUser) {
-    const next = nextOpponent(ctx, ctx.userRow, g.week);
-    if (next) p2Bits.push(`Up next: ${next.name} in Week ${next.week}.`);
-  } else if ((winner?.rank ?? 0) > 0 || (loser?.rank ?? 0) > 0) {
-    p2Bits.push('Expect the poll voters to take notice.');
+    if (natty) angle = userWon ? 'nattyWin' : 'nattyLoss';
+    else if (playoff && userWon) angle = 'playoffWin';
+    else if (bowl) angle = userWon ? 'bowlWin' : 'bowlLoss';
+    else if (r.rivalryName) angle = userWon ? 'rivalryWin' : 'rivalryLoss';
+    else if (!userWon) angle = margin <= 8 ? 'userLossClose' : 'userLoss';
+    else if (g.overtime) angle = 'userWinOT';
+    else if (margin >= 24) angle = 'userWinBlowout';
+    else if (margin <= 8) angle = 'userWinClose';
+    else angle = 'userWin';
+  } else {
+    if (natty) angle = 'nattyWin';
+    else if (r.rivalryName) angle = 'rivalryWin';
+    else if (upset) angle = 'upsetWin';
+    else angle = 'bigGame';
   }
 
-  const dek = isUser
-    ? userWon
-      ? pick(
-          [
-            `${winner?.nickName ?? winner?.longName} keep rolling with a ${margin}-point win.`,
-            `Another one in the books for ${winner?.longName}.`,
-            margin >= 21 ? 'It was over by halftime.' : 'A win is a win — and this one counts double in the locker room.'
-          ],
-          r.id,
-          2
-        )
-      : pick(
-          [
-            `A bitter one for ${loser?.longName} fans.`,
-            `${winner?.longName} had answers all afternoon.`,
-            'Back to the film room.'
-          ],
-          r.id,
-          2
-        )
-    : upset
-      ? 'The bracket-breakers strike again.'
-      : `${label(winner)} handled business.`;
+  const perspective = isUser && !userWon ? userTeam : winner;
+  const other = isUser && !userWon ? winner : loser;
+  const homeTeamCity = home?.city ?? '';
+  const tokens: Tokens = {
+    TEAM: perspective?.longName ?? '',
+    NICK: perspective?.nickName ?? '',
+    OPP: other?.longName ?? '',
+    OPPNICK: other?.nickName ?? '',
+    SCORE: `${winScore}-${loseScore}`,
+    MARGIN: String(margin),
+    WEEK: String(g.week),
+    CITY: homeTeamCity,
+    COACH: perspective?.headCoach ?? '',
+    RANKTXT: (perspective?.rank ?? 0) > 0 && (perspective?.rank ?? 99) <= 25 ? `No. ${perspective!.rank} ` : '',
+    RANKTXT2: (other?.rank ?? 0) > 0 && (other?.rank ?? 99) <= 25 ? `No. ${other!.rank} ` : '',
+    RIVALRY: r.rivalryName ?? '',
+    BOWL: g.bowlName ?? ''
+  };
+
+  const b = base(
+    r,
+    isUser ? (userWon ? 92 : 90) + (g.gotw ? 4 : 0) + (natty ? 8 : 0) : 50 + (g.gotw ? 10 : 0) + (upset ? 8 : 0),
+    isUser,
+    [home?.longName ?? '', away?.longName ?? '', bowl || playoff || natty ? 'Postseason' : 'Results'],
+    natty || playoff || bowl ? 'postseason' : 'games'
+  );
+  const tone = b.tone;
+
+  const headline = head(
+    ledger,
+    angle,
+    r.id,
+    tokens,
+    tone,
+    `${rankedLabel(winner)} beats ${rankedLabel(loser)}, ${winScore}-${loseScore}`
+  );
+
+  const dekKey = natty || playoff || bowl ? 'postseason' : r.rivalryName ? 'rivalry' : isUser ? (userWon ? 'userWin' : 'userLoss') : 'league';
+  const dekLine = dek(ledger, dekKey, r.id, tokens);
+
+  const scoreline = `${winScore}-${loseScore}${g.overtime ? ' in overtime' : ''}`;
+  const p1: string[] = [
+    `${winner?.longName ?? 'The winner'} ${homeWon ? 'defended home turf' : 'went on the road and won'}, beating ${loser?.longName ?? 'their opponent'} ${scoreline}${g.week ? ` in Week ${g.week}` : ''}.`
+  ];
+  if (r.rivalryName) p1.push(`The ${r.rivalryName} always carries extra freight, and this edition was no different.`);
+  if (g.bowlName && !r.rivalryName) p1.push(`The stage: the ${g.bowlName}.`);
+  if (g.gotw) p1.push(beat(ledger, 'gotw', r.id, tokens));
+  if (g.attendance > 78000)
+    p1.push(beat(ledger, 'atmosphere', r.id, { ...tokens, ATT: g.attendance.toLocaleString('en-US') }));
+  if (upset) p1.push(`Nobody outside the ${winner?.nickName ?? ''} locker room saw it coming.`.replace('  ', ' '));
+
+  const p2: string[] = [];
+  const rec = winner ? recordThrough(ctx, winner.row, g.week) : null;
+  if (rec && winner) {
+    p2.push(
+      beat(ledger, userWon || !isUser ? 'record' : 'recordLoss', r.id, {
+        TEAM: (isUser && !userWon ? userTeam : winner)?.longName ?? '',
+        NICK: (isUser && !userWon ? userTeam : winner)?.nickName ?? '',
+        REC: isUser && !userWon
+          ? (() => {
+              const ur = recordThrough(ctx, ctx.userRow, g.week);
+              return `${ur.w}–${ur.l}`;
+            })()
+          : `${rec.w}–${rec.l}`
+      })
+    );
+  }
+  if (isUser) {
+    const next = nextOpponent(ctx, ctx.userRow, g.week);
+    if (next) p2.push(beat(ledger, 'nextUp', r.id, { NEXTOPP: next.name, NEXTWEEK: String(next.week) }));
+  } else if ((winner?.rank ?? 0) > 0 || (loser?.rank ?? 0) > 0) {
+    p2.push('Expect the poll voters to take notice.');
+  }
+
+  const p3: string[] = [];
+  if (g.overtime) p3.push(beat(ledger, 'otColor', r.id, tokens));
+  else if (margin >= 24) p3.push(beat(ledger, 'marginWide', r.id, tokens));
+  else if (margin <= 8) p3.push(beat(ledger, 'marginTight', r.id, tokens));
+  if ((other?.rank ?? 0) > 0 && (other?.rank ?? 99) <= 25)
+    p3.push(
+      beat(ledger, isUser && !userWon ? 'rankedOppLoss' : 'rankedOpp', r.id, {
+        ...tokens,
+        RANKEDOPP: `No. ${other!.rank} ${other!.longName}`
+      })
+    );
 
   return {
-    ...base(r, isUser ? (userWon ? 92 : 90) + (g.gotw ? 4 : 0) : 50 + (g.gotw ? 10 : 0) + (upset ? 8 : 0), isUser, [
-      home?.longName ?? '',
-      away?.longName ?? '',
-      'Results'
-    ]),
-    week: g.week, // file the story under the week the game was played
+    ...b,
+    week: g.week,
     type: r.kind,
     headline,
-    dek,
-    body: [p1Bits.join(' '), p2Bits.join(' ')].filter(Boolean)
+    dek: dekLine,
+    body: [p1.join(' '), p2.join(' '), p3.join(' ')].filter(Boolean)
   };
 }
 
-function pollStory(r: Extract<RawEvent, { kind: 'pollMove' }>): MediaEvent {
+function pollStory(r: Extract<RawEvent, { kind: 'pollMove' }>, ledger: VarietyLedger): MediaEvent {
   const { ctx } = r;
   const team = ctx.teamsByRow.get(r.teamRow);
   const isUser = r.teamRow === ctx.userRow;
   const name = team?.longName ?? 'A program';
   const rising = r.to > 0 && (r.from === 0 || r.to < r.from);
-  let headline: string;
-  let dek: string;
-  if (r.to === 1) {
-    headline = pick(
-      [`${name} claims the No. 1 spot`, `New No. 1: ${name}`, `${name} takes over at the top`],
-      r.id
-    );
-    dek = 'The view from the summit.';
-  } else if (r.from === 0) {
-    headline = pick([`${name} cracks the Top 25`, `Poll debut: ${name} enters at No. ${r.to}`], r.id);
-    dek = 'The voters are paying attention.';
-  } else if (r.to === 0) {
-    headline = pick([`${name} tumbles out of the rankings`, `${name} drops from the Top 25`], r.id);
-    dek = 'A rough Saturday has consequences.';
-  } else if (rising) {
-    headline = pick(
-      [`${name} climbs to No. ${r.to}`, `${name} rises to No. ${r.to} in the latest poll`],
-      r.id
-    );
-    dek = `Up from No. ${r.from}.`;
-  } else {
-    headline = pick(
-      [`${name} slips to No. ${r.to}`, `${name} falls to No. ${r.to}`],
-      r.id
-    );
-    dek = `Down from No. ${r.from}.`;
-  }
+  const angle = r.to === 1 ? 'pollNo1' : r.from === 0 ? 'pollEnter' : r.to === 0 ? 'pollExit' : rising ? 'pollRise' : 'pollFall';
+  const tokens: Tokens = {
+    TEAM: name,
+    NICK: team?.nickName ?? '',
+    RANK: r.to > 0 ? String(r.to) : '',
+    DELTA: r.from > 0 && r.to > 0 ? String(Math.abs(r.from - r.to)) : ''
+  };
+  const b = base(r, isUser ? 72 : 60, isUser, [name, 'Polls']);
   const rec = recordThrough(ctx, r.teamRow, ctx.week);
   return {
-    ...base(r, isUser ? 72 : 60, isUser, [name, 'Polls']),
+    ...b,
     type: 'pollMove',
-    headline,
-    dek,
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${name} moves in the poll`),
+    dek: dek(ledger, 'polls', r.id, tokens),
     body: [
       `${name} ${rising ? 'moved up' : r.to === 0 ? 'fell out of' : 'slid in'} the media poll this week${
         r.from > 0 && r.to > 0 ? `, going from No. ${r.from} to No. ${r.to}` : ''
-      }. The ${team?.nickName ?? 'program'} sit at ${rec.w}–${rec.l} on the year.`
-    ]
+      }. The ${team?.nickName ?? 'program'} sit at ${rec.w}–${rec.l} on the year.`,
+      beat(ledger, 'pollClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
-function commitStory(r: Extract<RawEvent, { kind: 'commit' }>): MediaEvent {
+function commitStory(r: Extract<RawEvent, { kind: 'commit' }>, ledger: VarietyLedger): MediaEvent {
   const { recruit: rec, ctx } = r;
   const school = rec.committedTo ?? 'a program';
   const isUser = school === ctx.userName;
-  const starsTxt = `${rec.stars}-star`;
   const gem = rec.quality === 'GEM';
   const rivals = rec.race.filter((s) => s.name !== school).map((s) => s.name);
   const classCount = (ctx.snapshot.school?.recruiting?.recruits ?? []).filter(
     (x) => x.committedTo === school
   ).length;
 
-  const headline = r.flipFrom
-    ? pick(
-        [
-          `FLIP: ${starsTxt} ${rec.position} ${rec.name} spurns ${r.flipFrom} for ${school}`,
-          `${rec.name} flips commitment from ${r.flipFrom} to ${school}`
-        ],
-        r.id
-      )
-    : pick(
-        [
-          `${starsTxt} ${rec.position} ${rec.name} commits to ${school}`,
-          `${school} lands ${starsTxt} ${rec.position} ${rec.name}`,
-          rec.stars === 5
-            ? `Blue-chip haul: ${school} wins the ${rec.name} sweepstakes`
-            : `${rec.name} is headed to ${school}`
-        ],
-        r.id
-      );
+  const angle = r.flipFrom ? 'commitFlip' : rec.isTransfer ? 'commitTransfer' : rec.stars === 5 ? 'commit5' : 'commit';
+  const tokens: Tokens = {
+    TEAM: school,
+    NAME: rec.name,
+    POS: rec.position,
+    STARS: String(rec.stars),
+    STATE: rec.homeState.replace(/([a-z])([A-Z])/g, '$1 $2'),
+    FLIPFROM: r.flipFrom ?? ''
+  };
+  const b = base(r, (isUser ? 40 : 8) + rec.stars * 9 + (gem ? 6 : 0), isUser, [school, 'Recruiting']);
 
   const p1 = [
-    `${rec.name}, a ${starsTxt} ${rec.position} out of ${rec.homeState.replace(/([a-z])([A-Z])/g, '$1 $2')}${
+    `${rec.name}, a ${rec.stars}-star ${rec.position}${rec.isTransfer ? ' out of the transfer portal' : ` out of ${tokens.STATE}`}${
       rec.nationalRank ? ` ranked No. ${rec.nationalRank} nationally` : ''
     }, has committed to ${school}.`
   ];
   if (rivals.length) p1.push(`He picked the ${school} offer over ${rivals.slice(0, 2).join(' and ')}.`);
-  if (gem) p1.push(`Scouts who have seen him up close call him a gem — the ranking may be underselling it.`);
-
+  if (gem) p1.push('Scouts who have seen him up close call him a gem — the ranking may be underselling it.');
   const p2 =
     classCount > 1 && !r.seeded
       ? [`The pledge is commitment No. ${classCount} in the ${school} class of ${ctx.seasonYear + 1}.`]
       : [];
 
   return {
-    ...base(r, (isUser ? 40 : 8) + rec.stars * 9 + (gem ? 6 : 0), isUser, [school, 'Recruiting']),
+    ...b,
     type: 'commit',
-    headline,
-    dek: isUser
-      ? pick(['The class keeps building.', 'A big board name comes off it.', 'Momentum on the trail.'], r.id, 3)
-      : `${starsTxt.replace('-star', '★')} ${rec.position} off the board.`,
-    body: [p1.join(' '), p2.join(' ')].filter(Boolean)
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${rec.name} commits to ${school}`),
+    dek: dek(ledger, 'recruiting', r.id, tokens),
+    body: [p1.join(' '), p2.join(' '), beat(ledger, 'recruitClose', r.id, tokens)].filter(Boolean)
   };
 }
 
-function coachStory(r: Extract<RawEvent, { kind: 'coachChange' }>): MediaEvent {
+function coachStory(r: Extract<RawEvent, { kind: 'coachChange' }>, ledger: VarietyLedger): MediaEvent {
   const { ctx } = r;
   const team = ctx.teamsByRow.get(r.teamRow);
   const name = team?.longName ?? 'A program';
   const roleTxt = r.role === 'HC' ? 'head coach' : r.role === 'OC' ? 'offensive coordinator' : 'defensive coordinator';
   const isUser = r.teamRow === ctx.userRow;
-  const headline = pick(
-    [
-      `${name} turns to ${r.incoming} as ${roleTxt}`,
-      `${r.outgoing} out, ${r.incoming} in as ${name} ${roleTxt}`,
-      `Change in ${team?.city ?? name}: ${r.incoming} named ${roleTxt}`
-    ],
-    r.id
-  );
+  const angle = r.leaveReason === 'Fired' ? 'coachFired' : r.leaveReason === 'Retired' ? 'coachRetired' : 'coachHired';
+  const tokens: Tokens = {
+    TEAM: name,
+    CITY: team?.city ?? '',
+    ROLETXT: roleTxt,
+    INCOMING: r.incoming,
+    OUTGOING: r.outgoing
+  };
   const departure =
     r.leaveReason === 'Fired'
       ? `${r.outgoing} was dismissed`
@@ -305,31 +415,26 @@ function coachStory(r: Extract<RawEvent, { kind: 'coachChange' }>): MediaEvent {
             : r.leaveReason === 'ContractEnding'
               ? `${r.outgoing}'s contract ran out`
               : `the role held by ${r.outgoing} came open`;
+  const b = base(r, isUser ? 68 : 56, isUser, [name, 'Coaching']);
   return {
-    ...base(r, isUser ? 68 : 56, isUser, [name, 'Coaching']),
+    ...b,
     type: 'coachChange',
-    headline,
-    dek: pick(['The carousel spins.', 'A new voice in the building.', 'Sideline shakeup.'], r.id, 2),
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${name} names ${r.incoming} ${roleTxt}`),
+    dek: dek(ledger, 'coaching', r.id, tokens),
     body: [
-      `${name} has a new ${roleTxt}: ${r.incoming} takes over after ${departure}. How quickly the transition settles may define the ${team?.nickName ?? 'program'}'s next stretch.`
-    ]
+      `${name} has a new ${roleTxt}: ${r.incoming} takes over after ${departure}. How quickly the transition settles may define the ${team?.nickName ?? 'program'}'s next stretch.`,
+      beat(ledger, 'coachClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
-function hotSeatStory(r: Extract<RawEvent, { kind: 'hotSeat' }>): MediaEvent {
+function hotSeatStory(r: Extract<RawEvent, { kind: 'hotSeat' }>, ledger: VarietyLedger): MediaEvent {
   const { ctx } = r;
   const team = ctx.teamsByRow.get(r.teamRow);
   const name = team?.longName ?? 'A program';
   const isUser = r.teamRow === ctx.userRow;
   const rec = recordThrough(ctx, r.teamRow, ctx.week);
-  const headline = pick(
-    [
-      `The seat under ${r.coach} is officially hot at ${name}`,
-      `${name}'s ${r.coach} lands on the hot seat`,
-      `Job watch: ${r.coach} is coaching for his future at ${name}`
-    ],
-    r.id
-  );
+  const tokens: Tokens = { TEAM: name, CITY: team?.city ?? '', COACH: r.coach };
   const demeanor = team?.adDemeanor;
   const patience =
     demeanor === 'Impatient' || demeanor === 'Reactionary'
@@ -337,24 +442,27 @@ function hotSeatStory(r: Extract<RawEvent, { kind: 'hotSeat' }>): MediaEvent {
       : demeanor === 'Patient'
         ? ' The athletic director is known for patience, which may be the only thing buying time.'
         : '';
+  const b = base(r, isUser ? 66 : 54, isUser, [name, 'Coaching']);
   return {
-    ...base(r, isUser ? 66 : 54, isUser, [name, 'Coaching']),
+    ...b,
     type: 'hotSeat',
-    headline,
-    dek: pick(['The carousel warms up.', 'Every loss counts double now.', 'The buyout math begins.'], r.id, 2),
+    headline: head(ledger, 'hotSeat', r.id, tokens, b.tone, `${r.coach} is on the hot seat at ${name}`),
+    dek: dek(ledger, 'coaching', r.id, tokens),
     body: [
       `${r.coach}'s job security at ${name} has slipped to ${r.pct}% — hot seat territory by any measure. The ${
         team?.nickName ?? 'program'
-      } sit at ${rec.w}–${rec.l}, and ${r.yearsRemaining <= 1 ? 'his deal is up after this season' : `${r.yearsRemaining} years remain on his deal`}.${patience}`
-    ]
+      } sit at ${rec.w}–${rec.l}, and ${r.yearsRemaining <= 1 ? 'his deal is up after this season' : `${r.yearsRemaining} years remain on his deal`}.${patience}`,
+      beat(ledger, 'hotSeatClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
-function rosterStory(r: Extract<RawEvent, { kind: 'rosterMove' }>): MediaEvent {
+function rosterStory(r: Extract<RawEvent, { kind: 'rosterMove' }>, ledger: VarietyLedger): MediaEvent {
   const { ctx } = r;
   const name = ctx.userName;
   const dep = r.departures;
   const arr = r.arrivals;
+  const team = ctx.teamsByRow.get(ctx.userRow);
   const bits: string[] = [];
   if (dep.length)
     bits.push(
@@ -364,22 +472,23 @@ function rosterStory(r: Extract<RawEvent, { kind: 'rosterMove' }>): MediaEvent {
     bits.push(
       `In: ${arr.slice(0, 5).map(([n, p]) => `${n} (${p})`).join(', ')}${arr.length > 5 ? ` and ${arr.length - 5} more` : ''}.`
     );
-  const headline =
-    dep.length && arr.length
-      ? `Roster churn at ${name}: ${dep.length} out, ${arr.length} in`
-      : dep.length
-        ? `${name} says goodbye to ${dep.length === 1 ? `${dep[0][0]}` : `${dep.length} players`}`
-        : `${name} adds ${arr.length === 1 ? `${arr[0][0]}` : `${arr.length} newcomers`}`;
+  const tokens: Tokens = {
+    TEAM: name,
+    CITY: team?.city ?? '',
+    OUTC: String(dep.length),
+    INC: String(arr.length)
+  };
+  const b = base(r, 46, true, [name, 'Roster']);
   return {
-    ...base(r, 46, true, [name, 'Roster']),
+    ...b,
     type: 'rosterMove',
-    headline,
+    headline: head(ledger, 'rosterChurn', r.id, tokens, b.tone, `Roster moves at ${name}`),
     dek: 'The depth chart will look different on Saturday.',
     body: [bits.join(' ')]
   };
 }
 
-function sofarStory(r: Extract<RawEvent, { kind: 'seasonSoFar' }>): MediaEvent {
+function sofarStory(r: Extract<RawEvent, { kind: 'seasonSoFar' }>, ledger: VarietyLedger): MediaEvent {
   const { ctx } = r;
   const team = ctx.snapshot.school!.team;
   const rec = recordThrough(ctx, ctx.userRow, ctx.week);
@@ -397,55 +506,207 @@ function sofarStory(r: Extract<RawEvent, { kind: 'seasonSoFar' }>): MediaEvent {
     pa += them;
     if (us > them) {
       const oppRow = isHome ? g.awayRow : g.homeRow;
-      const opp = label(ctx.teamsByRow.get(oppRow));
+      const opp = rankedLabel(ctx.teamsByRow.get(oppRow));
       if (!bestWin || us - them > bestWin.margin) bestWin = { opp, margin: us - them, score: `${us}-${them}` };
     }
   }
   const next = nextOpponent(ctx, ctx.userRow, ctx.week - 1);
   const rankTxt = team.rank > 0 ? `ranked No. ${team.rank}` : 'unranked';
-  const headline = pick(
-    [
-      `State of the program: ${team.longName} at ${rec.w}–${rec.l}`,
-      team.rank === 1
-        ? `Top of the sport: inside ${team.longName}'s ${rec.w}–${rec.l} start`
-        : `Where ${team.longName} stands, ${rec.w}–${rec.l} in`,
-      `${team.longName} ${team.nickName}: the season so far`
-    ],
-    r.id
-  );
+  const tokens: Tokens = {
+    TEAM: team.longName,
+    NICK: team.nickName,
+    CITY: team.city ?? '',
+    REC: `${rec.w}–${rec.l}`
+  };
   const body = [
     `${team.longName} is ${rec.w}–${rec.l} and ${rankTxt} in the media poll, outscoring opponents ${pf}–${pa} on the year.` +
       (bestWin ? ` The signature result so far: a ${bestWin.score} win over ${bestWin.opp}.` : ''),
     (next ? `Next up: ${next.name} in Week ${next.week}. ` : '') +
       `${team.headCoach ? `${team.headCoach}'s` : 'The'} squad controls its own story from here.`
   ];
+  const b = base(r, 100, true, [team.longName, 'Feature']);
   return {
-    ...base(r, 100, true, [team.longName, 'Feature']),
+    ...b,
     type: 'seasonSoFar',
-    headline,
-    dek: `Catching the wire up on everything in ${team.city ?? 'town'}.`,
+    headline: head(ledger, 'seasonSoFar', r.id, tokens, b.tone, `${team.longName}: the season so far`),
+    dek: dek(ledger, 'feature', r.id, tokens),
     body
   };
 }
 
-export function writeArticle(r: RawEvent): MediaEvent | null {
+function statLineStory(r: Extract<RawEvent, { kind: 'statLine' }>, ledger: VarietyLedger): MediaEvent {
+  const { ctx } = r;
+  const team = ctx.teamsByRow.get(r.teamRow);
+  const opp = ctx.teamsByRow.get(r.oppRow);
+  const isUser = r.teamRow === ctx.userRow;
+  const angle = r.cat === 'pass' ? 'statLinePass' : r.cat === 'rush' ? 'statLineRush' : 'statLineRecv';
+  const word = r.cat === 'pass' ? 'passing' : r.cat === 'rush' ? 'rushing' : 'receiving';
+  const tokens: Tokens = {
+    NAME: r.name,
+    POS: r.position,
+    TEAM: team?.longName ?? '',
+    OPP: opp?.longName ?? '',
+    YDS: r.yards.toLocaleString('en-US')
+  };
+  const b = base(r, isUser ? 70 : 48, isUser, [team?.longName ?? '', 'Numbers']);
+  return {
+    ...b,
+    week: r.week,
+    type: 'statLine',
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${r.name} goes for ${tokens.YDS} ${word} yards`),
+    dek: dek(ledger, 'numbers', r.id, tokens),
+    body: [
+      `${r.name} went for ${tokens.YDS} ${word} yards in Week ${r.week} against ${opp?.longName ?? 'the opposition'} — the kind of afternoon that moves award ballots.`,
+      beat(ledger, 'statClose', r.id, tokens)
+    ].filter(Boolean)
+  };
+}
+
+function streakStory(r: Extract<RawEvent, { kind: 'streak' }>, ledger: VarietyLedger): MediaEvent {
+  const { ctx } = r;
+  const team = ctx.snapshot.school!.team;
+  const angle = r.unbeaten ? 'unbeaten' : 'streak';
+  const tokens: Tokens = {
+    TEAM: team.longName,
+    NICK: team.nickName,
+    N: String(r.n),
+    W: String(r.wins),
+    REC: `${r.wins}–${r.losses}`
+  };
+  const b = base(r, 76, true, [team.longName, 'Feature']);
+  return {
+    ...b,
+    type: 'streak',
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${team.longName} has won ${r.n} straight`),
+    dek: dek(ledger, 'feature', r.id, tokens),
+    body: [
+      `${team.longName} has now won ${r.n} in a row${r.unbeaten ? ' and remains unbeaten' : ''}. Streaks like this change how a season is talked about — and how it is scheduled against.`,
+      beat(ledger, 'streakClose', r.id, tokens)
+    ].filter(Boolean)
+  };
+}
+
+function weeklyAwardStory(r: Extract<RawEvent, { kind: 'weeklyAward' }>, ledger: VarietyLedger): MediaEvent {
+  const a = r.award;
+  const honor = `${a.confRow === null ? 'National' : 'Conference'} ${a.side === 'off' ? 'Offensive' : 'Defensive'} Player of the Week`;
+  const tokens: Tokens = { NAME: a.name, POS: a.position, TEAM: a.teamName, HONOR: honor };
+  const b = base(r, 62, true, [a.teamName, 'Awards']);
+  return {
+    ...b,
+    type: 'weeklyAward',
+    headline: head(ledger, 'weeklyAward', r.id, tokens, b.tone, `${a.name} named ${honor}`),
+    dek: dek(ledger, 'awards', r.id, tokens),
+    body: [
+      `${a.name} was named ${honor} for Week ${a.week}, the league announced. The ${a.teamName} ${a.position} headlines this week's honors list.`,
+      beat(ledger, 'weeklyClose', r.id, tokens)
+    ].filter(Boolean)
+  };
+}
+
+function awardShowStory(r: Extract<RawEvent, { kind: 'awardShow' }>, ledger: VarietyLedger): MediaEvent {
+  const { ctx } = r;
+  const heisman = r.winners.find((w) => w.awardType === 'HEISMAN');
+  const userTeam = ctx.teamsByRow.get(ctx.userRow);
+  const aboutUser = !!heisman && !!userTeam && [userTeam.longName, userTeam.displayName].includes(heisman.teamName);
+  const tokens: Tokens = {
+    NAME: heisman?.name ?? '',
+    TEAM: heisman?.teamName ?? '',
+    AWARD: AWARD_NAMES['HEISMAN'] ?? 'Heisman',
+    YEAR: String(r.year)
+  };
+  const marquee = ['BEST_QB', 'BEST_RB', 'BEST_REC', 'BEST_DEF_1']
+    .map((k) => {
+      const w = r.winners.find((x) => x.awardType === k);
+      return w ? `${AWARD_NAMES[k] ?? k}: ${w.name} (${w.teamName})` : null;
+    })
+    .filter(Boolean)
+    .join('. ');
+  const b = base(r, 86, aboutUser, [heisman?.teamName ?? '', 'Awards']);
+  return {
+    ...b,
+    type: 'awardShow',
+    headline: head(ledger, 'awardShow', r.id, tokens, b.tone, `${tokens.NAME} wins the ${tokens.AWARD}`),
+    dek: dek(ledger, 'awards', r.id, tokens),
+    body: [
+      `${heisman?.name ?? 'The winner'} of ${heisman?.teamName ?? ''} took home the ${tokens.AWARD} at the national awards show for the ${r.year} season.`,
+      marquee ? `Elsewhere on the stage — ${marquee}.` : '',
+      beat(ledger, 'awardShowClose', r.id, tokens)
+    ].filter(Boolean)
+  };
+}
+
+function awardWinStory(r: Extract<RawEvent, { kind: 'awardWin' }>, ledger: VarietyLedger): MediaEvent {
+  const { ctx } = r;
+  const w = r.winner;
+  const team = ctx.teamsByRow.get(ctx.userRow);
+  const award = AWARD_NAMES[w.awardType] ?? w.awardType;
+  const tokens: Tokens = { NAME: w.name, TEAM: w.teamName, CITY: team?.city ?? '', AWARD: award };
+  const b = base(r, 82, true, [w.teamName, 'Awards']);
+  return {
+    ...b,
+    type: 'awardWin',
+    headline: head(ledger, 'awardWin', r.id, tokens, b.tone, `${w.name} wins the ${award}`),
+    dek: dek(ledger, 'awards', r.id, tokens),
+    body: [
+      `${w.name}${w.position ? `, the ${w.teamName} ${w.position},` : ''} won the ${award} for the ${r.year} season — a program-level moment as much as a personal one.`,
+      beat(ledger, 'awardWinClose', r.id, tokens)
+    ].filter(Boolean)
+  };
+}
+
+function draftPickStory(r: Extract<RawEvent, { kind: 'draftPick' }>, ledger: VarietyLedger): MediaEvent {
+  const { ctx } = r;
+  const team = ctx.teamsByRow.get(ctx.userRow);
+  const tokens: Tokens = {
+    NAME: r.name,
+    POS: r.position,
+    TEAM: ctx.userName,
+    CITY: team?.city ?? '',
+    ROUND: ORDINAL[r.round] ?? `round-${r.round}`
+  };
+  const b = base(r, 64, true, [ctx.userName, 'Draft']);
+  return {
+    ...b,
+    type: 'draftPick',
+    headline: head(ledger, 'draftPick', r.id, tokens, b.tone, `${r.name} drafted in round ${r.round}`),
+    dek: dek(ledger, 'feature', r.id, tokens),
+    body: [
+      `${r.name}, the ${ctx.userName} ${r.position}, was selected in the ${tokens.ROUND} round of the NFL draft. Development stories like his are how programs sell the next class.`,
+      beat(ledger, 'draftClose', r.id, tokens)
+    ].filter(Boolean)
+  };
+}
+
+export function writeArticle(r: RawEvent, ledger: VarietyLedger): MediaEvent | null {
   try {
     switch (r.kind) {
       case 'userGame':
       case 'bigGame':
-        return gameStory(r);
+        return gameStory(r, ledger);
       case 'pollMove':
-        return pollStory(r);
+        return pollStory(r, ledger);
       case 'commit':
-        return commitStory(r);
+        return commitStory(r, ledger);
       case 'coachChange':
-        return coachStory(r);
+        return coachStory(r, ledger);
       case 'hotSeat':
-        return hotSeatStory(r);
+        return hotSeatStory(r, ledger);
       case 'rosterMove':
-        return rosterStory(r);
+        return rosterStory(r, ledger);
       case 'seasonSoFar':
-        return sofarStory(r);
+        return sofarStory(r, ledger);
+      case 'statLine':
+        return statLineStory(r, ledger);
+      case 'streak':
+        return streakStory(r, ledger);
+      case 'weeklyAward':
+        return weeklyAwardStory(r, ledger);
+      case 'awardShow':
+        return awardShowStory(r, ledger);
+      case 'awardWin':
+        return awardWinStory(r, ledger);
+      case 'draftPick':
+        return draftPickStory(r, ledger);
       default:
         return null;
     }

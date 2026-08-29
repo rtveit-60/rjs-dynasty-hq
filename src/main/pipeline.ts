@@ -90,7 +90,7 @@ export class Pipeline {
       });
       this.bankHistory(snapshot);
       this.events.onSnapshot(snapshot);
-      this.updateMedia(snapshot);
+      this.updateMedia(snapshot, await this.leagueLeaders());
       this.events.onStatus({ kind: 'watching', lastUpdate: this.lastUpdate });
     } catch (err) {
       this.events.onStatus({
@@ -150,7 +150,7 @@ export class Pipeline {
     });
     this.bankHistory(snapshot);
     this.events.onSnapshot(snapshot);
-    this.updateMedia(snapshot);
+    this.updateMedia(snapshot, await this.leagueLeaders());
     this.events.onStatus({ kind: 'watching', lastUpdate: this.lastUpdate });
   }
 
@@ -167,7 +167,7 @@ export class Pipeline {
   }
 
   /** Diff against the stored per-school media state, append fresh stories, push the feed. */
-  private updateMedia(snapshot: Snapshot): void {
+  private updateMedia(snapshot: Snapshot, leaders: LeagueLeaders | null): void {
     try {
       if (!snapshot.school) {
         this.events.onMedia([]);
@@ -181,7 +181,7 @@ export class Pipeline {
 
       const prev = readJson<MediaState>(stateFile);
       const log = readJson<MediaEvent[]>(eventsFile) ?? [];
-      const { state, events } = generateMedia(prev, snapshot);
+      const { state, events } = generateMedia(prev, snapshot, leaders);
       const known = new Set(log.map((e) => e.id));
       const fresh = events.filter((e) => !known.has(e.id));
       const merged = sortEvents([...fresh, ...log]).slice(0, 400);

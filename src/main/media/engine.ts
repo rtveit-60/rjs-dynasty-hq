@@ -1,5 +1,12 @@
-import type { GameInfo, MediaEvent, Snapshot, TeamInfo } from '../../shared/types.ts';
+import type {
+  GameInfo,
+  LeagueLeaders,
+  MediaEvent,
+  Snapshot,
+  TeamInfo
+} from '../../shared/types.ts';
 import { writeArticle, type RawEvent } from './articles.ts';
+import { makeLedger, type VarietyLedger } from './voices.ts';
 import { writeWirePosts } from './wire-posts.ts';
 
 /** Compact cross-save memory, persisted per school. */
@@ -17,11 +24,46 @@ export interface MediaState {
   rosterNames: string[];
   /** Head-coach job security status by team row (absent in states saved before the carousel). */
   hcSecurity?: Record<number, string>;
+  /** Template-usage ledger — nothing repeats inside one season cycle. */
+  variety?: { cycle: number; used: Record<string, number> };
+  /** Weekly honors already covered (potw ids). */
+  weeklyAwardIds?: string[];
+  /** Signature of the last annual awards-show block the wire covered. */
+  awardShowSig?: string;
+  /** User players whose draft news has already run. */
+  draftedNames?: string[];
+  /** Last seen season totals for leader players, "cat:playerRow" → value. */
+  leaderVals?: Record<string, number>;
+  /** Longest user win streak already celebrated this season. */
+  streakMax?: number;
 }
 
 const gameKey = (seasonYear: number, g: GameInfo) => `g${seasonYear}w${g.week}-${g.homeRow}-${g.awayRow}`;
 
-export function buildMediaState(snapshot: Snapshot): MediaState | null {
+const potwId = (seasonYear: number, a: Snapshot['weeklyAwards'][number]) =>
+  `potw${seasonYear}w${a.week}-${a.side}-${a.confRow ?? 'natl'}`;
+
+const awardSig = (annual: Snapshot['annualAwards']): string =>
+  annual ? annual.winners.map((w) => `${w.awardType}:${w.name}`).join('|') : '';
+
+/** The user's current win streak plus record, from the schedule. */
+function userStreak(snapshot: Snapshot, userRow: number): { streak: number; w: number; l: number } {
+  const results: boolean[] = [];
+  let w = 0;
+  let l = 0;
+  for (const g of [...snapshot.games].sort((a, b) => a.week - b.week)) {
+    if (g.status === 'unplayed') continue;
+    if (g.homeRow !== userRow && g.awayRow !== userRow) continue;
+    const won = (g.status === 'home') === (g.homeRow === userRow);
+    results.push(won);
+    won ? w++ : l++;
+  }
+  let streak = 0;
+  for (let i = results.length - 1; i >= 0 && results[i]; i--) streak++;
+  return { streak, w, l };
+}
+
+export function buildMediaState(snapshot: Snapshot, leaders?: LeagueLeaders | null): MediaState | null {
   const school = snapshot.school;
   const season = snapshot.season;
   if (!school || !season) return null;
@@ -39,6 +81,10 @@ export function buildMediaState(snapshot: Snapshot): MediaState | null {
   for (const c of snapshot.carousel ?? []) {
     if (c.role === 'HC') hcSecurity[c.teamRow] = c.securityStatus;
   }
+  const leaderVals: Record<string, number> = {};
+  for (const cat of leaders?.categories ?? []) {
+    for (const r of cat.rows) leaderVals[`${cat.key}:${r.playerRow}`] = r.value;
+  }
   return {
     version: 1,
     seasonYear: season.seasonYear,
@@ -53,7 +99,14 @@ export function buildMediaState(snapshot: Snapshot): MediaState | null {
     commits,
     staff,
     rosterNames: school.roster.map((p) => `${p.firstName} ${p.lastName}|${p.position}`),
-    hcSecurity
+    hcSecurity,
+    weeklyAwardIds: snapshot.weeklyAwards.map((a) => potwId(season.seasonYear, a)),
+    awardShowSig: awardSig(snapshot.annualAwards),
+    draftedNames: school.roster
+      .filter((pl) => pl.draftRound !== null)
+      .map((pl) => `${pl.firstName} ${pl.lastName}`),
+    leaderVals,
+    streakMax: Math.max(userStreak(snapshot, school.team.row).streak, 0)
   };
 }
 
@@ -82,7 +135,11 @@ function interestScore(g: GameInfo, ctx: MediaContext): number {
   return score;
 }
 
-export function diffMedia(prev: MediaState | null, snapshot: Snapshot): RawEvent[] {
+export function diffMedia(
+  prev: MediaState | null,
+  snapshot: Snapshot,
+  leaders: LeagueLeaders | null = null
+): RawEvent[] {
   const school = snapshot.school;
   const season = snapshot.season;
   if (!school || !season) return [];
@@ -113,11 +170,157 @@ export function diffMedia(prev: MediaState | null, snapshot: Snapshot): RawEvent
   // cap league-wide coverage per refresh so a multi-week sim doesn't flood the wire
   const bigGames = otherGames.slice(0, baseline ? 4 : 8).map((x) => x.g);
 
+  const rivalryOf = new Map<string, string>();
+  for (const rv of snapshot.rivalries) {
+    rivalryOf.set(`${Math.min(rv.a, rv.b)}-${Math.max(rv.a, rv.b)}`, rv.name);
+  }
+  const rivalryName = (g: GameInfo): string | null =>
+    rivalryOf.get(`${Math.min(g.homeRow, g.awayRow)}-${Math.max(g.homeRow, g.awayRow)}`) ?? null;
+
   for (const g of userGames) {
-    events.push({ kind: 'userGame', id: gameKey(season.seasonYear, g), game: g, ctx });
+    events.push({
+      kind: 'userGame',
+      id: gameKey(season.seasonYear, g),
+      game: g,
+      rivalryName: rivalryName(g),
+      ctx
+    });
   }
   for (const g of bigGames) {
-    events.push({ kind: 'bigGame', id: gameKey(season.seasonYear, g), game: g, ctx });
+    events.push({
+      kind: 'bigGame',
+      id: gameKey(season.seasonYear, g),
+      game: g,
+      rivalryName: rivalryName(g),
+      ctx
+    });
+  }
+
+  // --- big weekly stat lines, from the leaders sweep's week-over-week deltas ---
+  if (!baseline && prev!.leaderVals && leaders) {
+    const thresholds: Record<string, number> = { pass: 300, rush: 150, recv: 150 };
+    const freshByTeam = new Map<number, GameInfo>();
+    for (const g of freshGames) {
+      freshByTeam.set(g.homeRow, g);
+      freshByTeam.set(g.awayRow, g);
+    }
+    const lines: Extract<RawEvent, { kind: 'statLine' }>[] = [];
+    for (const cat of leaders.categories) {
+      const min = thresholds[cat.key];
+      if (!min) continue;
+      for (const r of cat.rows) {
+        const before = prev!.leaderVals[`${cat.key}:${r.playerRow}`];
+        if (before === undefined) continue;
+        const delta = r.value - before;
+        if (delta < min) continue;
+        const g = r.teamRow !== null ? freshByTeam.get(r.teamRow) : undefined;
+        if (!g) continue;
+        const oppRow = g.homeRow === r.teamRow ? g.awayRow : g.homeRow;
+        lines.push({
+          kind: 'statLine',
+          id: `stat${season.seasonYear}w${g.week}-${cat.key}-${r.playerRow}`,
+          cat: cat.key as 'pass' | 'rush' | 'recv',
+          playerRow: r.playerRow,
+          name: r.name,
+          position: r.position,
+          teamRow: r.teamRow!,
+          oppRow,
+          yards: delta,
+          week: g.week,
+          ctx
+        });
+      }
+    }
+    // The user's players always make the cut; otherwise the two biggest lines.
+    const mine = lines.filter((e) => e.teamRow === ctx.userRow);
+    const rest = lines
+      .filter((e) => e.teamRow !== ctx.userRow)
+      .sort((a, b) => b.yards - a.yards)
+      .slice(0, 2);
+    events.push(...mine, ...rest);
+  }
+
+  // --- streak milestones ---
+  {
+    const { streak, w, l } = userStreak(snapshot, ctx.userRow);
+    const marks = [4, 6, 8, 10, 12, 15, 20];
+    const already = baseline ? streak : (prev!.streakMax ?? 0);
+    const hit = marks.filter((m) => streak >= m && m > already).pop();
+    if (!baseline && hit) {
+      events.push({
+        kind: 'streak',
+        id: `streak${season.seasonYear}-${hit}`,
+        n: streak,
+        wins: w,
+        losses: l,
+        unbeaten: l === 0,
+        ctx
+      });
+    }
+  }
+
+  // --- weekly honors (a user player named Player of the Week) ---
+  {
+    const prevIds = new Set(baseline ? [] : (prev!.weeklyAwardIds ?? []));
+    for (const a of snapshot.weeklyAwards) {
+      if (a.teamRow !== ctx.userRow) continue;
+      const id = potwId(season.seasonYear, a);
+      if (prevIds.has(id)) continue;
+      events.push({ kind: 'weeklyAward', id, award: a, ctx });
+    }
+  }
+
+  // --- the annual awards show ---
+  {
+    const sig = awardSig(snapshot.annualAwards);
+    const before = baseline ? '' : (prev!.awardShowSig ?? '');
+    if (snapshot.annualAwards && sig && sig !== before) {
+      const annual = snapshot.annualAwards;
+      const userTeam = ctx.teamsByRow.get(ctx.userRow);
+      const ownNames = new Set(
+        [userTeam?.longName, userTeam?.displayName]
+          .filter((n): n is string => !!n)
+          .map((n) => n.toLowerCase())
+      );
+      const heisman = annual.winners.find((w) => w.awardType === 'HEISMAN');
+      if (heisman) {
+        events.push({
+          kind: 'awardShow',
+          id: `award${annual.year}-show`,
+          year: annual.year,
+          winners: annual.winners,
+          ctx
+        });
+      }
+      for (const w of annual.winners) {
+        if (!w.teamName || !ownNames.has(w.teamName.toLowerCase())) continue;
+        events.push({
+          kind: 'awardWin',
+          id: `award${annual.year}-${w.awardType}`,
+          year: annual.year,
+          winner: w,
+          ctx
+        });
+      }
+    }
+  }
+
+  // --- draft calls for the user's players ---
+  if (!baseline) {
+    const before = new Set(prev!.draftedNames ?? []);
+    for (const pl of school.roster) {
+      if (pl.draftRound === null) continue;
+      const nm = `${pl.firstName} ${pl.lastName}`;
+      if (before.has(nm)) continue;
+      events.push({
+        kind: 'draftPick',
+        id: `draft${season.seasonYear}-${pl.row}`,
+        name: nm,
+        position: pl.position,
+        round: pl.draftRound,
+        ctx
+      });
+    }
   }
 
   // --- polls ---
@@ -269,16 +472,20 @@ export function diffMedia(prev: MediaState | null, snapshot: Snapshot): RawEvent
 
 export function generateMedia(
   prev: MediaState | null,
-  snapshot: Snapshot
+  snapshot: Snapshot,
+  leaders: LeagueLeaders | null = null
 ): { state: MediaState | null; events: MediaEvent[] } {
-  const state = buildMediaState(snapshot);
+  const state = buildMediaState(snapshot, leaders);
   if (!state) return { state: null, events: [] };
-  const raw = diffMedia(prev, snapshot);
+  // One ledger per season cycle: no headline or post template repeats inside it.
+  const ledger: VarietyLedger = makeLedger(prev?.variety, state.seasonYear);
+  const raw = diffMedia(prev, snapshot, leaders);
   const events = raw
-    .map((r) => writeArticle(r))
+    .map((r) => writeArticle(r, ledger))
     .filter((e): e is MediaEvent => !!e);
   // The personality layer: short wire posts riding alongside the articles.
-  for (const r of raw) events.push(...writeWirePosts(r));
+  for (const r of raw) events.push(...writeWirePosts(r, ledger));
+  state.variety = { cycle: ledger.cycle, used: ledger.used };
   return { state, events };
 }
 

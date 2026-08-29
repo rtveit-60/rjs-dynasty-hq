@@ -124,6 +124,8 @@ export interface RosterPlayer {
   /** Leaving after this season: a senior, or already drafted. The game keeps
    * both on the roster until week 4 of the offseason. */
   departing: 'senior' | 'drafted' | null;
+  /** NFL draft round once drafted (PLYR_DRAFTROUND, 63 = undrafted). */
+  draftRound: number | null;
 }
 
 /**
@@ -448,6 +450,39 @@ export interface RecruitCard {
   glance: { label: string; value: number }[];
   mental: AbilitySlot[];
   physical: AbilitySlot[];
+}
+
+// --- Awards (weekly honors + the annual show) ---
+
+/**
+ * One Player of the Week honor for the latest completed week, from the save's
+ * PlayerAward ledger. National when confRow is null, otherwise a conference
+ * honor. Joined live to the Player table (current season only — see RESEARCH).
+ */
+export interface WeeklyAward {
+  week: number;
+  side: 'off' | 'def';
+  confRow: number | null;
+  playerRow: number;
+  name: string;
+  position: string;
+  teamRow: number;
+  teamName: string;
+}
+
+/** One winner from the annual awards show, denormalized text — recycling-proof. */
+export interface AnnualAwardWinner {
+  /** Save enum key; AWARD_NAMES maps it to the game's display name. */
+  awardType: string;
+  name: string;
+  position: string | null;
+  teamName: string;
+}
+
+export interface AnnualAwards {
+  /** Season the show covered, by the same block math Team History uses. */
+  year: number;
+  winners: AnnualAwardWinner[];
 }
 
 // --- League leaders (Media HQ ticker + modules, computed on demand) ---
@@ -794,6 +829,12 @@ export type MediaEventType =
   | 'commit'
   | 'coachChange'
   | 'hotSeat'
+  | 'weeklyAward'
+  | 'awardShow'
+  | 'awardWin'
+  | 'statLine'
+  | 'streak'
+  | 'draftPick'
   | 'rosterMove'
   | 'seasonSoFar';
 
@@ -815,11 +856,19 @@ export interface MediaEvent {
   format?: 'article' | 'post';
   /** Set on posts: the fictional personality who wrote it. */
   byline?: { name: string; handle: string; role: string; outletName: string };
+  /** Template tone the piece was written in (the reporter's voice). */
+  tone?: string;
 }
 
 export interface Snapshot {
   parsedAt: number;
   fileName: string;
+  /** Latest completed week's Players of the Week (national + conference). */
+  weeklyAwards: WeeklyAward[];
+  /** The most recent annual awards show on record; null before the first one. */
+  annualAwards: AnnualAwards | null;
+  /** Every rivalry series in the save, as team-row pairs — the wire flags rivalry games. */
+  rivalries: { a: number; b: number; name: string }[];
   season: SeasonState | null;
   teams: TeamInfo[];
   games: GameInfo[];

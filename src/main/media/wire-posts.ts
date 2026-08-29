@@ -9,8 +9,10 @@
  * filled from real save data — no invented numbers, ever.
  */
 import type { MediaEvent } from '../../shared/types.ts';
+import { AWARD_NAMES } from '../../shared/awards.ts';
 import type { RawEvent } from './articles.ts';
 import { EVENT_ROUTING, OUTLETS, PERSONALITIES, type MediaPersonality } from './ecosystem.ts';
+import { sayFresh, type VarietyLedger } from './voices.ts';
 
 function hash(s: string): number {
   let h = 2166136261;
@@ -20,30 +22,22 @@ function hash(s: string): number {
   }
   return h >>> 0;
 }
-const pick = <T,>(arr: T[], seed: string, salt = 0): T => arr[(hash(seed) + salt) % arr.length];
 
 type Tokens = Record<string, string>;
 
-const TOKEN_RE = /\{([A-Z_]+)\}/g;
-
-function fill(template: string, tokens: Tokens): string | null {
-  let ok = true;
-  const out = template.replace(TOKEN_RE, (_, key: string) => {
-    const v = tokens[key];
-    if (v === undefined || v === '') {
-      ok = false;
-      return '';
-    }
-    return v;
-  });
-  return ok ? out : null;
-}
-
-/** A personality's post for this event, or null when none of their lines fit. */
-function speak(p: MediaPersonality, tokens: Tokens, seed: string): string | null {
-  const usable = p.phrases.map((t) => fill(t, tokens)).filter((s): s is string => !!s);
-  if (!usable.length) return null;
-  return pick(usable, seed + p.id);
+/**
+ * A personality's post for this event, chosen through the season-cycle
+ * ledger — nobody repeats a line inside one cycle, and a template only
+ * renders when every {TOKEN} it names fills from real save data.
+ */
+function speak(p: MediaPersonality, tokens: Tokens, seed: string, ledger: VarietyLedger): string | null {
+  return sayFresh(
+    ledger,
+    `p:${p.id}`,
+    p.phrases.map((t) => ({ t })),
+    seed + p.id,
+    tokens
+  );
 }
 
 interface PostSpec {
@@ -57,6 +51,7 @@ function cascade(
   routeKey: string,
   tokens: Tokens,
   seed: string,
+  ledger: VarietyLedger,
   opts: { withRumor?: boolean; maxThen?: number; withReaction?: boolean } = {}
 ): PostSpec[] {
   const route = EVENT_ROUTING[routeKey];
@@ -72,7 +67,7 @@ function cascade(
       if (used.has(id)) continue;
       const p = PERSONALITIES[id];
       if (!p) continue;
-      const text = speak(p, tokens, seed + slot);
+      const text = speak(p, tokens, seed + slot, ledger);
       if (!text) continue;
       used.add(id);
       posts.push({ personality: p, text, slot });
@@ -124,7 +119,7 @@ function toEvents(
   }));
 }
 
-export function writeWirePosts(r: RawEvent): MediaEvent[] {
+export function writeWirePosts(r: RawEvent, ledger: VarietyLedger): MediaEvent[] {
   try {
     const ctx = r.ctx;
     switch (r.kind) {
@@ -152,9 +147,21 @@ export function writeWirePosts(r: RawEvent): MediaEvent[] {
           WEEK: String(g.week),
           COACH: winner.headCoach ?? ''
         };
-        const specs = cascade(upset ? 'upset_win' : 'game_recap', tokens, r.id, {
+        const route = /National Championship|NationalChampionship/i.test((g.bowlName ?? '') + g.weekType)
+          ? 'bowl_game'
+          : g.bowlName
+            ? 'bowl_game'
+            : r.rivalryName
+              ? 'rivalry_game'
+              : upset
+                ? 'upset_win'
+                : 'game_recap';
+        tokens.NICK = winner.nickName ?? '';
+        tokens.RIVALRY = r.rivalryName ?? '';
+        tokens.BOWL = g.bowlName ?? '';
+        const specs = cascade(route, tokens, r.id, ledger, {
           maxThen: isUser || upset ? 2 : 1,
-          withReaction: isUser || upset
+          withReaction: isUser || upset || !!g.bowlName || !!r.rivalryName
         });
         const basePriority = isUser ? 88 : 60;
         return toEvents(r, specs, basePriority, isUser, [winner.longName, loser.longName, 'Results'], g.week);
@@ -169,7 +176,7 @@ export function writeWirePosts(r: RawEvent): MediaEvent[] {
           COACH: team.headCoach ?? ''
         };
         const isUser = r.teamRow === ctx.userRow;
-        const specs = cascade('rankings_release', tokens, r.id, {
+        const specs = cascade('rankings_release', tokens, r.id, ledger, {
           maxThen: r.to === 1 || isUser ? 2 : 1,
           withReaction: r.to === 1
         });
@@ -196,7 +203,7 @@ export function writeWirePosts(r: RawEvent): MediaEvent[] {
           NIL: target && target.nilOffer > 0 ? pts(target.nilOffer) : '',
           NIL_ASK: target && target.nilExpectation > 0 ? pts(target.nilExpectation) : ''
         };
-        const specs = cascade('recruit_commitment', tokens, r.id, {
+        const specs = cascade('recruit_commitment', tokens, r.id, ledger, {
           maxThen: rec.stars >= 4 ? 2 : 1,
           withReaction: rec.stars === 5
         });
@@ -210,12 +217,12 @@ export function writeWirePosts(r: RawEvent): MediaEvent[] {
           r.role === 'HC' ? 'head coach' : r.role === 'OC' ? 'offensive coordinator' : 'defensive coordinator';
         const firedTokens: Tokens = { TEAM: team.longName, COACH: r.outgoing, ROLE: roleTxt };
         const hiredTokens: Tokens = { TEAM: team.longName, COACH: r.incoming, ROLE: roleTxt };
-        const fired = cascade('coaching_fired', firedTokens, r.id + 'f', {
+        const fired = cascade('coaching_fired', firedTokens, r.id + 'f', ledger, {
           withRumor: true,
           maxThen: 1,
           withReaction: r.role === 'HC'
         });
-        const hired = cascade('coaching_hired', hiredTokens, r.id + 'h', {
+        const hired = cascade('coaching_hired', hiredTokens, r.id + 'h', ledger, {
           maxThen: r.role === 'HC' ? 2 : 1,
           withReaction: false
         });
@@ -226,7 +233,7 @@ export function writeWirePosts(r: RawEvent): MediaEvent[] {
         if (!team) return [];
         const isUser = r.teamRow === ctx.userRow;
         const tokens: Tokens = { TEAM: team.longName, COACH: r.coach, ROLE: 'head coach' };
-        const specs = cascade('coaching_hot_seat', tokens, r.id, { maxThen: 1, withReaction: true });
+        const specs = cascade('coaching_hot_seat', tokens, r.id, ledger, { maxThen: 1, withReaction: true });
         return toEvents(r, specs, isUser ? 62 : 50, isUser, [team.longName, 'Coaching']);
       }
       case 'rosterMove': {
@@ -235,7 +242,7 @@ export function writeWirePosts(r: RawEvent): MediaEvent[] {
         for (const [name, pos] of r.departures.slice(0, 2)) {
           const tokens: Tokens = { TEAM: ctx.userName, PLAYER: name, POSITION: pos };
           specs.push(
-            ...cascade('portal_entry', tokens, `${r.id}-${name}`, { maxThen: 1, withReaction: false })
+            ...cascade('portal_entry', tokens, `${r.id}-${name}`, ledger, { maxThen: 1, withReaction: false })
           );
         }
         return toEvents(r, specs.slice(0, 4), 42, true, [ctx.userName, 'Roster']);
@@ -248,8 +255,93 @@ export function writeWirePosts(r: RawEvent): MediaEvent[] {
           RANK: team.rank > 0 ? String(team.rank) : '',
           WEEK: String(ctx.week)
         };
-        const specs = cascade('season_state', tokens, r.id, { maxThen: 1, withReaction: false });
+        const specs = cascade('season_state', tokens, r.id, ledger, { maxThen: 1, withReaction: false });
         return toEvents(r, specs, 96, true, [team.longName, 'Feature']);
+      }
+      case 'statLine': {
+        const team = ctx.teamsByRow.get(r.teamRow);
+        const opp = ctx.teamsByRow.get(r.oppRow);
+        if (!team) return [];
+        const isUser = r.teamRow === ctx.userRow;
+        const tokens: Tokens = {
+          PLAYER: r.name,
+          POSITION: r.position,
+          TEAM: team.longName,
+          NICK: team.nickName ?? '',
+          OPPONENT: opp?.longName ?? '',
+          YDS: r.yards.toLocaleString('en-US'),
+          WEEK: String(r.week)
+        };
+        const specs = cascade('stat_line', tokens, r.id, ledger, {
+          maxThen: isUser ? 2 : 1,
+          withReaction: isUser
+        });
+        return toEvents(r, specs, isUser ? 66 : 44, isUser, [team.longName, 'Numbers'], r.week);
+      }
+      case 'streak': {
+        const team = ctx.snapshot.school!.team;
+        const tokens: Tokens = {
+          TEAM: team.longName,
+          NICK: team.nickName ?? '',
+          COACH: team.headCoach ?? '',
+          N: String(r.n),
+          WEEK: String(ctx.week)
+        };
+        const specs = cascade('milestone_or_streak', tokens, r.id, ledger, {
+          maxThen: 2,
+          withReaction: true
+        });
+        return toEvents(r, specs, 72, true, [team.longName, 'Feature']);
+      }
+      case 'weeklyAward': {
+        const a = r.award;
+        const honor = `${a.confRow === null ? 'National' : 'Conference'} ${a.side === 'off' ? 'Offensive' : 'Defensive'} Player of the Week`;
+        const tokens: Tokens = {
+          PLAYER: a.name,
+          POSITION: a.position,
+          TEAM: a.teamName,
+          HONOR: honor,
+          WEEK: String(a.week)
+        };
+        const specs = cascade('weekly_award', tokens, r.id, ledger, { maxThen: 1, withReaction: true });
+        return toEvents(r, specs, 58, true, [a.teamName, 'Awards']);
+      }
+      case 'awardShow': {
+        const heisman = r.winners.find((w) => w.awardType === 'HEISMAN');
+        if (!heisman) return [];
+        const tokens: Tokens = {
+          PLAYER: heisman.name,
+          TEAM: heisman.teamName,
+          AWARD: AWARD_NAMES['HEISMAN'] ?? 'Heisman'
+        };
+        const specs = cascade('award_show', tokens, r.id, ledger, { maxThen: 2, withReaction: true });
+        const userTeam = ctx.teamsByRow.get(ctx.userRow);
+        const aboutUser = !!userTeam && [userTeam.longName, userTeam.displayName].includes(heisman.teamName);
+        return toEvents(r, specs, 80, aboutUser, [heisman.teamName, 'Awards']);
+      }
+      case 'awardWin': {
+        const w = r.winner;
+        const tokens: Tokens = {
+          PLAYER: w.name,
+          POSITION: w.position ?? '',
+          TEAM: w.teamName,
+          AWARD: AWARD_NAMES[w.awardType] ?? w.awardType
+        };
+        const specs = cascade('award_show', tokens, r.id, ledger, { maxThen: 1, withReaction: true });
+        return toEvents(r, specs, 76, true, [w.teamName, 'Awards']);
+      }
+      case 'draftPick': {
+        const team = ctx.teamsByRow.get(ctx.userRow);
+        const ordinals = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'];
+        const tokens: Tokens = {
+          PLAYER: r.name,
+          POSITION: r.position,
+          TEAM: ctx.userName,
+          NICK: team?.nickName ?? '',
+          ROUND: ordinals[r.round] ?? `round-${r.round}`
+        };
+        const specs = cascade('draft_day', tokens, r.id, ledger, { maxThen: 2, withReaction: true });
+        return toEvents(r, specs, 60, true, [ctx.userName, 'Draft']);
       }
       default:
         return [];

@@ -532,7 +532,11 @@ function playerFromRecord(rec: any, row: number): RosterPlayer {
     homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
     homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? ''),
     portraitId: Number(val(rec, 'PLYR_PORTRAIT') ?? 0),
-    departing: departureOf(rec)
+    departing: departureOf(rec),
+    draftRound: (() => {
+      const round = Number(val(rec, 'PLYR_DRAFTROUND') ?? 63);
+      return round >= 1 && round < 63 ? round : null;
+    })()
   };
 }
 
@@ -1413,6 +1417,142 @@ async function extractTeamHistory(
   return { rivalries, honors, heisman };
 }
 
+/** Every rivalry series as a light team-row pair list, for game flavor. */
+async function extractRivalryPairs(
+  franchise: any,
+  teamTableId: number
+): Promise<{ a: number; b: number; name: string }[]> {
+  try {
+    const rt = tablesByName(franchise, 'Rivalry')[0];
+    if (!rt) return [];
+    await readTable(rt);
+    const out: { a: number; b: number; name: string }[] = [];
+    for (const rec of rt.records as any[]) {
+      if (rec.isEmpty) continue;
+      const t1 = refFromRecord(rec, 'Team1');
+      const t2 = refFromRecord(rec, 'Team2');
+      if (isNullRef(t1) || isNullRef(t2)) continue;
+      if (t1.tableId !== teamTableId || t2.tableId !== teamTableId) continue;
+      const name = String(val(rec, 'Name') ?? '').trim();
+      if (!name) continue;
+      out.push({ a: t1.row, b: t2.row, name });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Weekly honors from PlayerAward (Period = 'Game'): national and per-conference
+ * Offensive/Defensive Players of the Week for the latest completed week. Rows
+ * persist from the previous season at the same week numbers and the ledger
+ * references recyclable Player rows, so a row only counts when its player
+ * still sits on the awarding team — always true for the current season's
+ * winner, rarely for last year's copy. Mechanism in RESEARCH "Weekly awards".
+ */
+async function extractWeeklyAwards(
+  franchise: any,
+  playerTable: any,
+  teamTable: any,
+  games: import('../../shared/types.ts').GameInfo[]
+): Promise<import('../../shared/types.ts').WeeklyAward[]> {
+  try {
+    const playedWeeks = games.filter((g) => g.status !== 'unplayed').map((g) => g.week);
+    if (!playedWeeks.length) return [];
+    const week = Math.max(...playedWeeks);
+    const pa = tablesByName(franchise, 'PlayerAward').sort(
+      (a: any, b: any) => (b.header?.recordCapacity ?? 0) - (a.header?.recordCapacity ?? 0)
+    )[0];
+    if (!pa) return [];
+    await readTable(pa);
+    const playerTableId = playerTable.header?.tableId ?? -1;
+    const teamTableId = teamTable.header?.tableId ?? -1;
+    const out: import('../../shared/types.ts').WeeklyAward[] = [];
+    const seen = new Set<string>();
+    for (const rec of pa.records as any[]) {
+      if (rec.isEmpty) continue;
+      if (String(val(rec, 'Period')) !== 'Game') continue;
+      if (Number(val(rec, 'PeriodIndex')) !== week) continue;
+      const type = String(val(rec, 'AwardType') ?? '');
+      const side = type.startsWith('Offensive') ? 'off' : type.startsWith('Defensive') ? 'def' : null;
+      if (!side) continue;
+      const pref = refFromRecord(rec, 'Player');
+      const p =
+        !isNullRef(pref) && pref.tableId === playerTableId ? playerTable.records[pref.row] : null;
+      if (!p || p.isEmpty) continue;
+      const tref = refFromRecord(rec, 'Team');
+      const t = !isNullRef(tref) && tref.tableId === teamTableId ? teamTable.records[tref.row] : null;
+      if (!t || t.isEmpty) continue;
+      // The disambiguating join: this season's winner is still on that team.
+      if (Number(val(p, 'TeamIndex')) !== Number(val(t, 'TeamIndex'))) continue;
+      const cref = refFromRecord(rec, 'Conference');
+      const confRow = isNullRef(cref) ? null : cref!.row;
+      const key = `${side}-${confRow ?? 'natl'}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        week,
+        side: side as 'off' | 'def',
+        confRow,
+        playerRow: pref!.row,
+        name: `${String(val(p, 'FirstName') ?? '').trim()} ${String(val(p, 'LastName') ?? '').trim()}`.trim(),
+        position: String(val(p, 'Position') ?? ''),
+        teamRow: tref!.row,
+        teamName:
+          String(val(t, 'DisplayName') ?? '').trim() || String(val(t, 'LongName') ?? '').trim()
+      });
+    }
+    // National honors first, then conference, offense before defense.
+    return out.sort(
+      (a, b) =>
+        Number(a.confRow !== null) - Number(b.confRow !== null) || a.side.localeCompare(b.side)
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * League-wide winners from the latest annual awards show block, text names —
+ * immune to Player-row recycling. Same block math as Team History; the year
+ * label can run one ahead during the short pre-show offseason window (see
+ * RESEARCH) — the media engine diffs block content, not the label, so no
+ * stories fire early.
+ */
+async function extractAnnualAwards(
+  franchise: any,
+  season: SeasonState | null
+): Promise<import('../../shared/types.ts').AnnualAwards | null> {
+  try {
+    const lt = tablesByName(franchise, 'LeagueHistoryAward')[0];
+    if (!lt) return null;
+    await readTable(lt);
+    const rows = (lt.records as any[]).filter((r) => !r.isEmpty);
+    if (!rows.length) return null;
+    const firstType = String(val(rows[0], 'AwardType') ?? '');
+    let blockLen = rows.findIndex((r, i) => i > 0 && String(val(r, 'AwardType') ?? '') === firstType);
+    if (blockLen <= 0) blockLen = rows.length;
+    const lastCompleted = season
+      ? season.stage === 'OffSeason'
+        ? season.seasonYear
+        : season.seasonYear - 1
+      : 0;
+    const winners = rows
+      .slice(rows.length - blockLen)
+      .map((rec) => ({
+        awardType: String(val(rec, 'AwardType') ?? ''),
+        name: `${String(val(rec, 'firstName') ?? '').trim()} ${String(val(rec, 'lastName') ?? '').trim()}`.trim(),
+        position: String(val(rec, 'Position') ?? '').trim() || null,
+        teamName: String(val(rec, 'TeamDisplayName') ?? '').trim()
+      }))
+      .filter((w) => w.name && w.awardType);
+    return winners.length ? { year: lastCompleted, winners } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** How deep into the postseason a bowl slot sits — the deepest one is the story. */
 const BOWL_DEPTH: Record<string, number> = {
   BowlSeason1: 1,
@@ -1729,9 +1869,16 @@ export async function extractSnapshot(
     };
   }
 
+  const weeklyAwards = await extractWeeklyAwards(franchise, playerTable, teamTable, games);
+  const annualAwards = await extractAnnualAwards(franchise, season);
+  const rivalries = await extractRivalryPairs(franchise, teamTable.header?.tableId ?? -1);
+
   return {
     parsedAt: Date.now(),
     fileName: opts.fileName,
+    weeklyAwards,
+    annualAwards,
+    rivalries,
     season,
     teams,
     games,

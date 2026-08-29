@@ -95,6 +95,20 @@ export const OUTLETS: Record<string, MediaOutlet> = {
     archetype: 'social_ecosystem',
     tone: 'varies wildly',
     tickerPriority: 6
+  },
+  the_tap: {
+    id: 'the_tap',
+    name: 'The Tap',
+    archetype: 'fan_blog',
+    tone: 'irreverent, fan-brained, jokes first',
+    tickerPriority: 6
+  },
+  fontaine_show: {
+    id: 'fontaine_show',
+    name: 'The Fontaine Files',
+    archetype: 'talk_show',
+    tone: 'urbane, wordplay, knowing',
+    tickerPriority: 5
   }
 };
 
@@ -116,7 +130,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       'Sources: {TEAM} is finalizing a deal with {COACH}. An announcement is expected within 24 hours.',
       "I'm told {TEAM} has informed {COACH} he will not return next season.",
-      'Sources: {TEAM} is making a change at {ROLE}. {COACH} is out.'
+      'Sources: {TEAM} is making a change at {ROLE}. {COACH} is out.',
+      "Sources: {PLAYER} is entering the NFL draft.",
+      "{PLAYER} was selected in the {ROUND} round. {TEAM} pipeline keeps producing."
     ]
   },
   whitcomb: {
@@ -162,9 +178,10 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     volatility: 3,
     toneTags: ['connective', 'neutral'],
     phrases: [
-      "Big show today. {TEAM}'s season is the story at the top.",
+      'The rundown leads with {TEAM} tonight. It earned the slot.',
       'Nobody on this desk picked {TEAM}. Nobody.',
-      "Let's get to it."
+      'We spent the whole first segment on {TEAM}. There was that much to cover.',
+      "Awards rundown at the top of the hour. {PLAYER} headlines."
     ]
   },
   raghunathan: {
@@ -178,7 +195,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     volatility: 2,
     toneTags: ['immediate', 'factual'],
     phrases: [
-      '{COACH} told me at the half: “We’re not tackling. That’s it. That’s the whole thing.”',
+      'Halftime scene: {COACH} calm, the {TEAM} staff animated, nobody panicking.',
       '{TEAM}’s sideline as the clock hit zero: pure disbelief.'
     ]
   },
@@ -226,7 +243,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       "What happened in {TEAM}'s stadium on Saturday was the sport arguing with itself.",
       '{TEAM} won the game and lost the argument. Both things are true.',
-      'We keep asking college football to be two things at once. {TEAM} against {OPPONENT} was the bill coming due.'
+      'We keep asking college football to be two things at once. {TEAM} against {OPPONENT} was the bill coming due.',
+      "The {RIVALRY} does not care about your rankings. It never has.",
+      "Bowl games are exhibitions until they aren’t. Ask {TEAM}."
     ]
   },
   buscher: {
@@ -274,7 +293,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
       '{TEAM} is No. {RANK} in the polls and lower in my ratings. The schedule has done a lot of work.',
       'That win was closer than the {CLOSE_SCORE} suggests. Two swings flipped it.',
       '{TEAM} beat {OPPONENT} by exactly what the model expected. Nobody believes me.',
-      '{TEAM} is the biggest disagreement between my model and the human consensus.'
+      '{TEAM} is the biggest disagreement between my model and the human consensus.',
+      "{PLAYER} accounted for {YDS} yards. The model has him top three nationally now.",
+      "{N} straight for {TEAM}. The streak keeps surviving contact with the schedule."
     ]
   },
   petrosino: {
@@ -289,7 +310,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['wry', 'structural'],
     phrases: [
       '{TEAM} keeps drawing the late window and keeps winning it. Nobody out here is surprised.',
-      '{COACH} on the stretch run: “We’ll be fine.” For once he looked like he meant it.'
+      'The stretch run rewards teams that travel well. {TEAM} travels well.'
     ]
   },
   reed: {
@@ -320,7 +341,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       '🚨BREAKING🚨 {STARS}-star {POSITION} {RECRUIT} has COMMITTED to {TEAM}!',
       '{RECRUIT} to {TEAM}. All signs pointed one direction for weeks.',
-      "{TEAM}'s class takes a JUMP with that commitment."
+      "{TEAM}'s class takes a JUMP with that commitment.",
+      "FLIP ALERT: {RECRUIT} is now committed to {TEAM} 🚨",
+      "Portal WIN for {TEAM}: {POSITION} {RECRUIT} is in."
     ]
   },
   alvarado: {
@@ -336,7 +359,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       'Hearing {PLAYER} is expected to enter the portal. Not official yet.',
       '{PLAYER} ({POSITION}) is no longer with the {TEAM} program, per sources.',
-      'Portal is about to get busy. Buckle up.'
+      '{TEAM} losing {PLAYER} will move the portal market. Watch the next 48 hours.'
     ]
   },
   bell: {
@@ -353,7 +376,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
       '{RECRUIT}’s NIL package at {TEAM} is worth a reported {NIL}, with performance escalators.',
       'The number on {RECRUIT}: {NIL}. That’s what it takes now.',
       '{RECRUIT} wanted {NIL_ASK} and got {NIL}. Read into that what you will.',
-      'The money mattered here. It always matters now.'
+      'The money mattered in the {RECRUIT} decision. It always matters now.'
     ]
   },
   whitfield: {
@@ -400,7 +423,12 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['inverted pyramid', 'no flourish'],
     phrases: [
       '{TEAM} beat {OPPONENT} {SCORE} on Saturday.',
-      '“We just kept playing,” {COACH} said after {TEAM}’s {SCORE} win over {OPPONENT}.'
+      'Final from Week {WEEK}: {TEAM} {SCORE} over {OPPONENT}.',
+      "{PLAYER} threw for {YDS} yards in {TEAM}’s Week {WEEK} game.",
+      "{PLAYER} ran for {YDS} yards against {OPPONENT}.",
+      "{PLAYER} was named {HONOR}.",
+      "{PLAYER} of {TEAM} won the {AWARD}.",
+      "{TEAM} won the {BOWL}, {SCORE}."
     ]
   },
   dunlavy: {
@@ -416,7 +444,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       'Power Rankings, Week {WEEK}: {TEAM} is rising and it’s finally not close.',
       'Ten things we learned in Week {WEEK}. {TEAM} is most of them.',
-      'Nobody had {TEAM} over {OPPONENT}. Nobody honest, anyway.'
+      'Nobody had {TEAM} over {OPPONENT}. Nobody honest, anyway.',
+      "The only Week {WEEK} words you need: {PLAYER}, {YDS} yards.",
+      "Award take nobody asked for: {PLAYER} earned every vote."
     ]
   },
   adeyemi: {
@@ -464,7 +494,8 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       "{TEAM}'s odds jumped after Saturday. The model saw it before I did.",
       'The model gives {TEAM} a real chance to win out. It has been wrong before. Loudly.',
-      'Ran it 10,000 times. {TEAM} makes the field in most of them.'
+      'Ran it 10,000 times. {TEAM} makes the field in most of them.',
+      "Model note: {PLAYER}’s {YDS}-yard day moved three different win probabilities."
     ]
   },
   pisani: {
@@ -479,7 +510,8 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['market-literate', 'slangy'],
     phrases: [
       'The market never believed in {OPPONENT}. It believed in {TEAM}. It was right.',
-      'Biggest move of the week and nobody was talking about it. They are now.'
+      'Biggest move of the week and nobody was talking about it. They are now.',
+      "The {BOWL} number was right all week. The sharp side cashed."
     ]
   },
   rooney: {
@@ -495,7 +527,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       "I've been telling you for two years about {TEAM}. TWO YEARS.",
       "That fan base doesn't want to hear it. I don't care. I really don't.",
-      "Call the show. Tell me I'm wrong about {TEAM}. You can't."
+      "Call the show. Tell me I'm wrong about {TEAM}. You can't.",
+      "They gave {PLAYER} the {AWARD} and I have THOUGHTS. Tune in.",
+      "{N} in a row and people STILL doubt {TEAM}. Unbelievable."
     ]
   },
   ballard: {
@@ -509,9 +543,10 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     volatility: 6,
     toneTags: ['genial', 'player-defensive'],
     phrases: [
-      "Cal, you've never been in that locker room in November. It's different.",
-      "I've played for a coach like that. You'd run through a wall for him.",
-      'Everybody wants a villain. Sometimes the other team is just better.'
+      "Cal, you've never been in a {TEAM} locker room in November. It's different.",
+      "I've played for coaches like {COACH}. You'd run through a wall for him.",
+      'Everybody wants a villain in the {TEAM} story. Sometimes the other team is just better.',
+      "{PLAYER} winning the {AWARD} is what doing it the right way looks like."
     ]
   },
   portal_pigeon: {
@@ -527,7 +562,8 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       '👀👀 something happening at {TEAM}',
       'Hearing movement around the {TEAM} program. Grain of salt.',
-      'Deleting this later'
+      '{TEAM} people know exactly what this is about. Deleting later.',
+      "{AWARD} chatter: it’s {PLAYER}. hearing it everywhere 👀"
     ]
   },
   carousel_hq: {
@@ -558,7 +594,8 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['technical', 'patient'],
     phrases: [
       'Thread on how {TEAM} took it from {OPPONENT}. It’s not the personnel.',
-      'This is the concept {TEAM} has run 40 times this year. {OPPONENT} never solved it.'
+      'This is the concept {TEAM} has run 40 times this year. {OPPONENT} never solved it.',
+      "{PLAYER}’s {YDS}-yard tape is absurd. Cutting it up tonight."
     ]
   },
   sideline_snitch: {
@@ -573,7 +610,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['inflammatory', 'deniable'],
     phrases: [
       'What I’m hearing out of {TEAM} right now is not good. Not going to say more.',
-      'More on this tomorrow if I’m allowed'
+      '{TEAM}-adjacent. More tomorrow if I’m allowed.'
     ]
   },
   cfb_ledger: {
@@ -604,7 +641,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       'Depth chart notes after the {TEAM} {ROLE} news. Changes coming.',
       'Practice observations: nothing about {RECRUIT}’s film was a surprise to this staff.',
-      'What the {TEAM} locker room was saying after the {SCORE} win.'
+      'Beat notebook after the {SCORE} win: depth notes and snap counts inside.',
+      "{PLAYER} ({POSITION}) drafted in the {ROUND} round. The staff texted congratulations from the road.",
+      "{PLAYER} takes {HONOR}. Nobody in that building is surprised."
     ]
   },
   castellanos: {
@@ -620,7 +659,50 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       '{TEAM} fans deserve an honest answer about where this program is going.',
       'This town has been patient. Patience has a shelf life.',
-      'The silence from the athletic department was a decision. So is this.'
+      'The silence from the athletic department was a decision. So is this.',
+      "A {ROUND}-round draft pick and a full trophy case. This is what the town asked for."
+    ]
+  },
+  dooley: {
+    id: 'dooley',
+    name: 'Chuck Dooley',
+    handle: '@DooleyAfterDark',
+    outlet: 'the_tap',
+    role: 'Guy At The Game',
+    credibility: 0.35,
+    speed: 9,
+    volatility: 9,
+    toneTags: ['unfiltered', 'fan-brained', 'all-caps-capable'],
+    phrases: [
+      '{TEAM} {SCORE}. I need a minute.',
+      '{OPPONENT} fans logging off in real time. Incredible scenes.',
+      'THE {NICK} ARE UNSTOPPABLE AND I AM NOT TAKING QUESTIONS',
+      '{PLAYER} went for {YDS} yards and I lost my voice in the second quarter',
+      'The {RIVALRY}?? In our house?? Goodnight everybody.',
+      '{N} straight. Somebody check on the message boards.',
+      'This is the best {TEAM} team of my lifetime and I have been alive a long time',
+      'They gave {PLAYER} the {AWARD}. Correct. Next question.',
+      'Woke up still thinking about the {BOWL}. Not in a good way or a bad way. Just thinking.'
+    ]
+  },
+  fontaine: {
+    id: 'fontaine',
+    name: 'Marty Fontaine',
+    handle: '@MartyFontaine',
+    outlet: 'fontaine_show',
+    role: 'Host',
+    credibility: 0.72,
+    speed: 4,
+    volatility: 4,
+    toneTags: ['urbane', 'wordplay', 'knowing'],
+    phrases: [
+      'File this under things of beauty: {PLAYER}, {YDS} yards, one raised eyebrow.',
+      '{TEAM} winning {N} straight is less a streak than a lifestyle.',
+      'The {AWARD} found the right mantle. It usually does.',
+      'Somewhere a defensive coordinator is watching {PLAYER} tape and quietly updating his résumé.',
+      '{TEAM} beat {OPPONENT} the way you fold a fitted sheet: badly at first, then all at once.',
+      'A {ROUND}-round pick out of {TEAM}. Development, dear listeners, is a choice.',
+      'The {RIVALRY} remains the sport’s best argument with itself.'
     ]
   },
   mowrey: {
@@ -635,8 +717,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['nostalgic', 'institutional memory'],
     phrases: [
       'I covered the 1989 team. This {TEAM} group reminds me of them — and this time in a good way.',
-      "They've had six coaches since I started. I've heard this press conference before.",
-      "The game's changed. Some of it for the better. Some of it not."
+      "I've heard this {TEAM} press conference before. The good ones sound different.",
+      "The game's changed. Some of it for the better. Some of it not.",
+      "A {ROUND}-round pick from this program. There was a time that was routine. It might be again."
     ]
   }
 };
@@ -700,5 +783,35 @@ export const EVENT_ROUTING: Record<
     first: ['steadman'],
     then: ['rutherford', 'vance', 'petrosino', 'mowrey'],
     reaction: ['farrow']
+  },
+  rivalry_game: {
+    first: ['lin'],
+    then: ['dolan', 'mowrey', 'weatherby'],
+    reaction: ['rooney', 'dooley', 'cardoza', 'fontaine']
+  },
+  bowl_game: {
+    first: ['lin'],
+    then: ['dolan', 'pisani', 'whitcomb'],
+    reaction: ['steadman', 'fontaine', 'dooley']
+  },
+  stat_line: {
+    first: ['lin'],
+    then: ['okonkwo', 'film_room_frank', 'dunlavy'],
+    reaction: ['ealy', 'dooley', 'fontaine', 'farrow']
+  },
+  weekly_award: {
+    first: ['hallberg'],
+    then: ['weatherby', 'lin'],
+    reaction: ['steadman', 'dooley']
+  },
+  award_show: {
+    first: ['steadman'],
+    then: ['hallberg', 'dunlavy', 'mowrey'],
+    reaction: ['rooney', 'ballard', 'fontaine', 'portal_pigeon']
+  },
+  draft_day: {
+    first: ['marchetti'],
+    then: ['weatherby', 'mowrey', 'castellanos'],
+    reaction: ['fontaine']
   }
 };
