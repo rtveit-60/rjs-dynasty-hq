@@ -167,6 +167,9 @@ function registerIpc(): void {
     Number.isInteger(playerRow) && playerRow >= 0 ? pipeline.recruitCard(playerRow) : null,
   );
 
+  // League stat leaders for Media HQ — one sweep per parse, cached in the pipeline.
+  ipcMain.handle('league:leaders', () => pipeline.leagueLeaders());
+
   // Attribute search over the recruiting class. Runs against the cached parse,
   // so it is cheap enough to re-run as the user types a threshold.
   ipcMain.handle('recruit:scout', (_e, criteria: unknown) =>

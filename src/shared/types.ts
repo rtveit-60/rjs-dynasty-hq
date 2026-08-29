@@ -450,6 +450,33 @@ export interface RecruitCard {
   physical: AbilitySlot[];
 }
 
+// --- League leaders (Media HQ ticker + modules, computed on demand) ---
+
+export interface LeaderRow {
+  playerRow: number;
+  name: string;
+  position: string;
+  team: string;
+  teamRow: number | null;
+  /** Category value — yards, tackles, sacks (half-precision), picks. */
+  value: number;
+  /** Companion figure, pre-formatted: "24 TD", "48 rec". */
+  sub: string;
+}
+
+export interface LeaderCategory {
+  key: 'pass' | 'rush' | 'recv' | 'tackles' | 'sacks' | 'ints';
+  label: string;
+  /** Ticker shorthand: PASS, RUSH, REC, TKL, SACK, INT. */
+  short: string;
+  rows: LeaderRow[];
+}
+
+export interface LeagueLeaders {
+  seasonYear: number;
+  categories: LeaderCategory[];
+}
+
 // --- Profiles (on-demand pop-up detail for a player, coach or school) ---
 
 /**

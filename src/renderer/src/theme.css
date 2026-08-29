@@ -3107,3 +3107,373 @@ table.tbl.tbl-wide {
 .chip .info-dot {
   margin-left: 2px;
 }
+
+/* ————————————————————————————————————————————————
+   Media HQ — the league desk: ticker + module grid.
+   ———————————————————————————————————————————————— */
+
+.ticker {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.tk-cap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  background: var(--team);
+  color: var(--team-contrast);
+  font: 700 11.5px var(--font-display);
+  letter-spacing: 0.14em;
+  padding: 7px 16px 6px 12px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.tk-cap .car {
+  font-size: 8px;
+  color: var(--hot);
+}
+
+.tk-menu-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.tk-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.tk-menu button {
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: 600 11.5px var(--font-display);
+  letter-spacing: 0.12em;
+  text-align: left;
+  padding: 8px 12px 7px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tk-menu button:last-child {
+  border-bottom: 0;
+}
+
+.tk-menu button:hover {
+  background: var(--sunken);
+  color: var(--ink);
+}
+
+.tk-menu button.active {
+  color: var(--hot);
+}
+
+.tk-strip {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.tk-track {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-width: max-content;
+  white-space: nowrap;
+  padding: 6px 0 5px;
+  animation: tk-scroll linear infinite;
+  will-change: transform;
+}
+
+.tk-strip:hover .tk-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-track {
+    animation: none;
+  }
+}
+
+@keyframes tk-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.tk-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0 14px;
+  font: 600 12px var(--font-display);
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+}
+
+.tk-item .rk {
+  color: var(--hot);
+  font-weight: 700;
+}
+
+.tk-item .tk-team,
+.tk-item b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.tk-item .rec {
+  color: var(--ink-3);
+}
+
+.tk-item .proj {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  padding: 1px 5px 0;
+}
+
+.up {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.dn {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+/* HQ module grid */
+
+.hq-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .hq-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hq-lead .story.lead {
+  margin: 0;
+}
+
+.hq-mods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+  align-items: start;
+}
+
+.hqm {
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.hqm-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font: 700 10.5px var(--font-display);
+  letter-spacing: 0.18em;
+  color: var(--ink);
+  background: var(--sunken);
+  padding: 6px 12px 5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.hqm-h .r {
+  color: var(--hot);
+}
+
+.hqm-h .info-dot {
+  vertical-align: 0;
+  margin-left: 4px;
+}
+
+.hqm-body {
+  padding: 8px 12px 10px;
+}
+
+.hqm-kv {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 7px 10px;
+  padding: 10px 12px 12px;
+  font: 600 12px var(--font-display);
+  letter-spacing: 0.08em;
+}
+
+.hqm-kv .k {
+  color: var(--ink-3);
+}
+
+.hqm-kv .dots {
+  border-bottom: 1px dotted var(--line);
+  position: relative;
+  top: -4px;
+}
+
+.hqm-kv .v {
+  text-align: right;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.hqm-block {
+  margin-bottom: 10px;
+}
+
+.hqm-block:last-child {
+  margin-bottom: 0;
+}
+
+.hqm-sub {
+  font: 700 9.5px var(--font-display);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 2px 0 4px;
+}
+
+.hqm-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12.5px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.hqm-row:first-of-type {
+  border-top: 0;
+}
+
+.hqm-row .i {
+  font-family: var(--font-score);
+  font-size: 11px;
+  color: var(--ink-3);
+  width: 16px;
+  flex: none;
+}
+
+.hqm-row .n {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.hqm-row .n .t {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.hqm-row .v {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hqm-wait {
+  color: var(--ink-3);
+  font-size: 12px;
+  padding: 6px 0;
+}
+
+.hq-awards {
+  margin-top: 12px;
+}
+
+.hq-award-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0 22px;
+  padding: 10px 12px 12px;
+}
+
+.hq-wirefeed {
+  margin-top: 12px;
+}
+
+.hqm-link {
+  border: 0;
+  background: none;
+  color: var(--hot);
+  font: 700 10.5px var(--font-display);
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.hq-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  background: none;
+  text-align: left;
+  padding: 6px 0;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.hq-headline:first-of-type {
+  border-top: 0;
+}
+
+.hq-headline:hover .h {
+  color: var(--team-bright, var(--team));
+}
+
+.hq-headline .o {
+  flex: none;
+  font: 700 9.5px var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  min-width: 92px;
+}
+
+.hq-headline .h {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -2,8 +2,17 @@ import { app } from 'electron';
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import type { MediaEvent, Profile, ProfileRequest, RecruitCard, Snapshot, WatchStatus } from '../shared/types.ts';
+import type {
+  LeagueLeaders,
+  MediaEvent,
+  Profile,
+  ProfileRequest,
+  RecruitCard,
+  Snapshot,
+  WatchStatus
+} from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
+import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
 import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from './parser/profile.ts';
 import { scoutRecruits } from './parser/recruit-scout.ts';
@@ -40,6 +49,9 @@ export class Pipeline {
   private queued = false;
   /** The school scoped by the latest refresh/rescope; marks "us" in profiles. */
   private lastSchoolRow: number | null = null;
+  /** League leaders, swept once per parsed save (keyed by its hash). */
+  private leaders: LeagueLeaders | null = null;
+  private leadersHash = '';
 
   constructor(events: PipelineEvents) {
     this.events = events;
@@ -98,6 +110,16 @@ export class Pipeline {
   async recruitCard(playerRow: number): Promise<RecruitCard | null> {
     if (!this.franchise) return null;
     return extractRecruitCard(this.franchise, playerRow);
+  }
+
+  /** League stat leaders for Media HQ — swept once per parse, then cached. */
+  async leagueLeaders(): Promise<LeagueLeaders | null> {
+    if (!this.franchise) return null;
+    if (!this.leaders || this.leadersHash !== this.lastHash) {
+      this.leaders = await extractLeagueLeaders(this.franchise);
+      this.leadersHash = this.lastHash;
+    }
+    return this.leaders;
   }
 
   /** Attribute search across the recruiting class. */
