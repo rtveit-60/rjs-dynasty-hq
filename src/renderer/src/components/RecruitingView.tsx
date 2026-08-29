@@ -6,6 +6,7 @@ import {
   devClass,
   devLabel,
   fmt,
+  ovrTier,
   recruitPos,
   recruitPosPool,
   recruitPositionsFor,
@@ -27,6 +28,7 @@ type SortKey =
   | 'dev'
   | 'pipeline'
   | 'status'
+  | 'ovr'
   | 'posrk'
   | 'natlrk'
   | 'edge'
@@ -50,7 +52,7 @@ const STAGE_ORDER: Record<string, number> = {
 };
 const BIG = Number.MAX_SAFE_INTEGER;
 const PAGE_SIZE = 200;
-const COLS = 12;
+const COLS = 13;
 
 const STAR_FILTERS = [
   { label: 'All', min: 0 },
@@ -127,6 +129,8 @@ export default function RecruitingView() {
           const s = (r: ClassRecruit) => (r.committedTo ? 100 : (STAGE_ORDER[r.stage] ?? -1));
           return (s(a) - s(b)) * dir || byName(a, b);
         }
+        case 'ovr':
+          return (a.overall - b.overall) * dir || rank(a.nationalRank) - rank(b.nationalRank);
         case 'posrk':
           return (rank(a.positionRank) - rank(b.positionRank)) * dir;
         case 'natlrk':
@@ -302,6 +306,7 @@ export default function RecruitingView() {
                   {th('Dev', 'dev')}
                   {th('Pipeline', 'pipeline', { defaultAsc: true })}
                   {th('Status', 'status')}
+                  {th('Ovr', 'ovr')}
                   {th('Pos Rk', 'posrk', { num: true, defaultAsc: true })}
                   {th('Natl Rk', 'natlrk', { num: true, defaultAsc: true })}
                   {th('Edge', 'edge')}
@@ -344,7 +349,12 @@ export default function RecruitingView() {
                       <td className="cell-clip" style={{ color: 'var(--ink-2)' }} title={spaceOut(r.pipeline)}>
                         {spaceOut(r.pipeline)}
                       </td>
-                      <td>{statusCell(r)}</td>
+                      <td className="cell-clip" title={r.committedTo ?? undefined}>
+                        {statusCell(r)}
+                      </td>
+                      <td>
+                        <span className={ovrTier(r.overall)}>{r.overall}</span>
+                      </td>
                       <td className="num">{r.positionRank || '—'}</td>
                       <td className="num">{r.nationalRank || '—'}</td>
                       <td className="cell-clip" title={r.edges.join(', ')}>

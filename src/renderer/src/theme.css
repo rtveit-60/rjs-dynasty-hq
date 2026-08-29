@@ -1870,14 +1870,21 @@ table.tbl.tbl-wide {
 /* Condensed layout for the wide recruiting board, so more columns fit before
    the horizontal scroll starts. */
 .tbl.tbl-wide thead th {
-  padding: 7px 8px;
+  padding: 7px 6px;
   font-size: 9.5px;
   letter-spacing: 0.07em;
 }
 
 .tbl.tbl-wide tbody td {
-  padding: 5px 8px;
+  padding: 5px 6px;
   font-size: 12px;
+}
+
+/* The board's OVR badge, a notch smaller than the roster's. */
+.tbl.tbl-wide .ovr {
+  min-width: 26px;
+  font-size: 12px;
+  padding: 0 4px;
 }
 
 .tbl.tbl-wide .stars-cell {
@@ -1975,11 +1982,11 @@ table.tbl.tbl-wide {
 
 /* Text columns scale with the window instead of sitting at fixed pixels. */
 .tbl.tbl-wide .cell-clip {
-  max-width: clamp(84px, 11vw, 190px);
+  max-width: clamp(78px, 9vw, 165px);
 }
 
 .tbl.tbl-wide .cell-clip.name {
-  max-width: clamp(140px, 17vw, 280px);
+  max-width: clamp(132px, 15vw, 250px);
 }
 
 /* ——— Scouting reports: attribute criteria builder ——— */

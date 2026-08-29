@@ -168,11 +168,11 @@ const spread = [0, 1, 7, 40, 250, 1200, 3000, all.length - 1]
   .map((i) => all[i]);
 for (const r of spread) {
   const card = await extractRecruitCard(franchise, r.playerRow);
-  const ok = !!card && card.name === r.name && card.position === r.position;
+  const ok = !!card && card.name === r.name && card.position === r.position && card.overall === r.overall;
   check(
-    `${r.name} (${r.position})`,
+    `${r.name} (${r.position}, ${r.overall} ovr)`,
     ok,
-    card ? `card says ${card.name} (${card.position})` : 'no card returned',
+    card ? `card says ${card.name} (${card.position}, ${card.overall} ovr)` : 'no card returned',
   );
 }
 
