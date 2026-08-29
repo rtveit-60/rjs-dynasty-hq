@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LeagueLeaders, MediaEvent } from '../../../shared/types.ts';
 import { AWARD_NAMES } from '../../../shared/awards.ts';
 import { useHQ } from '../store.ts';
@@ -68,6 +68,9 @@ export default function MediaHQ({
   const snapshot = useHQ((s) => s.snapshot);
   const parsedAt = useHQ((s) => s.snapshot?.parsedAt);
   const [leaders, setLeaders] = useState<LeagueLeaders | null>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const page = (dir: number) =>
+    railRef.current?.scrollBy({ left: dir * railRef.current.clientWidth, behavior: 'smooth' });
 
   useEffect(() => {
     let alive = true;
@@ -89,14 +92,21 @@ export default function MediaHQ({
     let w = 0;
     let l = 0;
     let pf = 0;
-    for (const g of games) {
+    let pa = 0;
+    const results: boolean[] = [];
+    for (const g of [...games].sort((a, b) => a.week - b.week)) {
       if (g.status === 'unplayed' || userRow === null) continue;
       if (g.homeRow !== userRow && g.awayRow !== userRow) continue;
       const won = (g.status === 'home') === (g.homeRow === userRow);
       won ? w++ : l++;
+      results.push(won);
       pf += g.homeRow === userRow ? g.homeScore : g.awayScore;
+      pa += g.homeRow === userRow ? g.awayScore : g.homeScore;
     }
-    return { w, l, pf, games: w + l };
+    let streak = 0;
+    for (let i = results.length - 1; i >= 0 && results[i] === results[results.length - 1]; i--) streak++;
+    const streakLabel = results.length ? (results[results.length - 1] ? 'W' : 'L') + streak : '—';
+    return { w, l, pf, pa, games: w + l, streakLabel };
   }, [games, userRow]);
 
   const nextGame = useMemo(() => {
@@ -135,6 +145,9 @@ export default function MediaHQ({
   const per = (v: number): string => (season.games > 0 ? (v / season.games).toFixed(1) : '—');
   const stat = (v: number | undefined, f: (n: number) => string = String): string =>
     leaders && mine ? f(v ?? 0) : '…';
+  const sp = school?.splits?.scope === 'current' && (school?.splits?.games ?? 0) > 0 ? school!.splits : null;
+  const pctOf = (part: number, whole: number): string =>
+    whole > 0 ? Math.round((part / whole) * 100) + '%' : '—';
 
   return (
     <>
@@ -144,12 +157,20 @@ export default function MediaHQ({
         <div className="hqm hq-heads">
           <div className="hqm-h">
             <span>HEADLINES</span>
-            <button className="hqm-link" onClick={onOpenWire}>
-              OPEN THE WIRE →
-            </button>
+            <span className="hq-pager">
+              <button className="hqm-link" onClick={() => page(-1)} aria-label="Previous story">
+                ←
+              </button>
+              <button className="hqm-link" onClick={() => page(1)} aria-label="Next story">
+                →
+              </button>
+              <button className="hqm-link" onClick={onOpenWire}>
+                OPEN THE WIRE →
+              </button>
+            </span>
           </div>
           {media.length ? (
-            <div className="hq-scroll">
+            <div className="hq-scroll" ref={railRef}>
               {media.slice(0, 8).map((e) => (
                 <div key={e.id} className="hq-card">
                   <Story e={e} lead={false} />
@@ -180,6 +201,9 @@ export default function MediaHQ({
               {rankDelta > 0 && <span className="up"> ▲{rankDelta}</span>}
               {rankDelta < 0 && <span className="dn"> ▼{-rankDelta}</span>}
             </span>
+            <span className="k">STREAK</span>
+            <span className="dots" />
+            <span className="v">{season.streakLabel}</span>
             <span className="k">NEXT UP</span>
             <span className="dots" />
             <span className="v">
@@ -198,6 +222,12 @@ export default function MediaHQ({
             <span className="k">PPG</span>
             <span className="dots" />
             <span className="v">{season.games > 0 ? (season.pf / season.games).toFixed(1) : '—'}</span>
+            <span className="k">PTS ALLOWED</span>
+            <span className="dots" />
+            <span className="v">{season.games > 0 ? (season.pa / season.games).toFixed(1) : '—'}</span>
+            <span className="k">TOTAL YPG</span>
+            <span className="dots" />
+            <span className="v">{stat((mine?.passYds ?? 0) + (mine?.rushYds ?? 0), per)}</span>
             <span className="k">PASS YPG</span>
             <span className="dots" />
             <span className="v">{stat(mine?.passYds, per)}</span>
@@ -210,6 +240,14 @@ export default function MediaHQ({
             <span className="k">FGS</span>
             <span className="dots" />
             <span className="v">{stat(mine?.fgs)}</span>
+            <span className="k">3RD DOWN</span>
+            <span className="dots" />
+            <span className="v">{sp ? pctOf(sp.thirdConv, sp.thirdDowns) : '—'}</span>
+            <span className="k">TO MARGIN</span>
+            <span className="dots" />
+            <span className="v">
+              {sp ? (sp.takeaways - sp.giveaways > 0 ? '+' : '') + (sp.takeaways - sp.giveaways) : '—'}
+            </span>
             <span className="k">SACKS</span>
             <span className="dots" />
             <span className="v">{stat(mine?.sacks, (n) => String(Math.round(n * 10) / 10))}</span>

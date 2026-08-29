@@ -3289,10 +3289,10 @@ table.tbl.tbl-wide {
 
 .hq-cols {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
   gap: 12px;
   margin-top: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 
 @media (max-width: 1000px) {
@@ -3450,10 +3450,27 @@ table.tbl.tbl-wide {
   height: 9px;
 }
 
+/* One story fills the rail; the arrows and snap points page through. */
+.hq-heads {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hq-scroll {
+  flex: 1;
+}
+
 .hq-card {
-  flex: 0 0 300px;
+  flex: 0 0 100%;
   min-width: 0;
   scroll-snap-align: start;
+}
+
+.hq-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .hq-card .story {
