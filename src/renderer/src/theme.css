@@ -1986,7 +1986,13 @@ table.tbl.tbl-wide {
 }
 
 .tbl.tbl-wide .cell-clip.name {
-  max-width: clamp(132px, 15vw, 250px);
+  max-width: clamp(132px, 20vw, 320px);
+}
+
+/* Hand the table's spare width to the name column, so it doesn't pool as a
+   gap between the narrow columns on the right. */
+.tbl.tbl-wide th.col-name {
+  width: 30%;
 }
 
 /* ——— Scouting reports: attribute criteria builder ——— */

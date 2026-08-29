@@ -178,9 +178,9 @@ export default function RecruitingView() {
     }
   };
 
-  const th = (label: string, key: SortKey, opts?: { num?: boolean; defaultAsc?: boolean }) => (
+  const th = (label: string, key: SortKey, opts?: { num?: boolean; defaultAsc?: boolean; cls?: string }) => (
     <th
-      className={`${opts?.num ? 'num ' : ''}${sortKey === key ? 'sorted' : ''}`}
+      className={`${opts?.num ? 'num ' : ''}${opts?.cls ? `${opts.cls} ` : ''}${sortKey === key ? 'sorted' : ''}`}
       onClick={() => sortBy(key, opts?.defaultAsc ?? false)}
       title={`Sort by ${label}`}
     >
@@ -301,7 +301,7 @@ export default function RecruitingView() {
                 <tr>
                   {th('Rating', 'rating')}
                   {th('Gem', 'gem')}
-                  {th('Recruit & School', 'name', { defaultAsc: true })}
+                  {th('Recruit & School', 'name', { defaultAsc: true, cls: 'col-name' })}
                   {th('Pos', 'pos', { defaultAsc: true })}
                   {th('Dev', 'dev')}
                   {th('Pipeline', 'pipeline', { defaultAsc: true })}
@@ -357,14 +357,16 @@ export default function RecruitingView() {
                       </td>
                       <td className="num">{r.positionRank || '—'}</td>
                       <td className="num">{r.nationalRank || '—'}</td>
+                      {/* One chip keeps the column narrow; hover lists every edge. */}
                       <td className="cell-clip" title={r.edges.join(', ')}>
-                        {r.edges.length
-                          ? r.edges.map((e) => (
-                              <span key={e} className="edge">
-                                {e}
-                              </span>
-                            ))
-                          : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                        {r.edges.length ? (
+                          <>
+                            <span className="edge">{r.edges[0]}</span>
+                            {r.edges.length > 1 && <span className="edge">+{r.edges.length - 1}</span>}
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--ink-3)' }}>—</span>
+                        )}
                       </td>
                       <td className="num">{r.offers}</td>
                       <td>
