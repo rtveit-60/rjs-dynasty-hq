@@ -1457,8 +1457,8 @@ table.tbl {
 }
 
 .q.gem {
-  color: var(--hot);
-  background: color-mix(in srgb, var(--team) 22%, transparent);
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 14%, transparent);
   border: 0;
   padding: 2px 8px 1px;
 }
@@ -1931,6 +1931,11 @@ table.tbl.tbl-wide {
   background: color-mix(in srgb, var(--team) 22%, transparent);
   color: var(--hot);
   white-space: nowrap;
+}
+
+.btag.gem {
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+  color: var(--good);
 }
 
 .btag.bust {

@@ -346,14 +346,17 @@ export default function RecruitingView() {
                           {spaceOut(r.homeState)}
                           {board === 'portal' && r.classType !== 'HS' ? ` · ${r.classType}` : ''}
                         </span>
-                        {r.quality === 'GEM' && <span className="btag">Gem</span>}
+                        {r.quality === 'GEM' && <span className="btag gem">Gem</span>}
                         {r.quality === 'BUST' && <span className="btag bust">Bust</span>}
                       </td>
                       <td>
                         <span className="pos-tag">{recruitPos(r.position)}</span>
                       </td>
                       <td>
-                        <span className="stars-cell">{stars(r.stars).slice(0, r.stars)}</span>
+                        <span className="stars-cell" title={`${r.stars} stars`}>
+                          {stars(r.stars).slice(0, r.stars)}
+                          <span className="off">{stars(r.stars).slice(r.stars)}</span>
+                        </span>
                       </td>
                       <td>
                         <span className={ovrTier(r.overall)}>{r.overall}</span>

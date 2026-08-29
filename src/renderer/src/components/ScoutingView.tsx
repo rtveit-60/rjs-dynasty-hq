@@ -378,7 +378,10 @@ export default function ScoutingView({
                       onClick={() => setOpenRow(openRow === r.row ? null : r.row)}
                     >
                       <td>
-                        <span className="stars-cell">{stars(r.stars).slice(0, r.stars)}</span>
+                        <span className="stars-cell" title={`${r.stars} stars`}>
+                          {stars(r.stars).slice(0, r.stars)}
+                          <span className="off">{stars(r.stars).slice(r.stars)}</span>
+                        </span>
                       </td>
                       <td>
                         {r.quality === 'GEM' && <span className="q gem">GEM</span>}

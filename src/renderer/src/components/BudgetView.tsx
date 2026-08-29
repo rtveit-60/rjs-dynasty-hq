@@ -135,7 +135,10 @@ export default function BudgetView({ school }: { school: School }) {
                         <NameLink req={{ kind: 'player', row: t.playerRow }}>{t.name}</NameLink>
                       </td>
                       <td>
-                        <span className="stars-cell">{stars(t.stars).slice(0, t.stars)}</span>
+                        <span className="stars-cell" title={`${t.stars} stars`}>
+                          {stars(t.stars).slice(0, t.stars)}
+                          <span className="off">{stars(t.stars).slice(t.stars)}</span>
+                        </span>
                       </td>
                       <td className="num">{t.nilOffer}</td>
                       <td className="num">{t.nilExpectation}</td>
