@@ -36,6 +36,18 @@ yards, awards, bowls, rivalry names). A template that names a token the event
 cannot fill never renders — nothing is invented, ever. Award names come from
 the game's own `AwardTypeEnumTableEntry` via `src/shared/awards.ts`.
 
+Two hard bans on top of that (added 2026-08-29 after review):
+
+1. **Never fabricate a quote.** No template may put words in the mouth of a
+   coach, player or anyone else from the save — no `{COACH} said "…"`, no
+   curly-quoted speech at all. Personalities may state their *own* opinions in
+   their own voice; they may never report speech nobody gave.
+   `scripts/media-check.ts` scans every generated line for curly quotes and
+   fails on any hit.
+2. **No contentless filler.** Every phrase must carry the event: a template
+   with no token and no event-specific claim ("Let's get to it") does not
+   ship. If a line could run under any story unchanged, it's filler.
+
 ## Coverage map
 
 | Beat | Trigger | Angle banks |
@@ -56,11 +68,23 @@ the game's own `AwardTypeEnumTableEntry` via `src/shared/awards.ts`.
 
 ## The press corps
 
-Fictional, always (house rule). The corps in `ecosystem.ts` covers the insider
-(terse, sourced), the wire recap writer, the analytics desk, the carousel
-tracker, the talk-radio shouter and his player-defending co-host, beat
-writers, the anonymous chaos accounts — plus two additions from this pass:
-**Chuck Dooley** of The Tap (the guy at the game, unfiltered) and **Marty
-Fontaine** of The Fontaine Files (urbane wordplay host). Routing per event
-lives in `EVENT_ROUTING`: a scoop breaks it, follow-ups file, takes arrive
-late, and rumors occasionally front-run a firing.
+Fictional, always (house rule). The corps runs 100+ profiles in two halves:
+
+- **The article desks** (`press.ts`, ~70 reporters): bylined staff for every
+  masthead — each with a name, handle, role, beats and a personal tone. A
+  story's byline is picked from the outlet's staff covering that beat, and the
+  *reporter's* tone (not the outlet's) chooses which templates the piece
+  draws, so two writers at the same desk read differently. Every article the
+  wire publishes carries a byline.
+- **The posting voices** (`ecosystem.ts`, ~36 personalities): the insider
+  (terse, sourced), the wire recap writer, the analytics desk, the carousel
+  tracker, the talk-radio shouter and his player-defending co-host, beat
+  writers, the anonymous chaos accounts, **Chuck Dooley** of The Tap (the guy
+  at the game, unfiltered) and **Marty Fontaine** of The Fontaine Files
+  (urbane wordplay host). Routing per event lives in `EVENT_ROUTING`: a scoop
+  breaks it, follow-ups file, takes arrive late, and rumors occasionally
+  front-run a firing.
+
+In the app the two halves live on separate surfaces: **The Wire** is the
+article feed (click any story for the full write-up in the reader), and
+**Social** is the posting timeline.

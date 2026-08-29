@@ -52,3 +52,20 @@ console.log(`\nidempotence: second pass produced ${dupes.length} unseen events (
 console.log(`ledger entries used this cycle: ${Object.keys(incremental.state?.variety?.used ?? {}).length}`);
 const heads = incremental.events.filter((e) => e.format !== 'post').map((e) => e.headline);
 console.log(`headline uniqueness: ${new Set(heads).size}/${heads.length} unique`);
+
+// Press corps: 100+ profiles across the article desks and the posting voices,
+// every article bylined, quick write-ups multi-paragraph.
+const { REPORTERS } = await import('../src/main/media/press.ts');
+const { PERSONALITIES } = await import('../src/main/media/ecosystem.ts');
+const corps = REPORTERS.length + Object.keys(PERSONALITIES).length;
+console.log(`press corps: ${REPORTERS.length} desk reporters + ${Object.keys(PERSONALITIES).length} posting voices = ${corps} (want 100+)`);
+if (corps < 100) throw new Error('press corps under 100 profiles');
+const arts = [...baseline.events, ...incremental.events].filter((e) => e.format !== 'post');
+const bylined = arts.filter((e) => e.byline?.name).length;
+const multiPara = arts.filter((e) => e.body.length >= 2).length;
+console.log(`articles bylined: ${bylined}/${arts.length}; multi-paragraph: ${multiPara}/${arts.length}`);
+const badLines = [...baseline.events, ...incremental.events].filter(
+  (e) => /[“”]/.test(e.headline) || e.body.some((p) => /[“”]/.test(p))
+);
+console.log(`fabricated-quote scan (curly quotes anywhere): ${badLines.length} hits (want 0)`);
+if (badLines.length) for (const e of badLines.slice(0, 5)) console.log('  !!', e.headline);

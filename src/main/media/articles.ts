@@ -16,6 +16,7 @@ import { AWARD_NAMES } from '../../shared/awards.ts';
 import type { MediaContext } from './engine.ts';
 import { BEATS, DEKS, HEADLINES } from './banks.ts';
 import { sayFresh, type VarietyLedger } from './voices.ts';
+import { reporterFor } from './press.ts';
 
 export type RawEvent =
   | { kind: 'userGame'; id: string; game: GameInfo; rivalryName?: string | null; ctx: MediaContext }
@@ -120,7 +121,27 @@ function rankedLabel(t: TeamInfo | undefined): string {
   return t.rank > 0 && t.rank <= 25 ? `No. ${t.rank} ${t.longName}` : t.longName;
 }
 
-function base(r: RawEvent, priority: number, aboutUser: boolean, tags: string[]) {
+/** Which desk covers each event family, for byline assignment. */
+const BEAT_OF: Record<RawEvent['kind'], string> = {
+  userGame: 'games',
+  bigGame: 'games',
+  pollMove: 'polls',
+  commit: 'recruiting',
+  coachChange: 'coaching',
+  rosterMove: 'coaching',
+  hotSeat: 'coaching',
+  seasonSoFar: 'feature',
+  statLine: 'numbers',
+  streak: 'feature',
+  weeklyAward: 'awards',
+  awardShow: 'awards',
+  awardWin: 'awards',
+  draftPick: 'draft'
+};
+
+function base(r: RawEvent, priority: number, aboutUser: boolean, tags: string[], beat?: string) {
+  const outlet = pickArr(AFFINITY[r.kind], r.id);
+  const rep = reporterFor(outlet, beat ?? BEAT_OF[r.kind], hash(`${r.id}:rep`));
   return {
     id: r.id,
     createdAt: Date.now(),
@@ -130,7 +151,9 @@ function base(r: RawEvent, priority: number, aboutUser: boolean, tags: string[])
     priority,
     aboutUser,
     tags,
-    outlet: pickArr(AFFINITY[r.kind], r.id)
+    outlet,
+    byline: rep ? { name: rep.name, handle: rep.handle, role: rep.role, outletName: '' } : undefined,
+    tone: rep?.tone ?? OUTLET_TONE[outlet]
   };
 }
 
@@ -222,9 +245,10 @@ function gameStory(
     r,
     isUser ? (userWon ? 92 : 90) + (g.gotw ? 4 : 0) + (natty ? 8 : 0) : 50 + (g.gotw ? 10 : 0) + (upset ? 8 : 0),
     isUser,
-    [home?.longName ?? '', away?.longName ?? '', bowl || playoff || natty ? 'Postseason' : 'Results']
+    [home?.longName ?? '', away?.longName ?? '', bowl || playoff || natty ? 'Postseason' : 'Results'],
+    natty || playoff || bowl ? 'postseason' : 'games'
   );
-  const tone = OUTLET_TONE[b.outlet];
+  const tone = b.tone;
 
   const headline = head(
     ledger,
@@ -272,13 +296,25 @@ function gameStory(
     p2.push('Expect the poll voters to take notice.');
   }
 
+  const p3: string[] = [];
+  if (g.overtime) p3.push(beat(ledger, 'otColor', r.id, tokens));
+  else if (margin >= 24) p3.push(beat(ledger, 'marginWide', r.id, tokens));
+  else if (margin <= 8) p3.push(beat(ledger, 'marginTight', r.id, tokens));
+  if ((other?.rank ?? 0) > 0 && (other?.rank ?? 99) <= 25)
+    p3.push(
+      beat(ledger, isUser && !userWon ? 'rankedOppLoss' : 'rankedOpp', r.id, {
+        ...tokens,
+        RANKEDOPP: `No. ${other!.rank} ${other!.longName}`
+      })
+    );
+
   return {
     ...b,
     week: g.week,
     type: r.kind,
     headline,
     dek: dekLine,
-    body: [p1.join(' '), p2.join(' ')].filter(Boolean)
+    body: [p1.join(' '), p2.join(' '), p3.join(' ')].filter(Boolean)
   };
 }
 
@@ -300,13 +336,14 @@ function pollStory(r: Extract<RawEvent, { kind: 'pollMove' }>, ledger: VarietyLe
   return {
     ...b,
     type: 'pollMove',
-    headline: head(ledger, angle, r.id, tokens, OUTLET_TONE[b.outlet], `${name} moves in the poll`),
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${name} moves in the poll`),
     dek: dek(ledger, 'polls', r.id, tokens),
     body: [
       `${name} ${rising ? 'moved up' : r.to === 0 ? 'fell out of' : 'slid in'} the media poll this week${
         r.from > 0 && r.to > 0 ? `, going from No. ${r.from} to No. ${r.to}` : ''
-      }. The ${team?.nickName ?? 'program'} sit at ${rec.w}–${rec.l} on the year.`
-    ]
+      }. The ${team?.nickName ?? 'program'} sit at ${rec.w}–${rec.l} on the year.`,
+      beat(ledger, 'pollClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
@@ -346,9 +383,9 @@ function commitStory(r: Extract<RawEvent, { kind: 'commit' }>, ledger: VarietyLe
   return {
     ...b,
     type: 'commit',
-    headline: head(ledger, angle, r.id, tokens, OUTLET_TONE[b.outlet], `${rec.name} commits to ${school}`),
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${rec.name} commits to ${school}`),
     dek: dek(ledger, 'recruiting', r.id, tokens),
-    body: [p1.join(' '), p2.join(' ')].filter(Boolean)
+    body: [p1.join(' '), p2.join(' '), beat(ledger, 'recruitClose', r.id, tokens)].filter(Boolean)
   };
 }
 
@@ -382,11 +419,12 @@ function coachStory(r: Extract<RawEvent, { kind: 'coachChange' }>, ledger: Varie
   return {
     ...b,
     type: 'coachChange',
-    headline: head(ledger, angle, r.id, tokens, OUTLET_TONE[b.outlet], `${name} names ${r.incoming} ${roleTxt}`),
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${name} names ${r.incoming} ${roleTxt}`),
     dek: dek(ledger, 'coaching', r.id, tokens),
     body: [
-      `${name} has a new ${roleTxt}: ${r.incoming} takes over after ${departure}. How quickly the transition settles may define the ${team?.nickName ?? 'program'}'s next stretch.`
-    ]
+      `${name} has a new ${roleTxt}: ${r.incoming} takes over after ${departure}. How quickly the transition settles may define the ${team?.nickName ?? 'program'}'s next stretch.`,
+      beat(ledger, 'coachClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
@@ -408,13 +446,14 @@ function hotSeatStory(r: Extract<RawEvent, { kind: 'hotSeat' }>, ledger: Variety
   return {
     ...b,
     type: 'hotSeat',
-    headline: head(ledger, 'hotSeat', r.id, tokens, OUTLET_TONE[b.outlet], `${r.coach} is on the hot seat at ${name}`),
+    headline: head(ledger, 'hotSeat', r.id, tokens, b.tone, `${r.coach} is on the hot seat at ${name}`),
     dek: dek(ledger, 'coaching', r.id, tokens),
     body: [
       `${r.coach}'s job security at ${name} has slipped to ${r.pct}% — hot seat territory by any measure. The ${
         team?.nickName ?? 'program'
-      } sit at ${rec.w}–${rec.l}, and ${r.yearsRemaining <= 1 ? 'his deal is up after this season' : `${r.yearsRemaining} years remain on his deal`}.${patience}`
-    ]
+      } sit at ${rec.w}–${rec.l}, and ${r.yearsRemaining <= 1 ? 'his deal is up after this season' : `${r.yearsRemaining} years remain on his deal`}.${patience}`,
+      beat(ledger, 'hotSeatClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
@@ -439,10 +478,11 @@ function rosterStory(r: Extract<RawEvent, { kind: 'rosterMove' }>, ledger: Varie
     OUTC: String(dep.length),
     INC: String(arr.length)
   };
+  const b = base(r, 46, true, [name, 'Roster']);
   return {
-    ...base(r, 46, true, [name, 'Roster']),
+    ...b,
     type: 'rosterMove',
-    headline: head(ledger, 'rosterChurn', r.id, tokens, undefined, `Roster moves at ${name}`),
+    headline: head(ledger, 'rosterChurn', r.id, tokens, b.tone, `Roster moves at ${name}`),
     dek: 'The depth chart will look different on Saturday.',
     body: [bits.join(' ')]
   };
@@ -484,10 +524,11 @@ function sofarStory(r: Extract<RawEvent, { kind: 'seasonSoFar' }>, ledger: Varie
     (next ? `Next up: ${next.name} in Week ${next.week}. ` : '') +
       `${team.headCoach ? `${team.headCoach}'s` : 'The'} squad controls its own story from here.`
   ];
+  const b = base(r, 100, true, [team.longName, 'Feature']);
   return {
-    ...base(r, 100, true, [team.longName, 'Feature']),
+    ...b,
     type: 'seasonSoFar',
-    headline: head(ledger, 'seasonSoFar', r.id, tokens, undefined, `${team.longName}: the season so far`),
+    headline: head(ledger, 'seasonSoFar', r.id, tokens, b.tone, `${team.longName}: the season so far`),
     dek: dek(ledger, 'feature', r.id, tokens),
     body
   };
@@ -512,11 +553,12 @@ function statLineStory(r: Extract<RawEvent, { kind: 'statLine' }>, ledger: Varie
     ...b,
     week: r.week,
     type: 'statLine',
-    headline: head(ledger, angle, r.id, tokens, OUTLET_TONE[b.outlet], `${r.name} goes for ${tokens.YDS} ${word} yards`),
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${r.name} goes for ${tokens.YDS} ${word} yards`),
     dek: dek(ledger, 'numbers', r.id, tokens),
     body: [
-      `${r.name} went for ${tokens.YDS} ${word} yards in Week ${r.week} against ${opp?.longName ?? 'the opposition'} — the kind of afternoon that moves award ballots.`
-    ]
+      `${r.name} went for ${tokens.YDS} ${word} yards in Week ${r.week} against ${opp?.longName ?? 'the opposition'} — the kind of afternoon that moves award ballots.`,
+      beat(ledger, 'statClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
@@ -531,14 +573,16 @@ function streakStory(r: Extract<RawEvent, { kind: 'streak' }>, ledger: VarietyLe
     W: String(r.wins),
     REC: `${r.wins}–${r.losses}`
   };
+  const b = base(r, 76, true, [team.longName, 'Feature']);
   return {
-    ...base(r, 76, true, [team.longName, 'Feature']),
+    ...b,
     type: 'streak',
-    headline: head(ledger, angle, r.id, tokens, undefined, `${team.longName} has won ${r.n} straight`),
+    headline: head(ledger, angle, r.id, tokens, b.tone, `${team.longName} has won ${r.n} straight`),
     dek: dek(ledger, 'feature', r.id, tokens),
     body: [
-      `${team.longName} has now won ${r.n} in a row${r.unbeaten ? ' and remains unbeaten' : ''}. Streaks like this change how a season is talked about — and how it is scheduled against.`
-    ]
+      `${team.longName} has now won ${r.n} in a row${r.unbeaten ? ' and remains unbeaten' : ''}. Streaks like this change how a season is talked about — and how it is scheduled against.`,
+      beat(ledger, 'streakClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
@@ -550,11 +594,12 @@ function weeklyAwardStory(r: Extract<RawEvent, { kind: 'weeklyAward' }>, ledger:
   return {
     ...b,
     type: 'weeklyAward',
-    headline: head(ledger, 'weeklyAward', r.id, tokens, OUTLET_TONE[b.outlet], `${a.name} named ${honor}`),
+    headline: head(ledger, 'weeklyAward', r.id, tokens, b.tone, `${a.name} named ${honor}`),
     dek: dek(ledger, 'awards', r.id, tokens),
     body: [
-      `${a.name} was named ${honor} for Week ${a.week}, the league announced. The ${a.teamName} ${a.position} headlines this week's honors list.`
-    ]
+      `${a.name} was named ${honor} for Week ${a.week}, the league announced. The ${a.teamName} ${a.position} headlines this week's honors list.`,
+      beat(ledger, 'weeklyClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
@@ -566,7 +611,8 @@ function awardShowStory(r: Extract<RawEvent, { kind: 'awardShow' }>, ledger: Var
   const tokens: Tokens = {
     NAME: heisman?.name ?? '',
     TEAM: heisman?.teamName ?? '',
-    AWARD: AWARD_NAMES['HEISMAN'] ?? 'Heisman'
+    AWARD: AWARD_NAMES['HEISMAN'] ?? 'Heisman',
+    YEAR: String(r.year)
   };
   const marquee = ['BEST_QB', 'BEST_RB', 'BEST_REC', 'BEST_DEF_1']
     .map((k) => {
@@ -579,11 +625,12 @@ function awardShowStory(r: Extract<RawEvent, { kind: 'awardShow' }>, ledger: Var
   return {
     ...b,
     type: 'awardShow',
-    headline: head(ledger, 'awardShow', r.id, tokens, OUTLET_TONE[b.outlet], `${tokens.NAME} wins the ${tokens.AWARD}`),
+    headline: head(ledger, 'awardShow', r.id, tokens, b.tone, `${tokens.NAME} wins the ${tokens.AWARD}`),
     dek: dek(ledger, 'awards', r.id, tokens),
     body: [
       `${heisman?.name ?? 'The winner'} of ${heisman?.teamName ?? ''} took home the ${tokens.AWARD} at the national awards show for the ${r.year} season.`,
-      marquee ? `Elsewhere on the stage — ${marquee}.` : ''
+      marquee ? `Elsewhere on the stage — ${marquee}.` : '',
+      beat(ledger, 'awardShowClose', r.id, tokens)
     ].filter(Boolean)
   };
 }
@@ -598,11 +645,12 @@ function awardWinStory(r: Extract<RawEvent, { kind: 'awardWin' }>, ledger: Varie
   return {
     ...b,
     type: 'awardWin',
-    headline: head(ledger, 'awardWin', r.id, tokens, OUTLET_TONE[b.outlet], `${w.name} wins the ${award}`),
+    headline: head(ledger, 'awardWin', r.id, tokens, b.tone, `${w.name} wins the ${award}`),
     dek: dek(ledger, 'awards', r.id, tokens),
     body: [
-      `${w.name}${w.position ? `, the ${w.teamName} ${w.position},` : ''} won the ${award} for the ${r.year} season — a program-level moment as much as a personal one.`
-    ]
+      `${w.name}${w.position ? `, the ${w.teamName} ${w.position},` : ''} won the ${award} for the ${r.year} season — a program-level moment as much as a personal one.`,
+      beat(ledger, 'awardWinClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 
@@ -620,11 +668,12 @@ function draftPickStory(r: Extract<RawEvent, { kind: 'draftPick' }>, ledger: Var
   return {
     ...b,
     type: 'draftPick',
-    headline: head(ledger, 'draftPick', r.id, tokens, OUTLET_TONE[b.outlet], `${r.name} drafted in round ${r.round}`),
+    headline: head(ledger, 'draftPick', r.id, tokens, b.tone, `${r.name} drafted in round ${r.round}`),
     dek: dek(ledger, 'feature', r.id, tokens),
     body: [
-      `${r.name}, the ${ctx.userName} ${r.position}, was selected in the ${tokens.ROUND} round of the NFL draft. Development stories like his are how programs sell the next class.`
-    ]
+      `${r.name}, the ${ctx.userName} ${r.position}, was selected in the ${tokens.ROUND} round of the NFL draft. Development stories like his are how programs sell the next class.`,
+      beat(ledger, 'draftClose', r.id, tokens)
+    ].filter(Boolean)
   };
 }
 

@@ -856,6 +856,8 @@ export interface MediaEvent {
   format?: 'article' | 'post';
   /** Set on posts: the fictional personality who wrote it. */
   byline?: { name: string; handle: string; role: string; outletName: string };
+  /** Template tone the piece was written in (the reporter's voice). */
+  tone?: string;
 }
 
 export interface Snapshot {

@@ -60,10 +60,12 @@ const AWARD_BAND: { enumKey: string; cat: 'total' | 'pass' | 'rush' | 'recv' }[]
  */
 export default function MediaHQ({
   media,
-  onOpenWire
+  onOpenWire,
+  onOpenStory
 }: {
   media: MediaEvent[];
   onOpenWire: () => void;
+  onOpenStory?: (e: MediaEvent) => void;
 }) {
   const snapshot = useHQ((s) => s.snapshot);
   const parsedAt = useHQ((s) => s.snapshot?.parsedAt);
@@ -173,7 +175,7 @@ export default function MediaHQ({
             <div className="hq-scroll" ref={railRef}>
               {media.slice(0, 8).map((e) => (
                 <div key={e.id} className="hq-card">
-                  <Story e={e} lead={false} />
+                  <Story e={e} lead={false} onOpen={onOpenStory} />
                 </div>
               ))}
             </div>

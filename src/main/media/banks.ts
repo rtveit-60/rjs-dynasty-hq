@@ -395,7 +395,13 @@ export const DEKS: Record<string, Template[]> = {
     { t: 'Momentum on the trail.' },
     { t: 'The future got faster.' },
     { t: 'Signed, sealed, celebrated.' },
-    { t: 'Rooms like this are built one yes at a time.' }
+    { t: 'Rooms like this are built one yes at a time.' },
+    { t: 'Another domino falls the right way.' },
+    { t: 'The board shrinks; the class grows.' },
+    { t: 'A recruitment that ran quiet ends loud.' },
+    { t: 'Add it to the February ledger.' },
+    { t: 'The staff’s calls kept getting answered.' },
+    { t: 'One more building block, delivered.' }
   ],
   coaching: [
     { t: 'The carousel spins.' },
@@ -408,13 +414,22 @@ export const DEKS: Record<string, Template[]> = {
     { t: 'Hardware season.' },
     { t: 'The voters got this one right.' },
     { t: 'Put it in the trophy case.' },
-    { t: 'Individual shine, team foundation.' }
+    { t: 'Individual shine, team foundation.' },
+    { t: 'A season’s work, condensed to a name on a trophy.' },
+    { t: 'The ballots are in.' },
+    { t: 'Recognition, delivered on schedule.' },
+    { t: 'One more line for the media guide.' },
+    { t: 'The campaign ends the way campaigns hope to.' },
+    { t: 'Voted on, argued over, settled.' }
   ],
   numbers: [
     { t: 'The box score reads like a typo.' },
     { t: 'Numbers that need a second look.' },
     { t: 'Stat sheets remember.' },
-    { t: 'That is production you game-plan around.' }
+    { t: 'That is production you game-plan around.' },
+    { t: 'A stat line that will follow him all season.' },
+    { t: 'The kind of afternoon charts are made of.' },
+    { t: 'Volume and efficiency, same box score.' }
   ],
   feature: [
     { t: 'Catching the wire up on everything in {CITY}.' },
@@ -450,5 +465,93 @@ export const BEATS: Record<string, Template[]> = {
   gotw: [
     { t: 'The matchup had top billing as the Game of the Week, and it delivered an audience to match.' },
     { t: 'Billed as the weekend’s main event, it played like one.' }
+  ],
+  marginWide: [
+    { t: 'A {MARGIN}-point margin doesn’t leave much to argue about.' },
+    { t: 'The scoreboard read {SCORE}, and the gap was every bit of it.' },
+    { t: 'Winning by {MARGIN} travels well: voters, recruits and opposing staffs all read the same number.' },
+    { t: 'There are close calls, and then there are afternoons like this one.' },
+    { t: 'Margins like {MARGIN} are how a team tells the country it isn’t asking permission.' }
+  ],
+  marginTight: [
+    { t: 'The final margin: {MARGIN}. Games this tight turn on a handful of snaps.' },
+    { t: 'A one-score finish, and every call down the stretch gets replayed all week.' },
+    { t: 'At {MARGIN} points, this one stays in the rewatch rotation.' },
+    { t: 'Nobody left early. A {SCORE} final doesn’t allow it.' },
+    { t: 'One possession separated them at the end. That’s the whole story of the sport some weeks.' }
+  ],
+  otColor: [
+    { t: 'Sixty minutes weren’t enough. The extra ones decided it.' },
+    { t: 'It took overtime to separate them, which is its own kind of compliment to both.' },
+    { t: 'Free football, as the broadcast calls it — expensive for one side.' },
+    { t: 'Overtime strips a game to nerve and execution, and {SCORE} is where it landed.' }
+  ],
+  rankedOpp: [
+    { t: 'Beating {RANKEDOPP} is the kind of line a resume gets built on.' },
+    { t: '{RANKEDOPP} came in as the measuring stick. Measurements were taken.' },
+    { t: 'Results against {RANKEDOPP} carry into December. This one will too.' },
+    { t: 'Wins over teams ranked where {RANKEDOPP} sits are the currency the committee actually counts.' }
+  ],
+  rankedOppLoss: [
+    { t: 'Losing to {RANKEDOPP} is survivable. The schedule will offer chances to prove it.' },
+    { t: 'Against {RANKEDOPP}, the gap showed. The film will say exactly where.' },
+    { t: 'No shame in a loss to {RANKEDOPP} — but the margin for the rest of the year just shrank.' }
+  ],
+  pollClose: [
+    { t: 'Polls are arguments, and this week’s ballot made {TEAM}’s case out loud.' },
+    { t: 'Voters moved {TEAM}. The schedule gets the next word.' },
+    { t: 'The committee era taught everyone the same lesson: where {TEAM} sits now matters less than where it finishes.' },
+    { t: 'Rankings are a snapshot, not a verdict — but {TEAM} will take the picture.' }
+  ],
+  recruitClose: [
+    { t: 'Recruiting is inventory, and {TEAM} just added a {STARS}-star {POS} to the shelf.' },
+    { t: 'Classes are built one name at a time. {TEAM} crossed a big one off the board.' },
+    { t: 'A {STARS}-star pledge changes how the rest of the {TEAM} board gets worked.' },
+    { t: 'The {POS} room at {TEAM} got more interesting today.' },
+    { t: 'Every February story starts with a day like this one in the {TEAM} class.' }
+  ],
+  coachClose: [
+    { t: 'Transitions are told in recruiting weekends and quiet staff-room hours. {INCOMING}’s starts now.' },
+    { t: 'New {ROLETXT} hires get one honeymoon. {INCOMING}’s begins immediately.' },
+    { t: 'The whiteboard belongs to {INCOMING} now. The results will belong to everyone.' },
+    { t: 'Staff changes are bets on culture as much as scheme, and {TEAM} just placed one.' }
+  ],
+  hotSeatClose: [
+    { t: 'Hot seats have their own physics, and {COACH} is living the math.' },
+    { t: 'The buyout arithmetic is now part of every {TEAM} conversation, spoken or not.' },
+    { t: 'Administrators say all the right things until the day they don’t. {COACH} knows the calendar.' },
+    { t: 'Every remaining game on the {TEAM} schedule is now also a referendum.' }
+  ],
+  statClose: [
+    { t: 'Numbers like {YDS} don’t hide. Award voters and opposing coordinators both keep them.' },
+    { t: '{NAME}’s tape from this one becomes required viewing.' },
+    { t: 'One afternoon, {YDS} yards. Seasons turn on games like it.' },
+    { t: 'Defensive staffs game-plan the next month around outputs like {YDS}.' }
+  ],
+  streakClose: [
+    { t: 'Streaks are schedule plus health plus a little luck. {N} in a row means all three held.' },
+    { t: 'Nobody circles {TEAM} on a schedule anymore. They highlight it.' },
+    { t: 'Win {N} straight and the conversation changes rooms — from local radio to national desks.' },
+    { t: 'Every streak carries its own pressure. {TEAM} wears it well at {REC}.' }
+  ],
+  weeklyClose: [
+    { t: 'Weekly hardware is small, but it stacks. {NAME}’s name is in the league’s ledger now.' },
+    { t: '{HONOR} lists are where award campaigns start, and {NAME} just made one.' },
+    { t: 'The film made the case. The league office just signed it.' }
+  ],
+  awardShowClose: [
+    { t: 'Trophy night closes the book on {YEAR}. The arguments it settles last longer than the ones it starts.' },
+    { t: 'Every award show writes the short version of a season. {YEAR}’s is now on the record.' },
+    { t: 'The {YEAR} season has its named canon.' }
+  ],
+  awardWinClose: [
+    { t: 'Hardware recruits. Every {TEAM} pitch this winter now includes the {AWARD}.' },
+    { t: 'The {AWARD} goes in the case. The standard it sets stays in the building.' },
+    { t: 'Individual trophies are program arguments — {TEAM} just gained one.' }
+  ],
+  draftClose: [
+    { t: 'Draft calls are the receipts of player development, and {TEAM} just cashed one.' },
+    { t: 'Draft night is the last box score of a college career. {NAME}’s reads well.' },
+    { t: 'The next {TEAM} recruiting weekend will mention {NAME}’s name early and often.' }
   ]
 };

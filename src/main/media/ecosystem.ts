@@ -178,9 +178,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     volatility: 3,
     toneTags: ['connective', 'neutral'],
     phrases: [
-      "Big show today. {TEAM}'s season is the story at the top.",
+      'The rundown leads with {TEAM} tonight. It earned the slot.',
       'Nobody on this desk picked {TEAM}. Nobody.',
-      "Let's get to it.",
+      'We spent the whole first segment on {TEAM}. There was that much to cover.',
       "Awards rundown at the top of the hour. {PLAYER} headlines."
     ]
   },
@@ -195,7 +195,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     volatility: 2,
     toneTags: ['immediate', 'factual'],
     phrases: [
-      '{COACH} told me at the half: “We’re not tackling. That’s it. That’s the whole thing.”',
+      'Halftime scene: {COACH} calm, the {TEAM} staff animated, nobody panicking.',
       '{TEAM}’s sideline as the clock hit zero: pure disbelief.'
     ]
   },
@@ -310,7 +310,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['wry', 'structural'],
     phrases: [
       '{TEAM} keeps drawing the late window and keeps winning it. Nobody out here is surprised.',
-      '{COACH} on the stretch run: “We’ll be fine.” For once he looked like he meant it.'
+      'The stretch run rewards teams that travel well. {TEAM} travels well.'
     ]
   },
   reed: {
@@ -359,7 +359,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       'Hearing {PLAYER} is expected to enter the portal. Not official yet.',
       '{PLAYER} ({POSITION}) is no longer with the {TEAM} program, per sources.',
-      'Portal is about to get busy. Buckle up.'
+      '{TEAM} losing {PLAYER} will move the portal market. Watch the next 48 hours.'
     ]
   },
   bell: {
@@ -376,7 +376,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
       '{RECRUIT}’s NIL package at {TEAM} is worth a reported {NIL}, with performance escalators.',
       'The number on {RECRUIT}: {NIL}. That’s what it takes now.',
       '{RECRUIT} wanted {NIL_ASK} and got {NIL}. Read into that what you will.',
-      'The money mattered here. It always matters now.'
+      'The money mattered in the {RECRUIT} decision. It always matters now.'
     ]
   },
   whitfield: {
@@ -423,7 +423,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['inverted pyramid', 'no flourish'],
     phrases: [
       '{TEAM} beat {OPPONENT} {SCORE} on Saturday.',
-      '“We just kept playing,” {COACH} said after {TEAM}’s {SCORE} win over {OPPONENT}.',
+      'Final from Week {WEEK}: {TEAM} {SCORE} over {OPPONENT}.',
       "{PLAYER} threw for {YDS} yards in {TEAM}’s Week {WEEK} game.",
       "{PLAYER} ran for {YDS} yards against {OPPONENT}.",
       "{PLAYER} was named {HONOR}.",
@@ -543,9 +543,9 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     volatility: 6,
     toneTags: ['genial', 'player-defensive'],
     phrases: [
-      "Cal, you've never been in that locker room in November. It's different.",
-      "I've played for a coach like that. You'd run through a wall for him.",
-      'Everybody wants a villain. Sometimes the other team is just better.',
+      "Cal, you've never been in a {TEAM} locker room in November. It's different.",
+      "I've played for coaches like {COACH}. You'd run through a wall for him.",
+      'Everybody wants a villain in the {TEAM} story. Sometimes the other team is just better.',
       "{PLAYER} winning the {AWARD} is what doing it the right way looks like."
     ]
   },
@@ -562,7 +562,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       '👀👀 something happening at {TEAM}',
       'Hearing movement around the {TEAM} program. Grain of salt.',
-      'Deleting this later',
+      '{TEAM} people know exactly what this is about. Deleting later.',
       "{AWARD} chatter: it’s {PLAYER}. hearing it everywhere 👀"
     ]
   },
@@ -610,7 +610,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['inflammatory', 'deniable'],
     phrases: [
       'What I’m hearing out of {TEAM} right now is not good. Not going to say more.',
-      'More on this tomorrow if I’m allowed'
+      '{TEAM}-adjacent. More tomorrow if I’m allowed.'
     ]
   },
   cfb_ledger: {
@@ -641,7 +641,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     phrases: [
       'Depth chart notes after the {TEAM} {ROLE} news. Changes coming.',
       'Practice observations: nothing about {RECRUIT}’s film was a surprise to this staff.',
-      'What the {TEAM} locker room was saying after the {SCORE} win.',
+      'Beat notebook after the {SCORE} win: depth notes and snap counts inside.',
       "{PLAYER} ({POSITION}) drafted in the {ROUND} round. The staff texted congratulations from the road.",
       "{PLAYER} takes {HONOR}. Nobody in that building is surprised."
     ]
@@ -717,7 +717,7 @@ export const PERSONALITIES: Record<string, MediaPersonality> = {
     toneTags: ['nostalgic', 'institutional memory'],
     phrases: [
       'I covered the 1989 team. This {TEAM} group reminds me of them — and this time in a good way.',
-      "They've had six coaches since I started. I've heard this press conference before.",
+      "I've heard this {TEAM} press conference before. The good ones sound different.",
       "The game's changed. Some of it for the better. Some of it not.",
       "A {ROUND}-round pick from this program. There was a time that was routine. It might be again."
     ]

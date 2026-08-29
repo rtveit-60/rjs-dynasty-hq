@@ -430,8 +430,17 @@ function createWindow(): void {
               await new Promise((r) => setTimeout(r, 1200));
             }
             for (const label of (process.env['HQ_CAPTURE_CLICK'] ?? '').split(',').filter(Boolean)) {
+              // Prefix match tolerates count badges inside the control ("THE WIRE 133").
               await win!.webContents.executeJavaScript(
-                `[...document.querySelectorAll('.filter,.tab,.btn')].find((b) => b.textContent.trim() === ${JSON.stringify(label.trim())})?.click()`
+                `[...document.querySelectorAll('.filter,.tab,.btn')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
+              );
+              await new Promise((r) => setTimeout(r, 700));
+            }
+            // HQ_CAPTURE_STORY=<n> opens the nth article card's reader.
+            const storyN = Number(process.env['HQ_CAPTURE_STORY'] ?? NaN);
+            if (Number.isFinite(storyN)) {
+              await win!.webContents.executeJavaScript(
+                `document.querySelectorAll('.story.openable')[${storyN}]?.click()`
               );
               await new Promise((r) => setTimeout(r, 700));
             }
