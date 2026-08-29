@@ -21,6 +21,7 @@ import {
   spaceOut,
   stars
 } from '../lib/format.ts';
+import BoardMark from './BoardMark.tsx';
 import InfoDot from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
@@ -392,7 +393,7 @@ export default function ScoutingView({
                       </td>
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
-                        {r.onBoard && <span className="fav" title="On your board">▣ </span>}
+                        {r.onBoard && <BoardMark />}
                         <NameLink req={{ kind: 'player', row: r.playerRow }}>{r.name}</NameLink>
                         <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
                           {' · '}

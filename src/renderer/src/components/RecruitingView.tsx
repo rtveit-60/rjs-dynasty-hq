@@ -14,6 +14,7 @@ import {
   stars
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import BoardMark from './BoardMark.tsx';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
@@ -32,8 +33,7 @@ type SortKey =
   | 'posrk'
   | 'natlrk'
   | 'edge'
-  | 'offers'
-  | 'board';
+  | 'offers';
 
 const DEV_ORDER: Record<string, number> = {
   Normal: 0,
@@ -51,7 +51,7 @@ const STAGE_ORDER: Record<string, number> = {
 };
 const BIG = Number.MAX_SAFE_INTEGER;
 const PAGE_SIZE = 200;
-const COLS = 12;
+const COLS = 11;
 
 const STAR_FILTERS = [
   { label: 'All', min: 0 },
@@ -136,8 +136,6 @@ export default function RecruitingView() {
           return (a.edges.length - b.edges.length) * dir || byName(a, b);
         case 'offers':
           return (a.offers - b.offers) * dir || byName(a, b);
-        case 'board':
-          return (Number(a.onBoard) - Number(b.onBoard)) * dir || byName(a, b);
         default:
           return 0;
       }
@@ -229,7 +227,9 @@ export default function RecruitingView() {
             Where your program holds a clear advantage over the schools actually pursuing the
             recruit: pipeline, pro potential, home state, or leading the race.
           </InfoRow>
-          <InfoRow term="Board">Already on your recruiting board.</InfoRow>
+          <InfoRow term="Crosshair">
+            The mark beside a name: that recruit is already on your recruiting board.
+          </InfoRow>
           <InfoRow term="The race">
             Every pursuing school and its influence, in the recruit's profile.
           </InfoRow>
@@ -325,7 +325,6 @@ export default function RecruitingView() {
                   {th('Pos Rk', 'posrk', { num: true, defaultAsc: true })}
                   {th('Edge', 'edge')}
                   {th('Offers', 'offers', { num: true })}
-                  {th('Board', 'board')}
                 </tr>
               </thead>
               <tbody>
@@ -340,6 +339,7 @@ export default function RecruitingView() {
                       </td>
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
+                        {r.onBoard && <BoardMark />}
                         <NameLink req={{ kind: 'player', row: r.playerRow }}>{r.name}</NameLink>
                         <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
                           {' · '}
@@ -383,13 +383,6 @@ export default function RecruitingView() {
                         )}
                       </td>
                       <td className="num">{r.offers}</td>
-                      <td>
-                        {r.onBoard ? (
-                          <span className="btag" title="On your recruiting board">▣ Board</span>
-                        ) : (
-                          <span style={{ color: 'var(--ink-3)' }}>—</span>
-                        )}
-                      </td>
                     </tr>
                     {openRow === r.row && <RecruitCardRow playerRow={r.playerRow} span={COLS} />}
                   </Fragment>

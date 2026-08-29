@@ -1496,6 +1496,14 @@ table.tbl {
   color: var(--hot);
 }
 
+.board-mark {
+  display: inline-block;
+  color: var(--hot);
+  margin-right: 6px;
+  vertical-align: -1px;
+  flex: none;
+}
+
 .team-logo {
   object-fit: contain;
   display: block;
