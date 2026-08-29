@@ -10,7 +10,12 @@ import { loadFranchise } from '../src/main/parser/franchise.ts';
 import { extractRecruitCard } from '../src/main/parser/recruit-card.ts';
 import { scoutRecruits } from '../src/main/parser/recruit-scout.ts';
 import { RATING_BY_FIELD, type ScoutCriterion } from '../src/shared/ratings.ts';
-import { POSITION_GROUPS, SUB_POSITIONS, positionsFor } from '../src/renderer/src/lib/format.ts';
+import {
+  RECRUIT_POS_OPTIONS,
+  recruitPos,
+  recruitPosPool,
+  recruitPositionsFor
+} from '../src/renderer/src/lib/format.ts';
 
 const savePath = process.argv[2] ?? 'samples/DYNASTY-DUKETOND-AUTOSAVE';
 const schoolFilter = (process.argv[3] ?? 'notre').toLowerCase();
@@ -42,45 +47,46 @@ const check = (name: string, ok: boolean, detail = '') => {
 const spaceOut = (raw: string) => raw.replace(/([a-z])([A-Z])/g, '$1 $2');
 function applyFilters(
   pool: ClassRecruit[],
-  o: { q?: string; group?: string; minStars?: number; edgeOnly?: boolean; openOnly?: boolean; boardOnly?: boolean },
+  o: { q?: string; pos?: string; minStars?: number; edgeOnly?: boolean; openOnly?: boolean; boardOnly?: boolean },
 ): ClassRecruit[] {
   const needle = (o.q ?? '').trim().toLowerCase();
-  const group = o.group ?? 'ALL';
+  const allowed = recruitPositionsFor(o.pos ?? 'ALL');
   const minStars = o.minStars ?? 0;
   return pool.filter((r) => {
     if (minStars && r.stars < minStars) return false;
-    if (group !== 'ALL' && !(POSITION_GROUPS[group] ?? []).includes(r.position)) return false;
+    if (allowed.length && !allowed.includes(r.position)) return false;
     if (o.edgeOnly && !r.edges.length) return false;
     if (o.openOnly && r.committedTo) return false;
     if (o.boardOnly && !r.onBoard) return false;
     if (needle) {
-      const hay = `${r.name} ${r.position} ${spaceOut(r.homeState)} ${spaceOut(r.pipeline)}`.toLowerCase();
+      const hay =
+        `${r.name} ${recruitPos(r.position)} ${recruitPosPool(r.position)} ${spaceOut(r.homeState)} ${spaceOut(r.pipeline)}`.toLowerCase();
       if (!hay.includes(needle)) return false;
     }
     return true;
   });
 }
 
-// ---- 1. Every position group returns only its own positions ----
-console.log('position groups:');
+// ---- 1. Every position option returns only its own positions ----
+console.log('position options:');
 const seenPositions = new Set(all.map((r) => r.position));
-for (const [group, positions] of Object.entries(POSITION_GROUPS)) {
-  const got = applyFilters(all, { group });
+for (const { key, positions } of RECRUIT_POS_OPTIONS) {
+  const got = applyFilters(all, { pos: key });
   const bad = got.filter((r) => !positions.includes(r.position));
   const badList = [...new Set(bad.map((r) => r.position))].join(', ');
   check(
-    `${group.padEnd(3)} (${String(got.length).padStart(4)} rows) → ${positions.join('/')}`,
+    `${key.padEnd(4)} (${String(got.length).padStart(4)} rows) → ${positions.join('/')}`,
     bad.length === 0,
     `${bad.length} wrong: ${badList}`,
   );
 }
 
-// ---- 2. No position falls through every group ----
-const grouped = new Set(Object.values(POSITION_GROUPS).flat());
+// ---- 2. No position falls through every option ----
+const grouped = new Set(RECRUIT_POS_OPTIONS.flatMap((o) => o.positions));
 const orphans = [...seenPositions].filter((p) => !grouped.has(p));
 console.log('\ncoverage:');
 check(
-  `every position in the class belongs to a group`,
+  `every position in the class belongs to an option`,
   orphans.length === 0,
   `unreachable via filters: ${orphans.join(', ')}`,
 );
@@ -106,18 +112,28 @@ if (sample) {
   const term = sample.name.split(' ')[1] ?? sample.name;
   const got = applyFilters(all, { q: term });
   check(`"${term}" (${got.length} rows) all contain the term`, got.every((r) =>
-    `${r.name} ${r.position} ${spaceOut(r.homeState)} ${spaceOut(r.pipeline)}`.toLowerCase().includes(term.toLowerCase()),
+    `${r.name} ${recruitPos(r.position)} ${recruitPosPool(r.position)} ${spaceOut(r.homeState)} ${spaceOut(r.pipeline)}`
+      .toLowerCase()
+      .includes(term.toLowerCase()),
   ));
   check(`"${term}" includes the recruit it came from`, got.some((r) => r.row === sample.row));
 }
+// Searching a main type must surface its side positions: "OT" finds LT and RT.
+const otHits = applyFilters(all, { q: 'ot' });
+const otSides = new Set(otHits.map((r) => r.position));
+check(
+  `"ot" reaches tackles on both sides (${otHits.length} rows)`,
+  ['LT', 'RT'].every((p) => !seenPositions.has(p) || otSides.has(p)),
+  `sides seen: ${[...otSides].join(', ')}`,
+);
 
 // ---- 6. Combined filters compose ----
 console.log('\ncombinations:');
-for (const group of ['QB', 'RB', 'DL', 'DB']) {
-  const got = applyFilters(all, { group, minStars: 4, openOnly: true });
+for (const pos of ['QB', 'HB', 'EDGE', 'CB']) {
+  const got = applyFilters(all, { pos, minStars: 4, openOnly: true });
   check(
-    `${group} + 4★+ + uncommitted (${got.length} rows)`,
-    got.every((r) => POSITION_GROUPS[group].includes(r.position) && r.stars >= 4 && !r.committedTo),
+    `${pos} + 4★+ + uncommitted (${got.length} rows)`,
+    got.every((r) => recruitPositionsFor(pos).includes(r.position) && r.stars >= 4 && !r.committedTo),
   );
 }
 
@@ -160,34 +176,50 @@ for (const r of spread) {
   );
 }
 
-// ---- 9b. Sub-position roles cover their group with no overlap ----
-console.log('\nsub-position roles:');
-for (const [group, subs] of Object.entries(SUB_POSITIONS)) {
-  const groupPositions = POSITION_GROUPS[group] ?? [];
-  const covered = subs.flatMap((s) => s.positions);
-  const outside = covered.filter((p) => !groupPositions.includes(p));
-  const uncovered = groupPositions.filter((p) => !covered.includes(p));
-  const dupes = covered.filter((p, i) => covered.indexOf(p) !== i);
+// ---- 9b. Position options mirror the game's own ranking pools ----
+// The game files recruits under main types (OT = LT+RT, OLB = LOLB+ROLB…) and
+// PositionRank runs per pool. If an option grouped positions the game ranks
+// separately, one rank value would appear twice inside it; if it split a real
+// pool, the map above would disagree with recruitPosPool. Both are asserted.
+console.log('\nposition pools:');
+const covered = RECRUIT_POS_OPTIONS.flatMap((o) => o.positions);
+check(
+  `no save position sits in two options`,
+  covered.length === new Set(covered).size,
+  covered.filter((p, i) => covered.indexOf(p) !== i).join(', '),
+);
+const hsRanked = all.filter((r) => !r.isTransfer && r.positionRank > 0);
+for (const { key, positions } of RECRUIT_POS_OPTIONS) {
+  const pool = hsRanked.filter((r) => positions.includes(r.position));
+  if (!pool.length) continue;
+  const ranks = pool.map((r) => r.positionRank);
+  const collisions = ranks.filter((v, i) => ranks.indexOf(v) !== i);
   check(
-    `${group}: ${subs.map((s) => `${s.label}=${s.positions.join('/')}`).join('  ')}`,
-    outside.length === 0 && uncovered.length === 0 && dupes.length === 0,
-    [
-      outside.length ? `outside group: ${outside.join(',')}` : '',
-      uncovered.length ? `not reachable: ${uncovered.join(',')}` : '',
-      dupes.length ? `in two roles: ${dupes.join(',')}` : ''
-    ]
-      .filter(Boolean)
-      .join('; '),
+    `${key.padEnd(4)} ranks as one pool (${pool.length} ranked)`,
+    collisions.length === 0,
+    `rank values duplicated: ${[...new Set(collisions)].slice(0, 5).join(', ')}`,
   );
-  // Each role must actually select the positions it claims.
-  for (const s of subs) {
-    const got = all.filter((r) => positionsFor(group, s.key).includes(r.position));
-    check(
-      `  ${group}/${s.label} (${got.length}) returns only ${s.positions.join('/')}`,
-      got.every((r) => s.positions.includes(r.position)),
-    );
-  }
 }
+check(
+  `recruitPosPool agrees with the option map`,
+  RECRUIT_POS_OPTIONS.every((o) => o.positions.every((p) => recruitPosPool(p) === o.key)),
+);
+// Display vocabulary: OL keeps its side, the defensive front shows role names.
+console.log('\ndisplay vocabulary:');
+const shown = new Map(
+  ['LT', 'RT', 'LG', 'RG', 'LE', 'RE', 'MLB', 'LOLB', 'ROLB'].map((p) => [p, recruitPos(p)]),
+);
+check(
+  `OL rows keep their side (LT/RT/LG/RG)`,
+  ['LT', 'RT', 'LG', 'RG'].every((p) => shown.get(p) === p),
+  [...shown].map(([k, v]) => `${k}→${v}`).join(' '),
+);
+check(
+  `defensive front shows role names (EDGE/MIKE/OLB)`,
+  shown.get('LE') === 'EDGE' && shown.get('RE') === 'EDGE' && shown.get('MLB') === 'MIKE' &&
+    shown.get('LOLB') === 'OLB' && shown.get('ROLB') === 'OLB',
+  [...shown].map(([k, v]) => `${k}→${v}`).join(' '),
+);
 
 // ---- 9c. Archetypes ----
 console.log('\narchetypes:');

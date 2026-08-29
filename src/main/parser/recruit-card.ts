@@ -109,6 +109,104 @@ export const GROUP_OF: Record<string, string> = {
   K: 'ST', P: 'ST'
 };
 
+/**
+ * The at-a-glance cut: the skills a position lives on, shown highlighted when
+ * a board row expands. Tight editorial pick per role — the full sheet stays in
+ * the profile. TE splits from WR here because blocking matters to one of them.
+ */
+export const GLANCE: Record<string, [string, string][]> = {
+  QB: [
+    ['ThrowPowerRating', 'THP'],
+    ['ThrowAccuracyShortRating', 'SAC'],
+    ['ThrowAccuracyMidRating', 'MAC'],
+    ['ThrowAccuracyDeepRating', 'DAC'],
+    ['ThrowUnderPressureRating', 'TUP'],
+    ['ThrowOnTheRunRating', 'RUN'],
+    ['SpeedRating', 'SPD'],
+    ['AwarenessRating', 'AWR']
+  ],
+  BACK: [
+    ['SpeedRating', 'SPD'],
+    ['AccelerationRating', 'ACC'],
+    ['AgilityRating', 'AGI'],
+    ['CarryingRating', 'CAR'],
+    ['BreakTackleRating', 'BTK'],
+    ['TruckingRating', 'TRK'],
+    ['JukeMoveRating', 'JKM'],
+    ['BCVisionRating', 'BCV'],
+    ['CatchingRating', 'CTH']
+  ],
+  RECV: [
+    ['SpeedRating', 'SPD'],
+    ['AccelerationRating', 'ACC'],
+    ['CatchingRating', 'CTH'],
+    ['ShortRouteRunningRating', 'SRR'],
+    ['MediumRouteRunningRating', 'MRR'],
+    ['DeepRouteRunningRating', 'DRR'],
+    ['CatchInTrafficRating', 'CIT'],
+    ['SpectacularCatchRating', 'SPC'],
+    ['ReleaseRating', 'RLS']
+  ],
+  TE: [
+    ['SpeedRating', 'SPD'],
+    ['CatchingRating', 'CTH'],
+    ['ShortRouteRunningRating', 'SRR'],
+    ['MediumRouteRunningRating', 'MRR'],
+    ['CatchInTrafficRating', 'CIT'],
+    ['SpectacularCatchRating', 'SPC'],
+    ['RunBlockRating', 'RBK'],
+    ['ImpactBlockingRating', 'IBL']
+  ],
+  OL: [
+    ['StrengthRating', 'STR'],
+    ['RunBlockRating', 'RBK'],
+    ['RunBlockPowerRating', 'RBP'],
+    ['RunBlockFinesseRating', 'RBF'],
+    ['PassBlockRating', 'PBK'],
+    ['PassBlockPowerRating', 'PBP'],
+    ['PassBlockFinesseRating', 'PBF'],
+    ['ImpactBlockingRating', 'IBL']
+  ],
+  DL: [
+    ['SpeedRating', 'SPD'],
+    ['StrengthRating', 'STR'],
+    ['PowerMovesRating', 'PMV'],
+    ['FinesseMovesRating', 'FMV'],
+    ['BlockSheddingRating', 'BSH'],
+    ['TackleRating', 'TAK'],
+    ['PursuitRating', 'PUR'],
+    ['HitPowerRating', 'POW']
+  ],
+  LB: [
+    ['SpeedRating', 'SPD'],
+    ['TackleRating', 'TAK'],
+    ['HitPowerRating', 'POW'],
+    ['BlockSheddingRating', 'BSH'],
+    ['PursuitRating', 'PUR'],
+    ['PlayRecognitionRating', 'PRC'],
+    ['ZoneCoverageRating', 'ZCV'],
+    ['ManCoverageRating', 'MCV']
+  ],
+  DB: [
+    ['SpeedRating', 'SPD'],
+    ['AccelerationRating', 'ACC'],
+    ['ManCoverageRating', 'MCV'],
+    ['ZoneCoverageRating', 'ZCV'],
+    ['PressRating', 'PRS'],
+    ['PlayRecognitionRating', 'PRC'],
+    ['JumpingRating', 'JMP'],
+    ['CatchingRating', 'CTH'],
+    ['TackleRating', 'TAK']
+  ],
+  ST: [
+    ['KickPowerRating', 'KPW'],
+    ['KickAccuracyRating', 'KAC']
+  ]
+};
+
+/** Position → glance list key. Same shape as GROUP_OF except TE stands alone. */
+const GLANCE_OF: Record<string, string> = { ...GROUP_OF, TE: 'TE' };
+
 export const CARD_FIELDS = [
   'FirstName',
   'LastName',
@@ -123,7 +221,9 @@ export const CARD_FIELDS = [
   'MentalAbility1', 'MentalAbility2', 'MentalAbility3',
   'MentalAbilityRank1', 'MentalAbilityRank2', 'MentalAbilityRank3',
   'PhysicalAbility1', 'PhysicalAbility2', 'PhysicalAbility3', 'PhysicalAbility4', 'PhysicalAbility5',
-  ...new Set([...COMMON, ...Object.values(BY_GROUP).flat()].map(([f]) => f))
+  ...new Set(
+    [...COMMON, ...Object.values(BY_GROUP).flat(), ...Object.values(GLANCE).flat()].map(([f]) => f)
+  )
 ];
 
 /** Position-relevant ratings from an already-read Player record, display-ordered. */
@@ -138,6 +238,18 @@ export function ratingsFromRecord(rec: any): { label: string; value: number }[] 
   return [...spec, ...COMMON]
     .filter(([, label], i, arr) => arr.findIndex(([, l]) => l === label) === i)
     .map(([field, label]) => ({ label, value: num(field) }))
+    .filter((r) => r.value > 0);
+}
+
+/** The at-a-glance skills for the record's position, display-ordered. */
+export function glanceFromRecord(rec: any): { label: string; value: number }[] {
+  const position = String(val(rec, 'Position') ?? '');
+  const spec = GLANCE[GLANCE_OF[position]] ?? COMMON;
+  return spec
+    .map(([field, label]) => {
+      const v = Number(val(rec, field));
+      return { label, value: Number.isFinite(v) ? v : 0 };
+    })
     .filter((r) => r.value > 0);
 }
 
@@ -175,7 +287,7 @@ export async function extractRecruitCard(franchise: any, playerRow: number): Pro
       return Number.isFinite(v) ? v : 0;
     };
     const position = String(val(rec, 'Position') ?? '');
-    const ratings = ratingsFromRecord(rec);
+    const glance = glanceFromRecord(rec);
     const { mental, physical } = abilitiesFromRecord(rec);
 
     return {
@@ -189,7 +301,7 @@ export async function extractRecruitCard(franchise: any, playerRow: number): Pro
       devTrait: String(val(rec, 'TraitDevelopment') ?? ''),
       homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? ''),
       homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
-      ratings,
+      glance,
       mental,
       physical
     };

@@ -388,6 +388,20 @@ function createWindow(): void {
               );
               await new Promise((r) => setTimeout(r, 700));
             }
+            // HQ_CAPTURE_POS=<key> picks a position in a board's dropdown (e.g. EDGE).
+            const posKey = process.env['HQ_CAPTURE_POS'];
+            if (posKey) {
+              await win!.webContents.executeJavaScript(
+                `(() => {
+                  const sel = document.querySelector('select.pos-select');
+                  if (!sel) return;
+                  const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+                  set.call(sel, ${JSON.stringify(posKey)});
+                  sel.dispatchEvent(new Event('change', { bubbles: true }));
+                })()`
+              );
+              await new Promise((r) => setTimeout(r, 700));
+            }
             // HQ_CAPTURE_ROW=<n> expands the nth table row (for detail cards).
             const rowIndex = process.env['HQ_CAPTURE_ROW'];
             if (rowIndex) {

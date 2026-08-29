@@ -17,6 +17,7 @@ import {
   heightFt,
   ovrTier,
   prestigeLabel,
+  recruitPosPool,
   spaceOut,
   stars,
   yearAbbrev
@@ -358,7 +359,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
           <span className="pf-stars">{stars(p.recruit.stars)}</span>
           {p.recruit.nationalRank > 0 && <span>Natl #{p.recruit.nationalRank}</span>}
           {p.recruit.positionRank > 0 && <span>
-            {p.position} #{p.recruit.positionRank}
+            {recruitPosPool(p.position)} #{p.recruit.positionRank}
           </span>}
           {p.recruit.stateRank > 0 && <span>State #{p.recruit.stateRank}</span>}
           {p.recruit.offers > 0 && <span>{p.recruit.offers} offers</span>}
