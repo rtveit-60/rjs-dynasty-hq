@@ -23,7 +23,6 @@ type Board = 'hs' | 'portal' | 'scout';
 
 type SortKey =
   | 'rating'
-  | 'gem'
   | 'name'
   | 'pos'
   | 'dev'
@@ -36,7 +35,6 @@ type SortKey =
   | 'offers'
   | 'board';
 
-const GEM_ORDER: Record<string, number> = { BUST: 0, NORMAL: 1, GEM: 2 };
 const DEV_ORDER: Record<string, number> = {
   Normal: 0,
   College_Impact: 1,
@@ -53,7 +51,7 @@ const STAGE_ORDER: Record<string, number> = {
 };
 const BIG = Number.MAX_SAFE_INTEGER;
 const PAGE_SIZE = 200;
-const COLS = 13;
+const COLS = 12;
 
 const STAR_FILTERS = [
   { label: 'All', min: 0 },
@@ -111,8 +109,6 @@ export default function RecruitingView() {
       switch (sortKey) {
         case 'rating':
           return (a.stars - b.stars) * dir || rank(a.nationalRank) - rank(b.nationalRank);
-        case 'gem':
-          return ((GEM_ORDER[a.quality] ?? 1) - (GEM_ORDER[b.quality] ?? 1)) * dir || byName(a, b);
         case 'name':
           return byName(a, b) * dir;
         case 'pos':
@@ -318,16 +314,15 @@ export default function RecruitingView() {
             <table className="tbl tbl-wide">
               <thead>
                 <tr>
-                  {th('Rating', 'rating')}
-                  {th('Gem', 'gem')}
+                  {th('Rk', 'natlrk', { defaultAsc: true })}
                   {th('Recruit & School', 'name', { defaultAsc: true, cls: 'col-name' })}
                   {th('Pos', 'pos', { defaultAsc: true })}
+                  {th('Stars', 'rating')}
+                  {th('Ovr', 'ovr')}
                   {th('Dev', 'dev')}
                   {th('Pipeline', 'pipeline', { defaultAsc: true })}
                   {th('Status', 'status')}
-                  {th('Ovr', 'ovr')}
                   {th('Pos Rk', 'posrk', { num: true, defaultAsc: true })}
-                  {th('Natl Rk', 'natlrk', { num: true, defaultAsc: true })}
                   {th('Edge', 'edge')}
                   {th('Offers', 'offers', { num: true })}
                   {th('Board', 'board')}
@@ -340,15 +335,8 @@ export default function RecruitingView() {
                       onClick={() => setOpenRow(openRow === r.row ? null : r.row)}
                       className={`clickable ${openRow === r.row ? 'expanded' : ''}`}
                     >
-                      <td>
-                        <span className="stars-cell">{stars(r.stars).slice(0, r.stars)}</span>
-                      </td>
-                      <td>
-                        {r.quality === 'GEM' && <span className="q gem">GEM</span>}
-                        {r.quality === 'BUST' && <span className="q bust">BUST</span>}
-                        {r.quality !== 'GEM' && r.quality !== 'BUST' && (
-                          <span style={{ color: 'var(--ink-3)' }}>—</span>
-                        )}
+                      <td className={`rk-lead ${r.nationalRank > 0 && r.nationalRank <= 5 ? 'hot' : ''}`}>
+                        {r.nationalRank || '—'}
                       </td>
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
@@ -358,9 +346,17 @@ export default function RecruitingView() {
                           {spaceOut(r.homeState)}
                           {board === 'portal' && r.classType !== 'HS' ? ` · ${r.classType}` : ''}
                         </span>
+                        {r.quality === 'GEM' && <span className="btag">Gem</span>}
+                        {r.quality === 'BUST' && <span className="btag bust">Bust</span>}
                       </td>
                       <td>
                         <span className="pos-tag">{recruitPos(r.position)}</span>
+                      </td>
+                      <td>
+                        <span className="stars-cell">{stars(r.stars).slice(0, r.stars)}</span>
+                      </td>
+                      <td>
+                        <span className={ovrTier(r.overall)}>{r.overall}</span>
                       </td>
                       <td>
                         <span className={devClass(r.devTrait)}>{devLabel(r.devTrait)}</span>
@@ -371,17 +367,13 @@ export default function RecruitingView() {
                       <td className="cell-clip" title={r.committedTo ?? undefined}>
                         {statusCell(r)}
                       </td>
-                      <td>
-                        <span className={ovrTier(r.overall)}>{r.overall}</span>
-                      </td>
                       <td className="num">{r.positionRank || '—'}</td>
-                      <td className="num">{r.nationalRank || '—'}</td>
                       {/* One chip keeps the column narrow; hover lists every edge. */}
                       <td className="cell-clip" title={r.edges.join(', ')}>
                         {r.edges.length ? (
                           <>
-                            <span className="edge">{r.edges[0]}</span>
-                            {r.edges.length > 1 && <span className="edge">+{r.edges.length - 1}</span>}
+                            <span className="btag">{r.edges[0]}</span>
+                            {r.edges.length > 1 && <span className="btag">+{r.edges.length - 1}</span>}
                           </>
                         ) : (
                           <span style={{ color: 'var(--ink-3)' }}>—</span>
@@ -390,7 +382,7 @@ export default function RecruitingView() {
                       <td className="num">{r.offers}</td>
                       <td>
                         {r.onBoard ? (
-                          <span className="fav" title="On your recruiting board">▣ On Board</span>
+                          <span className="btag" title="On your recruiting board">▣ Board</span>
                         ) : (
                           <span style={{ color: 'var(--ink-3)' }}>—</span>
                         )}
