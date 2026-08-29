@@ -61,8 +61,12 @@ export default function Setup() {
             <b>Theme</b> follows Windows in Auto, or stays fixed on Light or Dark.
           </p>
           <p>
-            <b>Size</b> scales the whole interface. Ctrl+= and Ctrl+− step it from anywhere;
-            Ctrl+0 resets. Handy when the app sits on a second monitor across the room.
+            <b>Fit</b> scales the whole interface with the window: maximized on a monitor it fills
+            edge to edge, tucked into a corner it shrinks to match.
+          </p>
+          <p>
+            <b>A−/A+</b> bias the size either way, with Fit on or off. Ctrl+= and Ctrl+− step it
+            from anywhere; Ctrl+0 resets.
           </p>
         </InfoDot>
         <div className="rule" />

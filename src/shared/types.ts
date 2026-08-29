@@ -12,6 +12,8 @@ export interface Settings {
   autoUpdate: boolean;
   /** Renderer zoom factor; 1 = 100%. Clamped to 0.7–1.5. */
   uiScale: number;
+  /** Scale the UI with window width (uiScale becomes a bias on the fit). */
+  uiFit: boolean;
   windowBounds?: { x: number; y: number; width: number; height: number };
 }
 

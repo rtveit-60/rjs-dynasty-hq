@@ -13,7 +13,8 @@ const DEFAULTS: Settings = {
   portraitsDir: null,
   logosDir: null,
   autoUpdate: true,
-  uiScale: 1
+  uiScale: 1,
+  uiFit: true
 };
 
 let current: Settings | null = null;

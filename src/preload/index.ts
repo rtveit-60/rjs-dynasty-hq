@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webFrame } from 'electron';
 import type {
   AppState,
   BrandPack,
@@ -31,6 +31,9 @@ export interface HQBridge {
   setSchool: (row: number | null) => Promise<Settings>;
   setTheme: (theme: ThemeMode) => Promise<Settings>;
   setUiScale: (scale: number) => Promise<Settings>;
+  setUiFit: (on: boolean) => Promise<Settings>;
+  onZoom: (cb: (effective: number) => void) => () => void;
+  getZoom: () => number;
   setAutoUpdate: (enabled: boolean) => Promise<Settings>;
   installUpdate: () => Promise<void>;
   onUpdateReady: (cb: (version: string) => void) => () => void;
@@ -58,6 +61,9 @@ const bridge: HQBridge = {
   setSchool: (row) => ipcRenderer.invoke('school:set', row),
   setTheme: (theme) => ipcRenderer.invoke('theme:set', theme),
   setUiScale: (scale) => ipcRenderer.invoke('zoom:set', scale),
+  setUiFit: (on) => ipcRenderer.invoke('zoomfit:set', on),
+  onZoom: subscribe<number>('ui:zoom'),
+  getZoom: () => webFrame.getZoomFactor(),
   setAutoUpdate: (enabled) => ipcRenderer.invoke('autoupdate:set', enabled),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateReady: subscribe<string>('update:ready'),

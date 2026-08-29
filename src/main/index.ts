@@ -146,7 +146,13 @@ function registerIpc(): void {
   ipcMain.handle('zoom:set', (_e, scale: number) => {
     const clamped = Math.min(1.5, Math.max(0.7, Number(scale)));
     const settings = updateSettings({ uiScale: Number.isFinite(clamped) ? clamped : 1 });
-    win?.webContents.setZoomFactor(settings.uiScale);
+    applyZoom();
+    return settings;
+  });
+
+  ipcMain.handle('zoomfit:set', (_e, on: boolean) => {
+    const settings = updateSettings({ uiFit: on === true });
+    applyZoom();
     return settings;
   });
 
@@ -309,6 +315,23 @@ function registerPortraitProtocol(): void {
   });
 }
 
+/**
+ * The width the interface is designed at. With fit on, the zoom factor tracks
+ * window width against this, so a maximized second monitor fills edge to edge
+ * and a tucked-away half window shrinks to match; uiScale biases the result.
+ */
+const ZOOM_BASE_WIDTH = 1380;
+
+function applyZoom(): void {
+  if (!win) return;
+  const s = getSettings();
+  const bias = Number.isFinite(s.uiScale) ? s.uiScale : 1;
+  const fit = s.uiFit ? win.getContentBounds().width / ZOOM_BASE_WIDTH : 1;
+  const effective = Math.min(1.6, Math.max(0.6, bias * fit));
+  win.webContents.setZoomFactor(effective);
+  win.webContents.send('ui:zoom', effective);
+}
+
 function createWindow(): void {
   const bounds = getSettings().windowBounds;
   win = new BrowserWindow({
@@ -336,8 +359,11 @@ function createWindow(): void {
   });
 
   win.once('ready-to-show', () => win?.show());
-  win.webContents.on('did-finish-load', () => {
-    win?.webContents.setZoomFactor(getSettings().uiScale ?? 1);
+  win.webContents.on('did-finish-load', applyZoom);
+  let zoomTimer: NodeJS.Timeout | undefined;
+  win.on('resize', () => {
+    clearTimeout(zoomTimer);
+    zoomTimer = setTimeout(applyZoom, 80);
   });
   win.on('close', () => {
     if (win && !win.isMaximized()) updateSettings({ windowBounds: win.getBounds() });
