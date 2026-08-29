@@ -1225,6 +1225,7 @@ async function extractRecruiting(
         stage,
         classType: classLabel(classRaw),
         isTransfer: classRaw.startsWith('Transfer'),
+        overall: Number(val(p, 'OverallRating') ?? 0),
         devTrait: String(val(p, 'TraitDevelopment') ?? ''),
         homeState,
         pipeline,

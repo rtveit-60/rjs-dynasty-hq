@@ -73,9 +73,6 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                   <div key={g.label} className="rc-skill" title={SKILL_NAME.get(g.label) ?? g.label}>
                     <span className="rc-skill-k">{g.label}</span>
                     <span className={`rc-skill-v ${ovrTier(g.value).split(' ')[1]}`}>{g.value}</span>
-                    <span className="rc-bar">
-                      <span style={{ width: `${Math.max(0, Math.min(100, g.value))}%` }} />
-                    </span>
                   </div>
                 ))}
               </div>

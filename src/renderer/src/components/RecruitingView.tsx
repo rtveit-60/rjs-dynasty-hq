@@ -6,6 +6,7 @@ import {
   devClass,
   devLabel,
   fmt,
+  ovrTier,
   recruitPos,
   recruitPosPool,
   recruitPositionsFor,
@@ -27,6 +28,7 @@ type SortKey =
   | 'dev'
   | 'pipeline'
   | 'status'
+  | 'ovr'
   | 'posrk'
   | 'natlrk'
   | 'edge'
@@ -50,7 +52,7 @@ const STAGE_ORDER: Record<string, number> = {
 };
 const BIG = Number.MAX_SAFE_INTEGER;
 const PAGE_SIZE = 200;
-const COLS = 12;
+const COLS = 13;
 
 const STAR_FILTERS = [
   { label: 'All', min: 0 },
@@ -127,6 +129,8 @@ export default function RecruitingView() {
           const s = (r: ClassRecruit) => (r.committedTo ? 100 : (STAGE_ORDER[r.stage] ?? -1));
           return (s(a) - s(b)) * dir || byName(a, b);
         }
+        case 'ovr':
+          return (a.overall - b.overall) * dir || rank(a.nationalRank) - rank(b.nationalRank);
         case 'posrk':
           return (rank(a.positionRank) - rank(b.positionRank)) * dir;
         case 'natlrk':
@@ -174,9 +178,9 @@ export default function RecruitingView() {
     }
   };
 
-  const th = (label: string, key: SortKey, opts?: { num?: boolean; defaultAsc?: boolean }) => (
+  const th = (label: string, key: SortKey, opts?: { num?: boolean; defaultAsc?: boolean; cls?: string }) => (
     <th
-      className={`${opts?.num ? 'num ' : ''}${sortKey === key ? 'sorted' : ''}`}
+      className={`${opts?.num ? 'num ' : ''}${opts?.cls ? `${opts.cls} ` : ''}${sortKey === key ? 'sorted' : ''}`}
       onClick={() => sortBy(key, opts?.defaultAsc ?? false)}
       title={`Sort by ${label}`}
     >
@@ -297,15 +301,16 @@ export default function RecruitingView() {
                 <tr>
                   {th('Rating', 'rating')}
                   {th('Gem', 'gem')}
-                  {th('Recruit & School', 'name', { defaultAsc: true })}
+                  {th('Recruit & School', 'name', { defaultAsc: true, cls: 'col-name' })}
                   {th('Pos', 'pos', { defaultAsc: true })}
                   {th('Dev', 'dev')}
                   {th('Pipeline', 'pipeline', { defaultAsc: true })}
                   {th('Status', 'status')}
+                  {th('Ovr', 'ovr')}
                   {th('Pos Rk', 'posrk', { num: true, defaultAsc: true })}
                   {th('Natl Rk', 'natlrk', { num: true, defaultAsc: true })}
                   {th('Edge', 'edge')}
-                  {th('Off', 'offers', { num: true })}
+                  {th('Offers', 'offers', { num: true })}
                   {th('Board', 'board')}
                 </tr>
               </thead>
@@ -344,17 +349,24 @@ export default function RecruitingView() {
                       <td className="cell-clip" style={{ color: 'var(--ink-2)' }} title={spaceOut(r.pipeline)}>
                         {spaceOut(r.pipeline)}
                       </td>
-                      <td>{statusCell(r)}</td>
+                      <td className="cell-clip" title={r.committedTo ?? undefined}>
+                        {statusCell(r)}
+                      </td>
+                      <td>
+                        <span className={ovrTier(r.overall)}>{r.overall}</span>
+                      </td>
                       <td className="num">{r.positionRank || '—'}</td>
                       <td className="num">{r.nationalRank || '—'}</td>
+                      {/* One chip keeps the column narrow; hover lists every edge. */}
                       <td className="cell-clip" title={r.edges.join(', ')}>
-                        {r.edges.length
-                          ? r.edges.map((e) => (
-                              <span key={e} className="edge">
-                                {e}
-                              </span>
-                            ))
-                          : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                        {r.edges.length ? (
+                          <>
+                            <span className="edge">{r.edges[0]}</span>
+                            {r.edges.length > 1 && <span className="edge">+{r.edges.length - 1}</span>}
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--ink-3)' }}>—</span>
+                        )}
                       </td>
                       <td className="num">{r.offers}</td>
                       <td>

@@ -400,6 +400,8 @@ export interface ClassRecruit {
   classType: string;
   /** True for portal transfers, which only appear in the offseason. */
   isTransfer: boolean;
+  /** True overall from the save — the game itself hides it until scouted. */
+  overall: number;
   devTrait: string;
   homeState: string;
   pipeline: string;

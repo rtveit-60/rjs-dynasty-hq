@@ -1807,7 +1807,6 @@ table.tbl.tbl-wide {
   font-weight: 700;
   font-size: 21px;
   line-height: 1.1;
-  margin-bottom: 4px;
 }
 
 .rc-skill-v.t1 {
@@ -1825,20 +1824,6 @@ table.tbl.tbl-wide {
 
 .rc-skill-v.t5 {
   color: var(--ink-3);
-}
-
-.rc-bar {
-  display: block;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--line-soft);
-  overflow: hidden;
-}
-
-.rc-bar > span {
-  display: block;
-  height: 100%;
-  background: var(--team-bright, var(--ink-3));
 }
 
 .rc-abilities {
@@ -1870,14 +1855,21 @@ table.tbl.tbl-wide {
 /* Condensed layout for the wide recruiting board, so more columns fit before
    the horizontal scroll starts. */
 .tbl.tbl-wide thead th {
-  padding: 7px 8px;
+  padding: 7px 6px;
   font-size: 9.5px;
   letter-spacing: 0.07em;
 }
 
 .tbl.tbl-wide tbody td {
-  padding: 5px 8px;
+  padding: 5px 6px;
   font-size: 12px;
+}
+
+/* The board's OVR badge, a notch smaller than the roster's. */
+.tbl.tbl-wide .ovr {
+  min-width: 26px;
+  font-size: 12px;
+  padding: 0 4px;
 }
 
 .tbl.tbl-wide .stars-cell {
@@ -1975,11 +1967,17 @@ table.tbl.tbl-wide {
 
 /* Text columns scale with the window instead of sitting at fixed pixels. */
 .tbl.tbl-wide .cell-clip {
-  max-width: clamp(84px, 11vw, 190px);
+  max-width: clamp(78px, 9vw, 165px);
 }
 
 .tbl.tbl-wide .cell-clip.name {
-  max-width: clamp(140px, 17vw, 280px);
+  max-width: clamp(132px, 20vw, 320px);
+}
+
+/* Hand the table's spare width to the name column, so it doesn't pool as a
+   gap between the narrow columns on the right. */
+.tbl.tbl-wide th.col-name {
+  width: 30%;
 }
 
 /* ——— Scouting reports: attribute criteria builder ——— */
@@ -2649,6 +2647,50 @@ table.tbl.tbl-wide {
   opacity: 0.75;
   margin-right: 2px;
   vertical-align: 1px;
+}
+
+/* The ratings sheet — label and number, nothing else. */
+.pf-ratings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 7px 18px;
+}
+
+.pf-rating {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.pf-rating .k {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+.pf-rating .v {
+  font-weight: 700;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-rating .v.t1 {
+  color: var(--team-bright, var(--ink));
+}
+
+.pf-rating .v.t2,
+.pf-rating .v.t3 {
+  color: var(--ink);
+}
+
+.pf-rating .v.t4 {
+  color: var(--ink-2);
+}
+
+.pf-rating .v.t5 {
+  color: var(--ink-3);
 }
 
 /* The race, inside the player profile. */
