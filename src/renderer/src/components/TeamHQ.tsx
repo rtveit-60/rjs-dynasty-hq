@@ -4,6 +4,7 @@ import { schemeLabel } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 import BudgetView from './BudgetView.tsx';
 import DepthChartView from './DepthChartView.tsx';
+import { NameLink } from './ProfileModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 import PlaybookView from './PlaybookView.tsx';
 import ProgramDashboard from './ProgramDashboard.tsx';
@@ -51,7 +52,9 @@ export default function TeamHQ() {
         <TeamLogo row={team.row} size={72} fallback={null} />
         <div>
           <h1 className="page-title">
-            {team.longName} <span className="nick">{team.nickName}</span>
+            <NameLink req={{ kind: 'school', row: team.row }}>
+              {team.longName} <span className="nick">{team.nickName}</span>
+            </NameLink>
           </h1>
           <div className="hq-meta">
             {team.city && (
@@ -117,7 +120,9 @@ function StaffHeadCard({
     <div className="staff-card">
       <div className="staff-role">{role}</div>
       <div className="staff-topline">
-        <span className="staff-name">{staff.name}</span>
+        <span className="staff-name">
+          <NameLink req={{ kind: 'coach', row: staff.coachRow }}>{staff.name}</NameLink>
+        </span>
         {hasRecord && (
           <span className="staff-rec" title="Career record">
             {staff.careerWins}–{staff.careerLosses}

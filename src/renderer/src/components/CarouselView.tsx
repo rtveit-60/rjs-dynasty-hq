@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { CarouselEntry } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
+import { NameLink } from './ProfileModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 
 const STATUS: Record<string, { label: string; color: string }> = {
@@ -319,10 +320,14 @@ export default function CarouselView() {
                 <td>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                     <TeamLogo row={c.teamRow} size={20} fallback={null} />
-                    {team?.longName ?? `Team ${c.teamRow}`}
+                    <NameLink req={{ kind: 'school', row: c.teamRow }}>
+                      {team?.longName ?? `Team ${c.teamRow}`}
+                    </NameLink>
                   </span>
                 </td>
-                <td style={{ fontWeight: 600 }}>{c.name}</td>
+                <td style={{ fontWeight: 600 }}>
+                  <NameLink req={{ kind: 'coach', row: c.coachRow }}>{c.name}</NameLink>
+                </td>
                 <td>{c.role}</td>
                 <td className="num">{c.age ?? '—'}</td>
                 <td className="num">{rec ? `${rec.w}–${rec.l}` : '—'}</td>

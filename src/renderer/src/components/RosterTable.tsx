@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { RosterPlayer, SchoolGrade } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
+import { NameLink } from './ProfileModal.tsx';
 import {
   POSITION_GROUPS,
   archetypeLabel,
@@ -253,9 +254,11 @@ export default function RosterTable({
                 <td className="jersey">{p.jersey}</td>
                 <td title={`Portrait #${p.portraitId}`}>
                   {portraitsOn && <Portrait id={p.portraitId} />}
-                  {p.firstName}
+                  <NameLink req={{ kind: 'player', row: p.row }}>{p.firstName}</NameLink>
                 </td>
-                <td className="pname">{p.lastName}</td>
+                <td className="pname">
+                  <NameLink req={{ kind: 'player', row: p.row }}>{p.lastName}</NameLink>
+                </td>
                 <td>
                   <span className="pos-tag">{p.position}</span>
                 </td>

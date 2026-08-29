@@ -7,7 +7,7 @@ import type { AbilitySlot, RecruitCard } from '../../shared/types.ts';
 import { mainTable, val } from './franchise.ts';
 
 /** Ratings worth showing, per position group. Order is the display order. */
-const COMMON: [string, string][] = [
+export const COMMON: [string, string][] = [
   ['SpeedRating', 'SPD'],
   ['AccelerationRating', 'ACC'],
   ['AgilityRating', 'AGI'],
@@ -18,7 +18,7 @@ const COMMON: [string, string][] = [
   ['ToughnessRating', 'TGH']
 ];
 
-const BY_GROUP: Record<string, [string, string][]> = {
+export const BY_GROUP: Record<string, [string, string][]> = {
   QB: [
     ['ThrowPowerRating', 'THP'],
     ['ThrowAccuracyShortRating', 'SAC'],
@@ -97,7 +97,7 @@ const BY_GROUP: Record<string, [string, string][]> = {
   ]
 };
 
-const GROUP_OF: Record<string, string> = {
+export const GROUP_OF: Record<string, string> = {
   QB: 'QB',
   HB: 'BACK', FB: 'BACK', RB: 'BACK',
   WR: 'RECV', TE: 'RECV',
@@ -108,7 +108,7 @@ const GROUP_OF: Record<string, string> = {
   K: 'ST', P: 'ST'
 };
 
-const CARD_FIELDS = [
+export const CARD_FIELDS = [
   'FirstName',
   'LastName',
   'Position',
@@ -125,6 +125,40 @@ const CARD_FIELDS = [
   ...new Set([...COMMON, ...Object.values(BY_GROUP).flat()].map(([f]) => f))
 ];
 
+/** Position-relevant ratings from an already-read Player record, display-ordered. */
+export function ratingsFromRecord(rec: any): { label: string; value: number }[] {
+  const num = (k: string): number => {
+    const v = Number(val(rec, k));
+    return Number.isFinite(v) ? v : 0;
+  };
+  const position = String(val(rec, 'Position') ?? '');
+  const group = GROUP_OF[position];
+  const spec = group ? (BY_GROUP[group] ?? []) : [];
+  return [...spec, ...COMMON]
+    .filter(([, label], i, arr) => arr.findIndex(([, l]) => l === label) === i)
+    .map(([field, label]) => ({ label, value: num(field) }))
+    .filter((r) => r.value > 0);
+}
+
+/** Mental + physical ability slots from an already-read Player record. */
+export function abilitiesFromRecord(rec: any): { mental: AbilitySlot[]; physical: AbilitySlot[] } {
+  const mental: AbilitySlot[] = [];
+  for (let i = 1; i <= 3; i++) {
+    const name = String(val(rec, `MentalAbility${i}`) ?? '');
+    const rank = String(val(rec, `MentalAbilityRank${i}`) ?? '');
+    if (!name || name === 'None') continue;
+    mental.push({ name, rank: rank === 'None' ? '' : rank });
+  }
+  // The save keeps only a tier for each physical slot — no name is stored.
+  const physical: AbilitySlot[] = [];
+  for (let i = 1; i <= 5; i++) {
+    const rank = String(val(rec, `PhysicalAbility${i}`) ?? '');
+    if (!rank || rank === 'None') continue;
+    physical.push({ name: '', rank });
+  }
+  return { mental, physical };
+}
+
 export async function extractRecruitCard(franchise: any, playerRow: number): Promise<RecruitCard | null> {
   try {
     const table = mainTable(franchise, 'Player');
@@ -137,28 +171,8 @@ export async function extractRecruitCard(franchise: any, playerRow: number): Pro
       return Number.isFinite(v) ? v : 0;
     };
     const position = String(val(rec, 'Position') ?? '');
-    const group = GROUP_OF[position];
-    const spec = group ? (BY_GROUP[group] ?? []) : [];
-
-    const ratings = [...spec, ...COMMON]
-      .filter(([, label], i, arr) => arr.findIndex(([, l]) => l === label) === i)
-      .map(([field, label]) => ({ label, value: num(field) }))
-      .filter((r) => r.value > 0);
-
-    const mental: AbilitySlot[] = [];
-    for (let i = 1; i <= 3; i++) {
-      const name = String(val(rec, `MentalAbility${i}`) ?? '');
-      const rank = String(val(rec, `MentalAbilityRank${i}`) ?? '');
-      if (!name || name === 'None') continue;
-      mental.push({ name, rank: rank === 'None' ? '' : rank });
-    }
-    // The save keeps only a tier for each physical slot — no name is stored.
-    const physical: AbilitySlot[] = [];
-    for (let i = 1; i <= 5; i++) {
-      const rank = String(val(rec, `PhysicalAbility${i}`) ?? '');
-      if (!rank || rank === 'None') continue;
-      physical.push({ name: '', rank });
-    }
+    const ratings = ratingsFromRecord(rec);
+    const { mental, physical } = abilitiesFromRecord(rec);
 
     return {
       row: playerRow,

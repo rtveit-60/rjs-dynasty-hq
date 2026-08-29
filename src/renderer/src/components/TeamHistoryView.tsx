@@ -1,4 +1,5 @@
 import type { Snapshot } from '../../../shared/types.ts';
+import { NameLink } from './ProfileModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 
 type School = NonNullable<Snapshot['school']>;
@@ -105,7 +106,9 @@ export default function TeamHistoryView({ school }: { school: School }) {
               >
                 <TeamLogo row={r.rivalRow} size={26} fallback={null} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{r.rivalName}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>
+                    <NameLink req={{ kind: 'school', row: r.rivalRow }}>{r.rivalName}</NameLink>
+                  </div>
                   <div style={{ fontSize: 11, color: 'var(--ink-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {r.name}
                     {r.secondaryName ? ` · ${r.secondaryName}` : ''}

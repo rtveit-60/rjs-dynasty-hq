@@ -5,6 +5,8 @@ import type {
   DetectedSave,
   MediaEvent,
   PlaybookBook,
+  Profile,
+  ProfileRequest,
   RecruitCard,
   Settings,
   Snapshot,
@@ -33,6 +35,7 @@ export interface HQBridge {
   onUpdateReady: (cb: (version: string) => void) => () => void;
   revealSave: () => Promise<void>;
   getRecruitCard: (playerRow: number) => Promise<RecruitCard | null>;
+  getProfile: (req: ProfileRequest) => Promise<Profile | null>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
   getPlaybook: (
@@ -58,6 +61,7 @@ const bridge: HQBridge = {
   onUpdateReady: subscribe<string>('update:ready'),
   revealSave: () => ipcRenderer.invoke('save:reveal'),
   getRecruitCard: (playerRow) => ipcRenderer.invoke('recruit:card', playerRow),
+  getProfile: (req) => ipcRenderer.invoke('profile:get', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   getPlaybook: (side, coachRow, schemeEnum) =>

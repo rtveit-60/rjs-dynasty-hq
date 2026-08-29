@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   DetectedSave,
   MediaEvent,
+  ProfileRequest,
   Settings,
   Snapshot,
   ThemeMode,
@@ -20,9 +21,14 @@ interface HQStore {
   systemDark: boolean;
   nav: NavKey;
   detectedSaves: DetectedSave[];
+  /** Open profile pop-ups, oldest first — click a name inside one and it stacks. */
+  profileStack: ProfileRequest[];
 
   init: () => Promise<void>;
   setNav: (nav: NavKey) => void;
+  openProfile: (req: ProfileRequest) => void;
+  backProfile: () => void;
+  closeProfiles: () => void;
   pickSave: () => Promise<void>;
   useSave: (path: string) => Promise<void>;
   refreshDetected: () => Promise<void>;
@@ -43,6 +49,7 @@ export const useHQ = create<HQStore>((set, get) => ({
   systemDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
   nav: 'team',
   detectedSaves: [],
+  profileStack: [],
 
   init: async () => {
     if (initialized) return;
@@ -58,6 +65,15 @@ export const useHQ = create<HQStore>((set, get) => ({
   },
 
   setNav: (nav) => set({ nav }),
+
+  openProfile: (req) =>
+    set((s) => {
+      const top = s.profileStack[s.profileStack.length - 1];
+      if (top && top.kind === req.kind && top.row === req.row) return s;
+      return { profileStack: [...s.profileStack, req] };
+    }),
+  backProfile: () => set((s) => ({ profileStack: s.profileStack.slice(0, -1) })),
+  closeProfiles: () => set({ profileStack: [] }),
 
   pickSave: async () => {
     const settings = await window.hq.pickSave();

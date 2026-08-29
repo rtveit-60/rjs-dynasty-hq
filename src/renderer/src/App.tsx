@@ -4,6 +4,7 @@ import { useEffectiveTheme, useHQ } from './store.ts';
 import CarouselView from './components/CarouselView.tsx';
 import MediaView from './components/MediaView.tsx';
 import Onboarding from './components/Onboarding.tsx';
+import ProfileModal from './components/ProfileModal.tsx';
 import RecruitingView from './components/RecruitingView.tsx';
 import SchoolPicker from './components/SchoolPicker.tsx';
 import SideNav from './components/SideNav.tsx';
@@ -74,6 +75,7 @@ export default function App() {
           <div className="content">{body}</div>
         </div>
       )}
+      <ProfileModal />
     </div>
   );
 }

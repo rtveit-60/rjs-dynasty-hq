@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { RecruitTargetEntry, Snapshot, TargetSchool } from '../../../shared/types.ts';
 import { STAGE_LABELS, spaceOut, stars } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import { NameLink } from './ProfileModal.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -173,7 +174,7 @@ export default function TargetsView({ school }: { school: School }) {
               <tr key={`${t.name}-${t.nationalRank}`}>
                 <td className="pname">
                   {t.isFavorite && <span className="fav">♥ </span>}
-                  {t.name}
+                  <NameLink req={{ kind: 'player', row: t.playerRow }}>{t.name}</NameLink>
                   <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}> · {spaceOut(t.homeState)}</span>
                 </td>
                 <td>
