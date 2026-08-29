@@ -10,6 +10,7 @@ import type {
   SeasonStatRow,
   StatLine
 } from '../../../shared/types.ts';
+import { RATINGS } from '../../../shared/ratings.ts';
 import {
   archetypeLabel,
   devClass,
@@ -31,6 +32,9 @@ const RANK_COLOR: Record<string, string> = {
   Gold: '#c9a227',
   Platinum: '#6fd3d0'
 };
+
+/** "SPD" → "Speed", for the ratings-sheet tooltips. */
+const SKILL_NAME = new Map(RATINGS.map((r) => [r.label, r.name]));
 
 const ROLE_SHORT: Record<string, string> = {
   HeadCoach: 'Head Coach',
@@ -420,14 +424,11 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
       {p.ratings.length > 0 && (
         <>
           <SectionTitle>Ratings</SectionTitle>
-          <div className="rc-ratings">
+          <div className="pf-ratings">
             {p.ratings.map((r) => (
-              <div key={r.label} className="rc-stat" title={r.label}>
-                <span className="rc-stat-k">{r.label}</span>
-                <span className={`rc-stat-v ${ovrTier(r.value)}`}>{r.value}</span>
-                <span className="rc-bar">
-                  <span style={{ width: `${Math.max(0, Math.min(100, r.value))}%` }} />
-                </span>
+              <div key={r.label} className="pf-rating" title={SKILL_NAME.get(r.label) ?? r.label}>
+                <span className="k">{r.label}</span>
+                <span className={`v ${ovrTier(r.value).split(' ')[1]}`}>{r.value}</span>
               </div>
             ))}
           </div>
