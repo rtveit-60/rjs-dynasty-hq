@@ -95,15 +95,12 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                 <div>
                   <div className="rc-sub">Physical</div>
                   {card.physical.length ? (
-                    <>
-                      {card.physical.map((a, i) => (
-                        <span key={i} className="chip">
-                          <span className="k">SLOT {i + 1}</span>&nbsp;
-                          <b style={{ color: RANK_COLOR[a.rank] ?? 'var(--ink-3)' }}>{a.rank}</b>
-                        </span>
-                      ))}
-                      <div className="rc-note">The save stores a tier per physical slot, not the ability name.</div>
-                    </>
+                    card.physical.map((a, i) => (
+                      <span key={i} className="chip">
+                        {a.name || `Slot ${i + 1}`}&nbsp;
+                        <b style={{ color: RANK_COLOR[a.rank] ?? 'var(--ink-3)' }}>{a.rank}</b>
+                      </span>
+                    ))
                   ) : (
                     <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>None</span>
                   )}

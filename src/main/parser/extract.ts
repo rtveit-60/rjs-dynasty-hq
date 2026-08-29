@@ -47,7 +47,9 @@ const PLAYER_FIELDS = [
   'PLYR_PORTRAIT',
   'HomePipeline',
   'PlayerType',
-  'PLYR_HOME_TOWN'
+  'PLYR_HOME_TOWN',
+  'RecruitingDealbreaker',
+  'PLYR_DRAFTROUND'
 ];
 
 function rgbHex(r: unknown, g: unknown, b: unknown): string | null {
@@ -529,8 +531,120 @@ function playerFromRecord(rec: any, row: number): RosterPlayer {
     archetype: String(val(rec, 'PlayerType') ?? ''),
     homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
     homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? ''),
-    portraitId: Number(val(rec, 'PLYR_PORTRAIT') ?? 0)
+    portraitId: Number(val(rec, 'PLYR_PORTRAIT') ?? 0),
+    departing: departureOf(rec)
   };
+}
+
+/**
+ * Whether this player is done after the season. The game itself keeps
+ * graduates and draft entries on the roster until week 4 of the offseason,
+ * which is exactly why Team Needs reads wrong in-game until then.
+ * PLYR_DRAFTROUND is 63 until a player is actually drafted.
+ */
+function departureOf(rec: any): 'senior' | 'drafted' | null {
+  const round = Number(val(rec, 'PLYR_DRAFTROUND') ?? 63);
+  if (round >= 1 && round < 63) return 'drafted';
+  if (String(val(rec, 'SchoolYear')) === 'Senior') return 'senior';
+  return null;
+}
+
+function dealbreakerOf(rec: any): string {
+  const d = String(val(rec, 'RecruitingDealbreaker') ?? '');
+  return /^Invalid/.test(d) ? '' : d;
+}
+
+/**
+ * Team Needs mirrors the game's recruiting-hub panel: OFFENSIVE / DEFENSIVE /
+ * SPECIAL TEAMS TARGETS, one `targeted/needed` cell per position in the
+ * game's own vocabulary — tackles and guards collapse to T and G, LE/RE to
+ * EDGE, LOLB/ROLB to OLB, MLB shows as MIKE, FS and SS stay apart, and LS is
+ * not displayed (all verified against the in-game screen).
+ */
+const NEED_GROUP: Record<string, string> = {
+  QB: 'QB', HB: 'HB', FB: 'FB', WR: 'WR', TE: 'TE',
+  LT: 'T', RT: 'T', LG: 'G', RG: 'G', C: 'C',
+  LE: 'EDGE', RE: 'EDGE', DT: 'DT', NT: 'DT',
+  LOLB: 'OLB', ROLB: 'OLB', MLB: 'MIKE',
+  CB: 'CB', FS: 'FS', SS: 'SS',
+  K: 'K', P: 'P'
+};
+const NEED_SIDE: Record<string, 'OFF' | 'DEF' | 'ST'> = {
+  QB: 'OFF', HB: 'OFF', FB: 'OFF', WR: 'OFF', TE: 'OFF', T: 'OFF', G: 'OFF', C: 'OFF',
+  EDGE: 'DEF', DT: 'DEF', OLB: 'DEF', MIKE: 'DEF', CB: 'DEF', FS: 'DEF', SS: 'DEF',
+  K: 'ST', P: 'ST'
+};
+const NEED_ORDER = [
+  'QB', 'HB', 'FB', 'WR', 'TE', 'T', 'G', 'C',
+  'EDGE', 'DT', 'OLB', 'MIKE', 'CB', 'FS', 'SS',
+  'K', 'P'
+];
+
+/**
+ * The game's own minimum roster composition, from the PositionCountTable row
+ * whose values sum to 57 in the franchise-common tuning store
+ * c45d7f72-500c-8bd1-1e95-271bfd1d2b18 (row 5; identical across store
+ * revisions — see RESEARCH "Team Needs"). Collapsed into the panel's display
+ * groups: T = LT+RT, G = LG+RG, EDGE = LE+RE, OLB = LOLB+ROLB.
+ */
+export const NEED_FLOOR: Record<string, number> = {
+  QB: 3, HB: 2, FB: 2, WR: 4, TE: 2, T: 4, G: 6, C: 3,
+  EDGE: 6, DT: 3, OLB: 6, MIKE: 3, CB: 4, FS: 3, SS: 3,
+  K: 1, P: 1
+};
+
+/**
+ * Projected roster shape per position group: who is really here next season.
+ * League averages come from every real program's roster in the same save, so
+ * the reference bar is the game's own roster-building behavior, not a guess.
+ */
+function buildTeamNeeds(
+  playerTable: any,
+  ownTeamIndex: number,
+  committedTargets: { position: string; stage: string; pursuing: import('../../shared/types.ts').TargetSchool[] }[]
+): import('../../shared/types.ts').TeamNeed[] {
+  const own = new Map<string, { now: number; departing: number }>();
+  for (const rec of playerTable.records as any[]) {
+    if (rec.isEmpty) continue;
+    if (Number(val(rec, 'TeamIndex')) !== ownTeamIndex) continue;
+    const group = NEED_GROUP[String(val(rec, 'Position'))];
+    if (!group) continue;
+    const slot = own.get(group) ?? { now: 0, departing: 0 };
+    slot.now++;
+    if (departureOf(rec)) slot.departing++;
+    own.set(group, slot);
+  }
+  if (!own.size) return [];
+
+  const committed = new Map<string, number>();
+  const targeted = new Map<string, number>();
+  for (const t of committedTargets) {
+    const group = NEED_GROUP[t.position];
+    if (!group) continue;
+    // Committed to us, not merely committed somewhere while still on the board.
+    if (t.stage.includes('Committed') && t.pursuing[0]?.isUser) {
+      committed.set(group, (committed.get(group) ?? 0) + 1);
+    } else {
+      // Still being chased — the strip's left number.
+      targeted.set(group, (targeted.get(group) ?? 0) + 1);
+    }
+  }
+
+  return NEED_ORDER.map((group) => {
+    const slot = own.get(group) ?? { now: 0, departing: 0 };
+    const incoming = committed.get(group) ?? 0;
+    const projected = slot.now - slot.departing + incoming;
+    return {
+      group,
+      side: NEED_SIDE[group] ?? 'ST',
+      now: slot.now,
+      departing: slot.departing,
+      committed: incoming,
+      projected,
+      targeted: targeted.get(group) ?? 0,
+      needed: Math.max(0, (NEED_FLOOR[group] ?? 0) - projected)
+    };
+  });
 }
 
 const SPEND_FIELDS: [string, string][] = [
@@ -838,6 +952,7 @@ async function extractBoard(
           positionRank: Number(val(recruitRec, 'PositionRank') ?? 0),
           offers: Number(val(recruitRec, 'TotalScholarshipOffers') ?? 0),
           homeState: String(val(playerRec, 'PLYR_HOME_STATE') ?? ''),
+          dealbreaker: dealbreakerOf(playerRec),
           pursuing
         });
       }
@@ -1606,6 +1721,7 @@ export async function extractSnapshot(
       staff,
       board: boardResult?.info ?? null,
       recruiting,
+      teamNeeds: buildTeamNeeds(playerTable, ownTeamIndex, boardResult?.info.targets ?? []),
       seasonHistory,
       contract,
       history

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { RecruitTargetEntry, Snapshot, TargetSchool } from '../../../shared/types.ts';
+import type { RecruitTargetEntry, Snapshot, TeamNeed } from '../../../shared/types.ts';
 import { STAGE_LABELS, spaceOut, stars } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 import { NameLink } from './ProfileModal.tsx';
@@ -17,7 +17,7 @@ type SortKey =
   | 'standing'
   | 'natl'
   | 'posrk'
-  | 'race';
+  | 'deal';
 
 const GEM_ORDER: Record<string, number> = { BUST: 0, NORMAL: 1, GEM: 2 };
 const STAGE_ORDER: Record<string, number> = {
@@ -35,25 +35,120 @@ const standingOf = (t: RecruitTargetEntry): number => {
   return i >= 0 ? i + 1 : BIG;
 };
 
-function Race({ pursuing }: { pursuing: TargetSchool[] }) {
+/**
+ * The snap pool a recruit is really competing for — sides collapse (LT/RT),
+ * linebacker roles stay apart (a MIKE and a WILL both start).
+ */
+const ROLE_POOL: Record<string, string> = {
+  QB: 'QB',
+  HB: 'HB', FB: 'FB',
+  WR: 'WR', TE: 'TE',
+  LT: 'OT', RT: 'OT', LG: 'OG', RG: 'OG', C: 'C',
+  LE: 'EDGE', RE: 'EDGE', DT: 'DT', NT: 'DT',
+  MLB: 'MIKE', ROLB: 'SAM', LOLB: 'WILL',
+  CB: 'CB', FS: 'S', SS: 'S',
+  K: 'K', P: 'P', LS: 'LS'
+};
+
+const rating = (t: RecruitTargetEntry): number => t.stars * 10000 - (t.nationalRank || 9999) / 1;
+
+/**
+ * Two or more targets who both demand playing time in the same snap pool
+ * can't all get it. Maps target key → the other names in the collision.
+ */
+function playingTimeConflicts(targets: RecruitTargetEntry[]): Map<RecruitTargetEntry, string[]> {
+  const pools = new Map<string, RecruitTargetEntry[]>();
+  for (const t of targets) {
+    if (t.dealbreaker !== 'PlayingTime') continue;
+    const pool = ROLE_POOL[t.position] ?? t.position;
+    pools.set(pool, [...(pools.get(pool) ?? []), t]);
+  }
+  const out = new Map<RecruitTargetEntry, string[]>();
+  for (const list of pools.values()) {
+    if (list.length < 2) continue;
+    const sorted = [...list].sort((a, b) => rating(b) - rating(a));
+    for (const t of sorted) {
+      out.set(t, sorted.filter((o) => o !== t).map((o) => o.name));
+    }
+  }
+  return out;
+}
+
+const DEAL_LABELS: Record<string, string> = {
+  PlayingTime: 'Playing Time',
+  ProximityToHome: 'Close to Home',
+  ChampionshipContender: 'Contender',
+  BrandExposure: 'Brand Exposure',
+  PlayingStyle: 'Playing Style',
+  CoachPrestige: 'Coach Prestige',
+  ProPotential: 'Pro Potential',
+  ConferencePrestige: 'Conf. Prestige'
+};
+
+/**
+ * The game's own needs strip: OFFENSIVE / DEFENSIVE / SPECIAL TEAMS TARGETS,
+ * one `targeted/needed` cell per position, red while a need is unfilled —
+ * except our `needed` is honest about departures, which the game ignores
+ * until week 4 of the offseason.
+ */
+function NeedCell({ n }: { n: TeamNeed }) {
+  const hot = n.needed > n.targeted;
   return (
-    <span className="race">
-      {pursuing.slice(0, 3).map((s, i) => (
-        <span key={s.name}>
-          {i > 0 && ' · '}
-          <span className={s.isUser ? 'lead' : ''}>
-            {s.name} {s.influence}
-          </span>
-          {s.delta !== null && s.delta !== 0 && (
-            <span className={s.delta > 0 ? 'delta-up' : 'delta-down'}>
-              {' '}
-              {s.delta > 0 ? '+' : '−'}
-              {Math.abs(s.delta)}
-            </span>
-          )}
-        </span>
-      ))}
+    <span
+      className={`need-cell ${hot ? 'hot' : ''}`}
+      title={
+        `${n.group}: ${n.now} on the roster` +
+        (n.departing > 0 ? `, ${n.departing} leaving (seniors/drafted)` : '') +
+        (n.committed > 0 ? `, ${n.committed} committed` : '') +
+        ` → ${n.projected} next season. ` +
+        (n.needed > 0
+          ? `${n.needed} short of the game's minimum roster; ${n.targeted} still being chased.`
+          : `At the game's minimum roster; ${n.targeted} still being chased.`)
+      }
+    >
+      <b>
+        {n.targeted}/{n.needed}
+      </b>{' '}
+      <span className="pos">{n.group}</span>
+      {n.committed > 0 && <span className="plus">+{n.committed}</span>}
     </span>
+  );
+}
+
+function NeedsBoard({ needs }: { needs: TeamNeed[] }) {
+  if (!needs.length) return null;
+  const off = needs.filter((n) => n.side === 'OFF');
+  const def = needs.filter((n) => n.side === 'DEF');
+  const st = needs.filter((n) => n.side === 'ST');
+  return (
+    <div className="needs-strip">
+      <div className="needs-row">
+        <span className="needs-row-label">OFFENSIVE TARGETS</span>
+        <div className="needs-cells">
+          {off.map((n) => (
+            <NeedCell key={n.group} n={n} />
+          ))}
+        </div>
+      </div>
+      <div className="needs-row">
+        <span className="needs-row-label">DEFENSIVE TARGETS</span>
+        <div className="needs-cells">
+          {def.map((n) => (
+            <NeedCell key={n.group} n={n} />
+          ))}
+        </div>
+        <span className="needs-row-label st">SPECIAL TEAMS</span>
+        <div className="needs-cells">
+          {st.map((n) => (
+            <NeedCell key={n.group} n={n} />
+          ))}
+        </div>
+      </div>
+      <div className="needs-foot">
+        targeted/needed · <span className="plus-note">+n</span> commits inbound · needs already count
+        seniors and draft entries out — the game itself waits until week 4 of the offseason
+      </div>
+    </div>
   );
 }
 
@@ -62,6 +157,11 @@ export default function TargetsView({ school }: { school: School }) {
   const currentWeek = useHQ((s) => s.snapshot?.season?.week ?? 0);
   const [sortKey, setSortKey] = useState<SortKey>('stars');
   const [asc, setAsc] = useState(false);
+
+  const conflicts = useMemo(
+    () => playingTimeConflicts(board?.targets ?? []),
+    [board]
+  );
 
   const sorted = useMemo(() => {
     if (!board) return [];
@@ -89,17 +189,26 @@ export default function TargetsView({ school }: { school: School }) {
           return dir * ((a.nationalRank || BIG) - (b.nationalRank || BIG));
         case 'posrk':
           return dir * ((a.positionRank || BIG) - (b.positionRank || BIG));
-        case 'race':
-          return dir * ((a.pursuing[0]?.influence ?? -1) - (b.pursuing[0]?.influence ?? -1));
+        case 'deal':
+          return (
+            dir * ((conflicts.has(b) ? 1 : 0) - (conflicts.has(a) ? 1 : 0)) ||
+            a.dealbreaker.localeCompare(b.dealbreaker) ||
+            b.stars - a.stars
+          );
         default:
           return dir * (a.stars - b.stars) || b.influence - a.influence;
       }
     });
     return list;
-  }, [board, sortKey, asc]);
+  }, [board, sortKey, asc, conflicts]);
 
   if (!board || !board.targets.length) {
-    return <div className="empty">No recruiting board found in this save.</div>;
+    return (
+      <>
+        <NeedsBoard needs={school.teamNeeds} />
+        <div className="empty">No recruiting board found in this save.</div>
+      </>
+    );
   }
   const gems = board.targets.filter((t) => t.quality === 'GEM').length;
   const busts = board.targets.filter((t) => t.quality === 'BUST').length;
@@ -129,8 +238,25 @@ export default function TargetsView({ school }: { school: School }) {
     </span>
   );
 
+  const dealCell = (t: RecruitTargetEntry) => {
+    if (!t.dealbreaker) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
+    const rivals = conflicts.get(t);
+    const label = DEAL_LABELS[t.dealbreaker] ?? spaceOut(t.dealbreaker);
+    if (!rivals) return <span className="deal">{label}</span>;
+    return (
+      <span
+        className="deal clash"
+        title={`Also chasing ${rivals.join(', ')} — everyone here wants playing time at the same spot.`}
+      >
+        <span className="dot" /> {label}
+      </span>
+    );
+  };
+
   return (
     <>
+      <NeedsBoard needs={school.teamNeeds} />
+
       <div className="filters" style={{ alignItems: 'center' }}>
         <span className="chip">
           <span className="k">BOARD</span> <b>{board.targets.length}</b>
@@ -166,7 +292,7 @@ export default function TargetsView({ school }: { school: School }) {
               {th('Standing', 'standing', { num: true, defaultAsc: true })}
               {th('Natl', 'natl', { num: true, defaultAsc: true })}
               {th('Pos Rk', 'posrk', { num: true, defaultAsc: true })}
-              {th('The Race', 'race')}
+              {th('Dealbreaker', 'deal')}
             </tr>
           </thead>
           <tbody>
@@ -212,18 +338,17 @@ export default function TargetsView({ school }: { school: School }) {
                 </td>
                 <td className="num">{t.nationalRank > 0 ? t.nationalRank : '—'}</td>
                 <td className="num">{t.positionRank > 0 ? t.positionRank : '—'}</td>
-                <td>
-                  <Race pursuing={t.pursuing} />
-                </td>
+                <td>{dealCell(t)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <p className="foot-note">
-        Standing is your rank among the schools pursuing the recruit (hover for raw influence). Visit
-        weeks in green are upcoming; hover shows the planned activity. The race lists the top three
-        pursuers with week-over-week influence changes. ♥ marks board favorites.
+        Standing is your rank among the schools pursuing the recruit (hover for raw influence); the
+        full race is in each recruit&apos;s profile. Visit weeks in green are upcoming; hover shows the
+        planned activity. A tinted dot in Dealbreaker marks two of your targets demanding playing time
+        at the same spot — hover to see who. ♥ marks board favorites.
       </p>
     </>
   );

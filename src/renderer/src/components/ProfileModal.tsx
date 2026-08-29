@@ -362,8 +362,39 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
           </span>}
           {p.recruit.stateRank > 0 && <span>State #{p.recruit.stateRank}</span>}
           {p.recruit.offers > 0 && <span>{p.recruit.offers} offers</span>}
+          {p.recruit.dealbreaker && (
+            <span>
+              <span className="pf-va">Dealbreaker</span> {spaceOut(p.recruit.dealbreaker)}
+            </span>
+          )}
           {p.recruit.committedTo && <span className="pf-commit">Committed — {p.recruit.committedTo}</span>}
         </div>
+      )}
+
+      {p.recruit && p.recruit.pursuing.length > 0 && (
+        <>
+          <SectionTitle>The Race</SectionTitle>
+          <div className="pf-race">
+            {p.recruit.pursuing.map((s, i) => (
+              <div key={`${s.name}-${i}`} className={`pf-race-row ${s.isUser ? 'us' : ''}`}>
+                <span className="rk">{i + 1}</span>
+                <span className="nm">{s.name}</span>
+                <span className="bar">
+                  <span
+                    style={{
+                      width: `${
+                        p.recruit!.pursuing[0].influence > 0
+                          ? Math.max(3, Math.round((s.influence / p.recruit!.pursuing[0].influence) * 100))
+                          : 3
+                      }%`
+                    }}
+                  />
+                </span>
+                <span className="inf">{s.influence}</span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {p.stops.length > 1 && (
@@ -418,7 +449,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
             ))}
             {p.physical.map((a, i) => (
               <span key={i} className="chip">
-                <span className="k">PHYS</span>&nbsp;
+                {a.name || <span className="k">PHYS</span>}&nbsp;
                 <b style={{ color: RANK_COLOR[a.rank] ?? 'var(--ink-3)' }}>{a.rank}</b>
               </span>
             ))}

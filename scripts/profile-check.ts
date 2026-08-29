@@ -6,7 +6,7 @@
  */
 import { loadFranchise, mainTable, val, refFromRecord, isNullRef } from '../src/main/parser/franchise.ts';
 import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from '../src/main/parser/profile.ts';
-import { extractSnapshot } from '../src/main/parser/extract.ts';
+import { extractSnapshot, NEED_FLOOR } from '../src/main/parser/extract.ts';
 
 const savePath = process.argv[2] ?? 'samples/DYNASTY-DUKETOND-AUTOSAVE';
 const franchise = await loadFranchise(savePath);
@@ -314,6 +314,90 @@ if (school) {
     );
     const s32 = prof?.seasons.find((s) => s.year === 2032);
     check('unbanked year stays schedule-free', !!s32 && s32.schedule.length === 0 && s32.pointsFor === null);
+  }
+}
+
+// Recruiting Office data: team needs, dealbreakers, and the race in profiles.
+{
+  const needs = snap.school!.teamNeeds;
+  // The panel mirrors the game's recruiting hub: OFFENSIVE / DEFENSIVE /
+  // SPECIAL TEAMS TARGETS in the game's own position vocabulary.
+  check(
+    'needs use the game panel vocabulary',
+    needs.map((n) => n.group).join(',') === 'QB,HB,FB,WR,TE,T,G,C,EDGE,DT,OLB,MIKE,CB,FS,SS,K,P',
+    needs.map((n) => n.group).join(',')
+  );
+  check(
+    'needs split into the panel rows 8/7/2',
+    needs.filter((n) => n.side === 'OFF').length === 8 &&
+      needs.filter((n) => n.side === 'DEF').length === 7 &&
+      needs.filter((n) => n.side === 'ST').length === 2
+  );
+  check(
+    'team needs arithmetic holds',
+    needs.every((n) => n.projected === n.now - n.departing + n.committed),
+    needs.map((n) => `${n.group} ${n.now}-${n.departing}+${n.committed}=${n.projected}`).join(' ')
+  );
+  check(
+    'needed measures against the game roster floor',
+    needs.every((n) => n.needed === Math.max(0, (NEED_FLOOR[n.group] ?? 0) - n.projected)),
+    needs.map((n) => `${n.group}:${n.targeted}/${n.needed}`).join(' ')
+  );
+  {
+    const boardTargets = snap.school!.board?.targets ?? [];
+    const commitsToUs = boardTargets.filter(
+      (t) => t.stage.includes('Committed') && t.pursuing[0]?.isUser
+    ).length;
+    const chased = needs.reduce((s, n) => s + n.targeted, 0);
+    const inbound = needs.reduce((s, n) => s + n.committed, 0);
+    check(
+      'chased + committed reconcile to the board',
+      chased + inbound === boardTargets.length && inbound === commitsToUs,
+      `${chased} chased + ${inbound} committed = ${boardTargets.length} board`
+    );
+  }
+  const departingTotal = needs.reduce((s, n) => s + n.departing, 0);
+  const seniors = snap.school!.roster.filter((r) => r.departing === 'senior').length;
+  const drafted = snap.school!.roster.filter((r) => r.departing === 'drafted').length;
+  check('departures equal roster seniors + draftees', departingTotal === seniors + drafted, `${departingTotal} = ${seniors}+${drafted}`);
+
+  const targets = snap.school!.board?.targets ?? [];
+  const withDeal = targets.filter((t) => t.dealbreaker);
+  check('dealbreakers extracted for targets', targets.length === 0 || withDeal.length > 0, `${withDeal.length}/${targets.length}`);
+  check(
+    'dealbreaker values are known enums',
+    withDeal.every((t) =>
+      ['PlayingTime', 'ProximityToHome', 'ChampionshipContender', 'BrandExposure', 'PlayingStyle', 'CoachPrestige', 'ProPotential', 'ConferencePrestige'].includes(t.dealbreaker)
+    ),
+    [...new Set(withDeal.map((t) => t.dealbreaker))].join(',')
+  );
+
+  // Physical abilities carry the game's names now (archetype slot tables).
+  {
+    let withPhys = 0;
+    let named = 0;
+    for (const t of targets.slice(0, 25)) {
+      const prof = await extractPlayerProfile(franchise, t.playerRow, 27);
+      for (const a of prof?.physical ?? []) {
+        withPhys++;
+        if (a.name) named++;
+      }
+    }
+    check('physical abilities carry names', withPhys > 0 && named === withPhys, `${named}/${withPhys} slots named`);
+  }
+
+  // The race inside a recruit's player profile, with the user school flagged.
+  const target = targets.find((t) => t.pursuing.length >= 2);
+  if (target) {
+    const prof = await extractPlayerProfile(franchise, target.playerRow, 27);
+    const race = prof?.recruit?.pursuing ?? [];
+    check('recruit profile carries the race', race.length >= 2, `${race.length} schools`);
+    check(
+      'race sorted by influence, user flagged',
+      race.every((s, i) => i === 0 || race[i - 1].influence >= s.influence) &&
+        race.some((s) => s.isUser) === target.pursuing.some((s) => s.isUser),
+      race.map((s) => `${s.isUser ? '*' : ''}${s.name} ${s.influence}`).join(' | ')
+    );
   }
 }
 
