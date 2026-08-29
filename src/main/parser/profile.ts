@@ -19,7 +19,8 @@ import type {
   SchoolProfile,
   SchoolSeason,
   SeasonStatRow,
-  StatLine
+  StatLine,
+  TargetSchool
 } from '../../shared/types.ts';
 import { SCHOOL_LOCATIONS } from '../data/school-locations.ts';
 import { ensureCoachSchema } from './coach-schema.ts';
@@ -297,6 +298,7 @@ const PROFILE_PLAYER_FIELDS = [
   'YearlyAwardCount',
   'InjuryStatus',
   'ProspectStarRating',
+  'RecruitingDealbreaker',
   'SeasonStats',
   'CareerStats',
   'GameStats'
@@ -333,7 +335,11 @@ function seasonGameTable(franchise: any): any | null {
   return candidates.sort((a: any, b: any) => b.header.recordCapacity - a.header.recordCapacity)[0];
 }
 
-export async function extractPlayerProfile(franchise: any, playerRow: number): Promise<PlayerProfile | null> {
+export async function extractPlayerProfile(
+  franchise: any,
+  playerRow: number,
+  userTeamRow: number | null = null
+): Promise<PlayerProfile | null> {
   try {
     const ctx = await buildCtx(franchise);
     const pt = mainTable(franchise, 'Player');
@@ -473,17 +479,26 @@ export async function extractPlayerProfile(franchise: any, playerRow: number): P
         const pref = refFromRecord(rrec, 'Player');
         if (isNullRef(pref) || pref.tableId !== playerTableId || pref.row !== playerRow) continue;
         const stage = String(val(rrec, 'RecruitStage') ?? '');
-        let committedTo: string | null = null;
-        if (stage.includes('Committed')) {
-          const topRec = await recordAt(franchise, refFromRecord(rrec, 'TopSchoolsList'));
-          const first = topRec ? refsFromArrayRecord(topRec)[0] : undefined;
-          const entry = first ? await recordAt(franchise, first) : null;
-          if (entry) {
-            const tid = Number(val(entry, 'TeamId'));
-            const trow = ctx.rowByTeamIndex.get(tid);
-            committedTo = (trow !== undefined ? ctx.nameByRow.get(trow) : null) ?? null;
-          }
+
+        // The race: every pursuing school with its influence, best first.
+        const pursuing: TargetSchool[] = [];
+        const topRec = await recordAt(franchise, refFromRecord(rrec, 'TopSchoolsList'));
+        for (const er of topRec ? refsFromArrayRecord(topRec).slice(0, 8) : []) {
+          const entry = await recordAt(franchise, er);
+          if (!entry) continue;
+          const tid = Number(val(entry, 'TeamId'));
+          const trow = ctx.rowByTeamIndex.get(tid);
+          pursuing.push({
+            name: (trow !== undefined ? ctx.nameByRow.get(trow) : null) ?? `Team ${tid}`,
+            influence: numOf(entry, 'TeamInfluence'),
+            isUser: userTeamRow !== null && trow === userTeamRow,
+            delta: null
+          });
         }
+        pursuing.sort((a, b) => b.influence - a.influence);
+        const committedTo = stage.includes('Committed') ? (pursuing[0]?.name ?? null) : null;
+
+        const deal = String(val(rec, 'RecruitingDealbreaker') ?? '');
         recruit = {
           stars: STAR_MAP[String(val(rec, 'ProspectStarRating'))] ?? 0,
           nationalRank: numOf(rrec, 'NationalRank'),
@@ -491,7 +506,9 @@ export async function extractPlayerProfile(franchise: any, playerRow: number): P
           stateRank: numOf(rrec, 'StateRank'),
           stage,
           offers: numOf(rrec, 'TotalScholarshipOffers'),
-          committedTo
+          committedTo,
+          dealbreaker: /^Invalid/.test(deal) ? '' : deal,
+          pursuing
         };
         break;
       }

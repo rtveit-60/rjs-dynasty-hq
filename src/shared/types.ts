@@ -117,6 +117,32 @@ export interface RosterPlayer {
   homeState: string;
   homeTown: string;
   portraitId: number;
+  /** Leaving after this season: a senior, or already drafted. The game keeps
+   * both on the roster until week 4 of the offseason. */
+  departing: 'senior' | 'drafted' | null;
+}
+
+/**
+ * One cell of the game-style needs panel (`targeted/needed` per position).
+ * `now` counts everyone the game still lists; `departing` are the
+ * seniors/draftees inside that count; `committed` are commits on the way in.
+ * `needed` measures the projected roster against the game's own minimum
+ * roster composition — honest about departures, which the game itself
+ * ignores until week 4 of the offseason.
+ */
+export interface TeamNeed {
+  group: string;
+  /** The row the game's own needs panel files this position under. */
+  side: 'OFF' | 'DEF' | 'ST';
+  now: number;
+  departing: number;
+  committed: number;
+  /** now − departing + committed. */
+  projected: number;
+  /** Board targets still being chased at this position (commits excluded). */
+  targeted: number;
+  /** max(0, game roster floor − projected). */
+  needed: number;
 }
 
 export interface DepthChartSlot {
@@ -335,6 +361,8 @@ export interface RecruitTargetEntry {
   positionRank: number;
   offers: number;
   homeState: string;
+  /** Save enum, e.g. PlayingTime, ProximityToHome; '' when none. */
+  dealbreaker: string;
   pursuing: TargetSchool[];
 }
 
@@ -507,6 +535,10 @@ export interface PlayerProfile {
     stage: string;
     offers: number;
     committedTo: string | null;
+    /** Save enum, e.g. PlayingTime; '' when none. */
+    dealbreaker: string;
+    /** The race: pursuing schools by influence, user school flagged. */
+    pursuing: TargetSchool[];
   } | null;
 }
 
@@ -758,6 +790,8 @@ export interface Snapshot {
     staff: StaffTendency[];
     board: BoardInfo | null;
     recruiting: RecruitingData | null;
+    /** Projected roster needs per position group; empty when roster is absent. */
+    teamNeeds: TeamNeed[];
     seasonHistory: SeasonRecord[];
     contract: CoachContract | null;
     history: TeamHistoryData | null;

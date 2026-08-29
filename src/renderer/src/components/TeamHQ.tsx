@@ -19,7 +19,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'program', label: 'PROGRAM DASHBOARD' },
   { key: 'roster', label: 'ROSTER' },
   { key: 'depth', label: 'DEPTH CHART' },
-  { key: 'targets', label: 'TARGETS' },
+  { key: 'targets', label: 'RECRUITING OFFICE' },
   { key: 'budget', label: 'NIL & BUDGET' },
   { key: 'tendencies', label: 'TENDENCIES' },
   { key: 'playbook', label: 'PLAYBOOK' },

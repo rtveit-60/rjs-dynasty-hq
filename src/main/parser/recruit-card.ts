@@ -4,6 +4,7 @@
  * far too much to serialise on every save write.
  */
 import type { AbilitySlot, RecruitCard } from '../../shared/types.ts';
+import { PHYSICAL_ABILITY_SLOTS } from '../../shared/physical-abilities.ts';
 import { mainTable, val } from './franchise.ts';
 
 /** Ratings worth showing, per position group. Order is the display order. */
@@ -149,12 +150,15 @@ export function abilitiesFromRecord(rec: any): { mental: AbilitySlot[]; physical
     if (!name || name === 'None') continue;
     mental.push({ name, rank: rank === 'None' ? '' : rank });
   }
-  // The save keeps only a tier for each physical slot — no name is stored.
+  // The save keeps only a tier per physical slot; which ability the slot IS
+  // comes from the archetype's slot table in the game's own data (see
+  // scripts/extract-abilities.ts).
+  const slotNames = PHYSICAL_ABILITY_SLOTS[String(val(rec, 'PlayerType') ?? '')] ?? [];
   const physical: AbilitySlot[] = [];
   for (let i = 1; i <= 5; i++) {
     const rank = String(val(rec, `PhysicalAbility${i}`) ?? '');
     if (!rank || rank === 'None') continue;
-    physical.push({ name: '', rank });
+    physical.push({ name: slotNames[i - 1] ?? '', rank });
   }
   return { mental, physical };
 }

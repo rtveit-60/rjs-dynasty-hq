@@ -38,6 +38,8 @@ export class Pipeline {
   private lastUpdate: number | null = null;
   private busy = false;
   private queued = false;
+  /** The school scoped by the latest refresh/rescope; marks "us" in profiles. */
+  private lastSchoolRow: number | null = null;
 
   constructor(events: PipelineEvents) {
     this.events = events;
@@ -69,6 +71,7 @@ export class Pipeline {
         this.lastUpdate = Date.now();
         console.log(`[hq] parsed ${basename(savePath)} (${hash.slice(0, 8)})`);
       }
+      this.lastSchoolRow = schoolTeamRow;
       const snapshot = await extractSnapshot(this.franchise, {
         schoolTeamRow,
         fileName: basename(savePath)
@@ -106,7 +109,7 @@ export class Pipeline {
   /** Pop-up profile for a clicked name — player, coach or school. */
   async profile(req: ProfileRequest): Promise<Profile | null> {
     if (!this.franchise) return null;
-    if (req.kind === 'player') return extractPlayerProfile(this.franchise, req.row);
+    if (req.kind === 'player') return extractPlayerProfile(this.franchise, req.row, this.lastSchoolRow);
     if (req.kind === 'coach') return extractCoachProfile(this.franchise, req.row);
     if (req.kind === 'school') return extractSchoolProfile(this.franchise, req.row, readBankedGames());
     return null;
@@ -118,6 +121,7 @@ export class Pipeline {
       await this.refresh(savePath, schoolTeamRow);
       return;
     }
+    this.lastSchoolRow = schoolTeamRow;
     const snapshot = await extractSnapshot(this.franchise, {
       schoolTeamRow,
       fileName: basename(savePath)
