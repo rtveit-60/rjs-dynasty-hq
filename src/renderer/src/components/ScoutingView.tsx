@@ -393,13 +393,13 @@ export default function ScoutingView({
                       </td>
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
-                        {r.onBoard && <BoardMark />}
                         <NameLink req={{ kind: 'player', row: r.playerRow }}>{r.name}</NameLink>
                         <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
                           {' · '}
                           {spaceOut(r.homeState)}
                           {r.isTransfer ? ` · ${r.classType}` : ''}
                         </span>
+                        {r.onBoard && <BoardMark />}
                       </td>
                       <td>
                         <span className="pos-tag">{recruitPos(r.position)}</span>

@@ -339,13 +339,13 @@ export default function RecruitingView() {
                       </td>
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
-                        {r.onBoard && <BoardMark />}
                         <NameLink req={{ kind: 'player', row: r.playerRow }}>{r.name}</NameLink>
                         <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
                           {' · '}
                           {spaceOut(r.homeState)}
                           {board === 'portal' && r.classType !== 'HS' ? ` · ${r.classType}` : ''}
                         </span>
+                        {r.onBoard && <BoardMark />}
                         {r.quality === 'GEM' && <span className="btag gem">Gem</span>}
                         {r.quality === 'BUST' && <span className="btag bust">Bust</span>}
                       </td>
