@@ -39,9 +39,9 @@
 
 /* Night studio — the primary broadcast set: dark stage, lit modules. */
 [data-theme='dark'] {
-  --paper: #14171c;
-  --surface: #0f1116;
-  --sunken: #0a0c0f;
+  --paper: #11141a;
+  --surface: #0b0d11;
+  --sunken: #07080b;
   --ink: #e9ecf2;
   --ink-2: #aeb6c4;
   --ink-3: #79818f;

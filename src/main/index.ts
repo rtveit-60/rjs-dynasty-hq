@@ -54,8 +54,8 @@ function effectiveTheme(): 'light' | 'dark' {
 }
 
 const OVERLAY = {
-  light: { color: '#f4f2ee', symbolColor: '#22211f', height: 44 },
-  dark: { color: '#101214', symbolColor: '#e9e7e2', height: 44 }
+  light: { color: '#fafbfc', symbolColor: '#16181d', height: 44 },
+  dark: { color: '#11141a', symbolColor: '#e9ecf2', height: 44 }
 };
 
 function applyOverlay(): void {
@@ -347,7 +347,7 @@ function createWindow(): void {
       ? join(app.getAppPath(), 'build/icon.png')
       : undefined,
     show: false,
-    backgroundColor: effectiveTheme() === 'dark' ? '#101214' : '#f4f2ee',
+    backgroundColor: effectiveTheme() === 'dark' ? '#0b0d11' : '#eef0f3',
     titleBarStyle: 'hidden',
     titleBarOverlay: OVERLAY[effectiveTheme()],
     webPreferences: {
