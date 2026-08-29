@@ -360,10 +360,16 @@ function createWindow(): void {
 
   win.once('ready-to-show', () => win?.show());
   win.webContents.on('did-finish-load', applyZoom);
-  let zoomTimer: NodeJS.Timeout | undefined;
+  // Zoom tracks the drag frame by frame — a trailing one-frame throttle keeps
+  // IPC sane while the window is in motion and still lands on the final size.
+  let zoomPending = false;
   win.on('resize', () => {
-    clearTimeout(zoomTimer);
-    zoomTimer = setTimeout(applyZoom, 80);
+    if (zoomPending) return;
+    zoomPending = true;
+    setTimeout(() => {
+      zoomPending = false;
+      if (win && !win.isMinimized()) applyZoom();
+    }, 16);
   });
   win.on('close', () => {
     if (win && !win.isMaximized()) updateSettings({ windowBounds: win.getBounds() });
