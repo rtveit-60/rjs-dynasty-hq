@@ -3435,47 +3435,78 @@ table.tbl.tbl-wide {
   margin-top: 12px;
 }
 
-/* Headlines rail: story cards in a horizontal, snap-scrolling strip. */
-.hq-scroll {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding: 10px 12px 12px;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ink-3) transparent;
-}
-
-.hq-scroll::-webkit-scrollbar {
-  height: 9px;
-}
-
-/* One story fills the rail; the arrows and snap points page through. */
+/* Headlines rail: one story at a time, floating centered between chevrons. */
 .hq-heads {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
+.hq-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 8px 12px;
+}
+
+.hq-chev {
+  flex: none;
+  width: 28px;
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 700 26px/1 var(--font-display);
+  padding: 0 0 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hq-chev:hover {
+  color: var(--hot);
+  border-color: var(--ink-3);
+}
+
 .hq-scroll {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.hq-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .hq-card {
   flex: 0 0 100%;
   min-width: 0;
-  scroll-snap-align: start;
-}
-
-.hq-pager {
-  display: inline-flex;
+  scroll-snap-align: center;
+  display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: center;
 }
 
 .hq-card .story {
-  height: 100%;
+  width: min(600px, 100%);
+  height: auto;
   margin: 0;
+  text-align: center;
+}
+
+.hq-card .story .meta {
+  justify-content: center;
+}
+
+.hq-card .read-cue {
+  margin-left: 0;
 }
 
 /* The full Top 25 flows down two columns. */
