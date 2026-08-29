@@ -8,20 +8,25 @@
 
 :root {
   --font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-score: 'Archivo Black', 'Arial Black', sans-serif;
   --font-ui: 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
 
-  --paper: #f4f2ee;
-  --surface: #fbfaf8;
-  --sunken: #edeae4;
-  --ink: #22211f;
-  --ink-2: #5c5951;
-  --ink-3: #8f8a80;
-  --line: rgba(34, 33, 31, 0.14);
-  --line-soft: rgba(34, 33, 31, 0.07);
+  /* Daylight studio — the light broadcast set. */
+  --paper: #fafbfc;
+  --surface: #eef0f3;
+  --sunken: #e2e5e9;
+  --ink: #16181d;
+  --ink-2: #4c5361;
+  --ink-3: #7d8492;
+  --line: rgba(22, 24, 29, 0.16);
+  --line-soft: rgba(22, 24, 29, 0.07);
 
   --team: #3f4a5a;
   --team-2: #8f8a80;
   --team-contrast: #ffffff;
+
+  /* The one hot highlight — the number that matters. */
+  --hot: #8f6400;
 
   --good: #256e4b;
   --warn: #9a6a00;
@@ -32,15 +37,18 @@
   --dev-elite: #a06a00;
 }
 
+/* Night studio — the primary broadcast set: dark stage, lit modules. */
 [data-theme='dark'] {
-  --paper: #101214;
-  --surface: #16181b;
-  --sunken: #0b0d0e;
-  --ink: #e9e7e2;
-  --ink-2: #a8a49b;
-  --ink-3: #6f6b63;
-  --line: rgba(233, 231, 226, 0.13);
-  --line-soft: rgba(233, 231, 226, 0.06);
+  --paper: #14171c;
+  --surface: #0f1116;
+  --sunken: #0a0c0f;
+  --ink: #e9ecf2;
+  --ink-2: #aeb6c4;
+  --ink-3: #79818f;
+  --line: rgba(233, 236, 242, 0.13);
+  --line-soft: rgba(233, 236, 242, 0.06);
+
+  --hot: #ffd25f;
 
   --good: #57b789;
   --warn: #d9a53e;
@@ -84,7 +92,7 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   background: var(--line);
-  border-radius: 5px;
+  border-radius: 3px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
@@ -128,6 +136,27 @@ body {
   color: var(--team);
 }
 
+.bug-plate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--team);
+  color: var(--team-contrast);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 3px 15px 2px 12px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  white-space: nowrap;
+}
+
+.bug-plate .rec {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
 .titlebar-meta {
   display: flex;
   align-items: center;
@@ -165,7 +194,7 @@ body {
 .school-mark {
   width: 40px;
   height: 40px;
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--team);
   color: var(--team-contrast);
   display: grid;
@@ -214,7 +243,7 @@ body {
   letter-spacing: 0.12em;
   text-align: left;
   cursor: pointer;
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 2px 2px 0;
 }
 
 .nav-item:hover:not(:disabled) {
@@ -241,7 +270,7 @@ body {
   color: var(--ink-3);
   border: 1px solid var(--line);
   padding: 1px 5px;
-  border-radius: 999px;
+  border-radius: 2px;
 }
 
 .rail-foot {
@@ -263,7 +292,7 @@ body {
   gap: 7px;
   padding: 3px 10px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 2px;
   font-size: 11px;
   color: var(--ink-2);
   background: var(--surface);
@@ -379,7 +408,7 @@ body {
 
 .staff-card {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--paper);
   padding: 11px 14px;
 }
@@ -463,8 +492,9 @@ body {
 .page-kicker::before {
   content: '';
   width: 18px;
-  height: 3px;
+  height: 4px;
   background: var(--team-bright, var(--team));
+  transform: skewX(-14deg);
 }
 
 .page-title {
@@ -505,7 +535,7 @@ body {
   align-items: center;
   gap: 6px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 2px;
   padding: 3px 8px;
   font-size: 11.5px;
   color: var(--ink-2);
@@ -562,7 +592,7 @@ body {
 
 .tab.active {
   color: var(--ink);
-  border-bottom-color: var(--team);
+  border-bottom-color: var(--team-bright, var(--team));
 }
 
 .tab:disabled {
@@ -574,19 +604,23 @@ body {
 
 .section-h {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   margin: 26px 0 10px;
 }
 
+/* Lower-third plate: team color, skewed trailing edge. */
 .section-h h3 {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 13.5px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-2);
+  color: var(--team-contrast);
+  background: var(--team);
+  padding: 3px 15px 2px 11px;
   margin: 0;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 
 .section-h .rule {
@@ -613,7 +647,7 @@ body {
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--ink-2);
-  border-radius: 999px;
+  border-radius: 2px;
   padding: 3px 11px;
   font-size: 11.5px;
   font-weight: 500;
@@ -634,7 +668,7 @@ body {
 
 .tbl-wrap {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   overflow-x: auto;
   background: var(--paper);
 }
@@ -715,7 +749,7 @@ table.tbl {
   font-weight: 700;
   font-size: 14px;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: 2px;
   border: 1px solid transparent;
 }
 
@@ -748,7 +782,7 @@ table.tbl {
   font-weight: 600;
   letter-spacing: 0.05em;
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: 2px;
   border: 1px solid var(--line);
   color: var(--ink-3);
 }
@@ -784,7 +818,7 @@ table.tbl {
 
 .dc-card {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--paper);
   padding: 10px 12px;
 }
@@ -885,7 +919,7 @@ table.tbl {
 .save-list {
   margin-top: 26px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 2px;
   overflow: hidden;
   background: var(--paper);
 }
@@ -941,7 +975,7 @@ table.tbl {
   border: 1px solid var(--line);
   background: var(--paper);
   color: var(--ink);
-  border-radius: 6px;
+  border-radius: 3px;
   padding: 7px 14px;
   font-size: 12.5px;
   font-weight: 600;
@@ -953,9 +987,9 @@ table.tbl {
 }
 
 .btn.primary {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+  background: var(--team);
+  border-color: var(--team);
+  color: var(--team-contrast);
 }
 
 .btn.primary:hover {
@@ -985,7 +1019,7 @@ table.tbl {
   align-items: center;
   gap: 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--paper);
   padding: 9px 11px;
   cursor: pointer;
@@ -1000,7 +1034,7 @@ table.tbl {
 .swatch {
   width: 22px;
   height: 22px;
-  border-radius: 4px;
+  border-radius: 2px;
   flex: none;
   border: 1px solid var(--line);
 }
@@ -1019,7 +1053,7 @@ table.tbl {
 .search {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--paper);
   color: var(--ink);
   padding: 9px 12px;
@@ -1042,7 +1076,7 @@ table.tbl {
 
 .stat {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--paper);
   padding: 12px 14px;
 }
@@ -1059,11 +1093,11 @@ table.tbl {
 }
 
 .stat .num {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 26px;
+  font-family: var(--font-score);
+  font-weight: 400;
+  font-size: 23px;
   line-height: 1.1;
-  margin-top: 4px;
+  margin-top: 5px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1079,7 +1113,7 @@ table.tbl {
   font-weight: 700;
   font-size: 12px;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: 2px;
   border: 1px solid var(--line);
   color: var(--ink-2);
 }
@@ -1092,7 +1126,7 @@ table.tbl {
 .split-bar {
   display: flex;
   height: 34px;
-  border-radius: 6px;
+  border-radius: 3px;
   overflow: hidden;
   border: 1px solid var(--line);
   font-family: var(--font-display);
@@ -1225,7 +1259,7 @@ table.tbl {
 
 .panel {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--paper);
   padding: 14px 16px;
 }
@@ -1263,7 +1297,7 @@ table.tbl {
   font-weight: 700;
   letter-spacing: 0.08em;
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: 2px;
 }
 
 /* ——— Playbook browser ——— */
@@ -1271,7 +1305,7 @@ table.tbl {
 .seg-toggle {
   display: inline-flex;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 2px;
   overflow: hidden;
   background: var(--sunken);
 }
@@ -1340,7 +1374,7 @@ table.tbl {
   background: none;
   text-align: left;
   padding: 6px 9px;
-  border-radius: 5px;
+  border-radius: 3px;
   font-size: 13px;
   color: var(--ink-2);
   cursor: pointer;
@@ -1367,7 +1401,7 @@ table.tbl {
   background: none;
   text-align: left;
   padding: 6px 9px;
-  border-radius: 5px;
+  border-radius: 3px;
   font-size: 13px;
   color: var(--ink-2);
   cursor: pointer;
@@ -1383,7 +1417,7 @@ table.tbl {
 
 .pb-art {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 2px;
   background: var(--surface);
   padding: 14px;
 }
@@ -1407,7 +1441,7 @@ table.tbl {
   color: var(--ink-2);
   background: var(--sunken);
   border: 1px solid var(--line-soft);
-  border-radius: 999px;
+  border-radius: 2px;
   padding: 2px 9px;
 }
 
@@ -1446,7 +1480,7 @@ table.tbl {
 }
 
 .fav {
-  color: var(--dev-elite);
+  color: var(--hot);
 }
 
 .team-logo {
@@ -1459,7 +1493,7 @@ table.tbl {
   display: inline-block;
   width: 22px;
   height: 22px;
-  border-radius: 4px;
+  border-radius: 2px;
   object-fit: cover;
   vertical-align: -6px;
   margin-right: 8px;
@@ -1478,7 +1512,7 @@ table.tbl {
   letter-spacing: 0.04em;
   padding: 1px 7px;
   margin-right: 4px;
-  border-radius: 999px;
+  border-radius: 2px;
   color: var(--team-bright, var(--team));
   border: 1px solid color-mix(in srgb, var(--team-bright, var(--team)) 45%, transparent);
   background: color-mix(in srgb, var(--team-bright, var(--team)) 8%, transparent);
@@ -1488,7 +1522,7 @@ table.tbl {
 .stars-cell {
   font-size: 12px;
   letter-spacing: 0.05em;
-  color: var(--dev-elite);
+  color: var(--hot);
   white-space: nowrap;
 }
 
@@ -1506,7 +1540,7 @@ table.tbl {
 
 .story {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--paper);
   padding: 16px 18px;
   min-width: 0;
@@ -1659,7 +1693,7 @@ table.tbl {
 .theme-toggle {
   display: inline-flex;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
@@ -1814,10 +1848,10 @@ table.tbl.tbl-wide {
 
 .rc-skill-v {
   display: block;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 21px;
-  line-height: 1.1;
+  font-family: var(--font-score);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1.2;
 }
 
 .rc-skill-v.t1 {
@@ -1917,7 +1951,7 @@ table.tbl.tbl-wide {
 
 .tbl-wrap::-webkit-scrollbar-thumb {
   background: var(--ink-3);
-  border-radius: 6px;
+  border-radius: 3px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
@@ -1929,7 +1963,7 @@ table.tbl.tbl-wide {
 
 .tbl-wrap::-webkit-scrollbar-track {
   background: var(--sunken);
-  border-radius: 6px;
+  border-radius: 3px;
 }
 
 /* A 200-row table would park its horizontal scrollbar hundreds of pixels below
@@ -1988,7 +2022,7 @@ table.tbl.tbl-wide {
 /* ——— Scouting reports: attribute criteria builder ——— */
 .scout-builder {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 3px;
   background: var(--paper);
   padding: 12px 14px;
   margin-top: 14px;
@@ -2018,7 +2052,7 @@ table.tbl.tbl-wide {
 .scout-select {
   min-width: 210px;
   padding: 5px 8px;
-  border-radius: 5px;
+  border-radius: 3px;
   border: 1px solid var(--line);
   background: var(--sunken);
   color: var(--ink);
@@ -2259,8 +2293,10 @@ table.tbl.tbl-wide {
 }
 
 .pf-ovr {
-  font-size: 26px;
-  padding: 8px 12px;
+  font-family: var(--font-score);
+  font-weight: 400;
+  font-size: 22px;
+  padding: 9px 12px;
 }
 
 .pf-season-rec {
@@ -2293,6 +2329,9 @@ table.tbl.tbl-wide {
 }
 
 .pf-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 22px 0 8px;
   font: 600 12px var(--font-ui);
   letter-spacing: 0.14em;
@@ -2300,6 +2339,15 @@ table.tbl.tbl-wide {
   color: var(--ink-3);
   border-bottom: 1px solid var(--line);
   padding-bottom: 5px;
+}
+
+.pf-section::before {
+  content: '';
+  width: 13px;
+  height: 3px;
+  flex: none;
+  background: var(--team-bright, var(--team));
+  transform: skewX(-14deg);
 }
 
 .pf-scroll {
@@ -2791,7 +2839,7 @@ table.tbl.tbl-wide {
   overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 2px;
   padding: 16px 18px 15px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
 }
