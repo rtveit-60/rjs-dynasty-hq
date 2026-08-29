@@ -438,8 +438,8 @@ export interface RecruitCard {
   devTrait: string;
   homeTown: string;
   homeState: string;
-  /** Position-relevant ratings, already ordered for display. */
-  ratings: { label: string; value: number }[];
+  /** The skills the position lives on, ordered for the At a Glance card. */
+  glance: { label: string; value: number }[];
   mental: AbilitySlot[];
   physical: AbilitySlot[];
 }

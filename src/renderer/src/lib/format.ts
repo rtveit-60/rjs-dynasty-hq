@@ -142,53 +142,56 @@ export const POSITION_GROUPS: Record<string, string[]> = {
 };
 
 /**
- * Sub-roles inside a position group. The save stores a side (LT vs RT, LOLB vs
- * ROLB) where scouting cares about the role, so these collapse the sides into
- * the names coaches actually use — tackles vs guards, Mike/Sam/Will.
+ * How the game shows a recruit's position on a board row: the defensive front
+ * collapses into role names (LE/RE → EDGE, MLB → MIKE, LOLB/ROLB → OLB) while
+ * offensive linemen keep their side (LT, RG…). NT never appears in a class or
+ * the portal, but maps to DT in case a save surprises us.
  */
-export interface SubPosition {
-  key: string;
-  label: string;
-  positions: string[];
-}
-
-export const SUB_POSITIONS: Record<string, SubPosition[]> = {
-  RB: [
-    { key: 'HB', label: 'HB', positions: ['HB'] },
-    { key: 'FB', label: 'FB', positions: ['FB'] }
-  ],
-  OL: [
-    { key: 'OT', label: 'OT', positions: ['LT', 'RT'] },
-    { key: 'OG', label: 'OG', positions: ['LG', 'RG'] },
-    { key: 'C', label: 'C', positions: ['C'] }
-  ],
-  DL: [
-    { key: 'EDGE', label: 'EDGE', positions: ['LE', 'RE'] },
-    { key: 'DT', label: 'DT', positions: ['DT', 'NT'] }
-  ],
-  LB: [
-    { key: 'MIKE', label: 'MIKE', positions: ['MLB'] },
-    { key: 'SAM', label: 'SAM', positions: ['ROLB'] },
-    { key: 'WILL', label: 'WILL', positions: ['LOLB'] }
-  ],
-  DB: [
-    { key: 'CB', label: 'CB', positions: ['CB'] },
-    { key: 'S', label: 'S', positions: ['FS', 'SS'] }
-  ],
-  ST: [
-    { key: 'K', label: 'K', positions: ['K'] },
-    { key: 'P', label: 'P', positions: ['P'] },
-    { key: 'LS', label: 'LS', positions: ['LS'] }
-  ]
+const RECRUIT_POS: Record<string, string> = {
+  LE: 'EDGE', RE: 'EDGE', MLB: 'MIKE', LOLB: 'OLB', ROLB: 'OLB', NT: 'DT'
 };
 
-/** Positions a group + optional sub-role selection resolves to. */
-export function positionsFor(group: string, sub: string): string[] {
-  if (!group || group === 'ALL') return [];
-  const base = POSITION_GROUPS[group] ?? [];
-  if (!sub || sub === 'ALL') return base;
-  const found = (SUB_POSITIONS[group] ?? []).find((s) => s.key === sub);
-  return found ? found.positions : base;
+export function recruitPos(savePos: string): string {
+  return RECRUIT_POS[savePos] ?? savePos;
+}
+
+/**
+ * The main position types the game files recruits under, in the needs-strip
+ * order — one PositionRank pool each, verified from the save itself: rank runs
+ * as a single contiguous pool across LT+RT, LG+RG, LE+RE and LOLB+ROLB (one
+ * #1 each), while MLB, FS, SS, K and P rank alone.
+ */
+export const RECRUIT_POS_OPTIONS: { key: string; positions: string[] }[] = [
+  { key: 'QB', positions: ['QB'] },
+  { key: 'HB', positions: ['HB'] },
+  { key: 'FB', positions: ['FB'] },
+  { key: 'WR', positions: ['WR'] },
+  { key: 'TE', positions: ['TE'] },
+  { key: 'OT', positions: ['LT', 'RT'] },
+  { key: 'OG', positions: ['LG', 'RG'] },
+  { key: 'C', positions: ['C'] },
+  { key: 'EDGE', positions: ['LE', 'RE'] },
+  { key: 'DT', positions: ['DT', 'NT'] },
+  { key: 'OLB', positions: ['LOLB', 'ROLB'] },
+  { key: 'MIKE', positions: ['MLB'] },
+  { key: 'CB', positions: ['CB'] },
+  { key: 'FS', positions: ['FS'] },
+  { key: 'SS', positions: ['SS'] },
+  { key: 'K', positions: ['K'] },
+  { key: 'P', positions: ['P'] }
+];
+
+/** Save positions a dropdown selection covers; empty = no position filter. */
+export function recruitPositionsFor(key: string): string[] {
+  return RECRUIT_POS_OPTIONS.find((o) => o.key === key)?.positions ?? [];
+}
+
+const POOL_OF: Record<string, string> = {};
+for (const o of RECRUIT_POS_OPTIONS) for (const p of o.positions) POOL_OF[p] = o.key;
+
+/** The main type a save position files under: "RT" → "OT", "MLB" → "MIKE". */
+export function recruitPosPool(savePos: string): string {
+  return POOL_OF[savePos] ?? savePos;
 }
 
 /** "WR_ShiftyRouteRunner" → "Shifty Route Runner"; also the role prefix. */

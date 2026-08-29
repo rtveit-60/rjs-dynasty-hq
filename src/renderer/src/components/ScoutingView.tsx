@@ -10,14 +10,14 @@ import {
   type ScoutOp
 } from '../../../shared/ratings.ts';
 import {
-  POSITION_GROUPS,
+  RECRUIT_POS_OPTIONS,
   STAGE_LABELS,
-  SUB_POSITIONS,
   archetypeLabel,
   devClass,
   devLabel,
   fmt,
-  positionsFor,
+  recruitPos,
+  recruitPositionsFor,
   spaceOut,
   stars
 } from '../lib/format.ts';
@@ -35,6 +35,15 @@ const OPS: { op: ScoutOp; label: string }[] = [
 /** Blank slate that matches the user's own example: a burner receiver. */
 const DEFAULT_CRITERIA: ScoutCriterion[] = [{ field: 'SpeedRating', op: 'gte', value: 90 }];
 
+/** Game position → the rating-catalog group its scouted attributes live under. */
+const RATING_GROUP: Record<string, string> = {
+  QB: 'QB', HB: 'RB', FB: 'RB', WR: 'WR', TE: 'TE',
+  OT: 'OL', OG: 'OL', C: 'OL',
+  EDGE: 'DL', DT: 'DL', OLB: 'LB', MIKE: 'LB',
+  CB: 'DB', FS: 'DB', SS: 'DB',
+  K: 'ST', P: 'ST'
+};
+
 export default function ScoutingView({
   recruits,
   teamName,
@@ -45,8 +54,7 @@ export default function ScoutingView({
   portalActive: boolean;
 }) {
   const [criteria, setCriteria] = useState<ScoutCriterion[]>(DEFAULT_CRITERIA);
-  const [group, setGroup] = useState('ALL');
-  const [sub, setSub] = useState('ALL');
+  const [pos, setPos] = useState('ALL');
   const [archetype, setArchetype] = useState('ALL');
   const [pool, setPool] = useState<'all' | 'hs' | 'portal'>('all');
   const [minStars, setMinStars] = useState(0);
@@ -92,7 +100,7 @@ export default function ScoutingView({
       if (pool === 'portal' && !r.isTransfer) continue;
       if (minStars && r.stars < minStars) continue;
       if (openOnly && r.committedTo) continue;
-      const allowed = positionsFor(group, sub);
+      const allowed = recruitPositionsFor(pos);
       if (allowed.length && !allowed.includes(r.position)) continue;
       if (archetype !== 'ALL' && r.archetype !== archetype) continue;
       out.push({ r, values: h.values });
@@ -107,18 +115,18 @@ export default function ScoutingView({
       return (a.r.nationalRank || 1e9) - (b.r.nationalRank || 1e9);
     });
     return out;
-  }, [hits, byPlayerRow, pool, minStars, openOnly, group, sub, archetype, sortField, asc, active]);
+  }, [hits, byPlayerRow, pool, minStars, openOnly, pos, archetype, sortField, asc, active]);
 
   /** Archetypes actually present for the current position selection. */
   const archetypeOptions = useMemo(() => {
-    const allowed = positionsFor(group, sub);
+    const allowed = recruitPositionsFor(pos);
     const seen = new Set<string>();
     for (const r of recruits) {
       if (allowed.length && !allowed.includes(r.position)) continue;
       if (r.archetype) seen.add(r.archetype);
     }
     return [...seen].sort();
-  }, [recruits, group, sub]);
+  }, [recruits, pos]);
 
   const pageCount = Math.max(1, Math.ceil(rowsAll.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -127,7 +135,7 @@ export default function ScoutingView({
   useEffect(() => {
     setPage(0);
     setOpenRow(null);
-  }, [key, group, sub, archetype, pool, minStars, openOnly, sortField, asc]);
+  }, [key, pos, archetype, pool, minStars, openOnly, sortField, asc]);
 
   const setC = (i: number, patch: Partial<ScoutCriterion>) =>
     setCriteria((cs) =>
@@ -158,8 +166,9 @@ export default function ScoutingView({
     }
   };
 
-  const options = ratingsFor(group);
-  const optionGroups = ratingGroupsFor(group);
+  const ratingGroup = pos === 'ALL' ? 'ALL' : (RATING_GROUP[pos] ?? 'ALL');
+  const options = ratingsFor(ratingGroup);
+  const optionGroups = ratingGroupsFor(ratingGroup, pos === 'ALL' ? undefined : pos);
 
   return (
     <>
@@ -239,20 +248,38 @@ export default function ScoutingView({
         </button>
       </div>
 
-      <div className="filters" style={{ marginTop: 12 }}>
-        {['ALL', ...Object.keys(POSITION_GROUPS)].map((g) => (
-          <button
-            key={g}
-            className={`filter ${group === g ? 'active' : ''}`}
-            onClick={() => {
-              setGroup(g);
-              setSub('ALL');
-              setArchetype('ALL');
-            }}
-          >
-            {g}
-          </button>
-        ))}
+      {/* One line: position (the game's own vocabulary), archetype, pool, stars. */}
+      <div className="filters" style={{ marginTop: 12, alignItems: 'center' }}>
+        <select
+          className="scout-select pos-select"
+          value={pos}
+          onChange={(e) => {
+            setPos(e.target.value);
+            setArchetype('ALL');
+          }}
+          title="Position"
+        >
+          <option value="ALL">All positions</option>
+          {RECRUIT_POS_OPTIONS.map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.key}
+            </option>
+          ))}
+        </select>
+        <select
+          className="scout-select"
+          value={archetype}
+          onChange={(e) => setArchetype(e.target.value)}
+          style={{ minWidth: 190 }}
+          title="Archetype"
+        >
+          <option value="ALL">Any archetype ({archetypeOptions.length})</option>
+          {archetypeOptions.map((a) => (
+            <option key={a} value={a}>
+              {archetypeLabel(a)}
+            </option>
+          ))}
+        </select>
 
         <span className="filter-sep" />
         {[
@@ -287,44 +314,6 @@ export default function ScoutingView({
         <button className={`filter ${openOnly ? 'active' : ''}`} onClick={() => setOpenOnly(!openOnly)}>
           Uncommitted
         </button>
-      </div>
-
-      {/* Archetype, with the role chips beside it. Sides collapse into roles:
-          LT/RT are both tackles, LOLB is the Will. */}
-      <div className="filters" style={{ marginTop: 0 }}>
-        <span className="filter-label">Archetype</span>
-        <select
-          className="scout-select"
-          value={archetype}
-          onChange={(e) => setArchetype(e.target.value)}
-          style={{ minWidth: 190 }}
-        >
-          <option value="ALL">Any archetype ({archetypeOptions.length})</option>
-          {archetypeOptions.map((a) => (
-            <option key={a} value={a}>
-              {archetypeLabel(a)}
-            </option>
-          ))}
-        </select>
-
-        {(SUB_POSITIONS[group]?.length ?? 0) > 0 && (
-          <>
-            <span className="filter-sep" />
-            <span className="filter-label">Role</span>
-            {['ALL', ...SUB_POSITIONS[group].map((s) => s.key)].map((k) => (
-              <button
-                key={k}
-                className={`filter ${sub === k ? 'active' : ''}`}
-                onClick={() => {
-                  setSub(k);
-                  setArchetype('ALL');
-                }}
-              >
-                {k === 'ALL' ? 'All' : (SUB_POSITIONS[group].find((s) => s.key === k)?.label ?? k)}
-              </button>
-            ))}
-          </>
-        )}
       </div>
 
       {!active.length ? (
@@ -396,7 +385,7 @@ export default function ScoutingView({
                         </span>
                       </td>
                       <td>
-                        <span className="pos-tag">{r.position}</span>
+                        <span className="pos-tag">{recruitPos(r.position)}</span>
                       </td>
                       <td className="cell-clip" title={archetypeLabel(r.archetype)}>
                         {archetypeLabel(r.archetype)}
@@ -458,7 +447,7 @@ export default function ScoutingView({
           <p className="foot-note">
             Every attribute you filter on becomes a sortable column. Searches the recruiting class
             {portalActive ? ' and the transfer portal' : ' (the portal fills in the offseason)'}. Click a
-            recruit for their full card.
+            recruit for their at-a-glance card; the full ratings sheet is in their profile.
           </p>
         </>
       )}

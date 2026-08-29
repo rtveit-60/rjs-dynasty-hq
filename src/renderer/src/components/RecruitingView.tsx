@@ -1,13 +1,14 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import type { ClassRecruit, TargetSchool } from '../../../shared/types.ts';
+import type { ClassRecruit } from '../../../shared/types.ts';
 import {
-  POSITION_GROUPS,
-  SUB_POSITIONS,
-  positionsFor,
+  RECRUIT_POS_OPTIONS,
   STAGE_LABELS,
   devClass,
   devLabel,
   fmt,
+  recruitPos,
+  recruitPosPool,
+  recruitPositionsFor,
   spaceOut,
   stars
 } from '../lib/format.ts';
@@ -30,7 +31,7 @@ type SortKey =
   | 'natlrk'
   | 'edge'
   | 'offers'
-  | 'race';
+  | 'board';
 
 const GEM_ORDER: Record<string, number> = { BUST: 0, NORMAL: 1, GEM: 2 };
 const DEV_ORDER: Record<string, number> = {
@@ -58,22 +59,6 @@ const STAR_FILTERS = [
   { label: '3★+', min: 3 }
 ];
 
-function Race({ race }: { race: TargetSchool[] }) {
-  if (!race.length) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
-  return (
-    <span className="race">
-      {race.map((s, i) => (
-        <span key={`${s.name}-${i}`}>
-          {i > 0 && ' · '}
-          <span className={s.isUser ? 'lead' : ''}>
-            {s.name} {s.influence}
-          </span>
-        </span>
-      ))}
-    </span>
-  );
-}
-
 export default function RecruitingView() {
   const snapshot = useHQ((s) => s.snapshot);
   const rc = snapshot?.school?.recruiting;
@@ -81,8 +66,7 @@ export default function RecruitingView() {
 
   const [board, setBoard] = useState<Board>('hs');
   const [q, setQ] = useState('');
-  const [group, setGroup] = useState('ALL');
-  const [sub, setSub] = useState('ALL');
+  const [pos, setPos] = useState('ALL');
   const [minStars, setMinStars] = useState(0);
   const [edgeOnly, setEdgeOnly] = useState(false);
   const [openOnly, setOpenOnly] = useState(false);
@@ -99,20 +83,21 @@ export default function RecruitingView() {
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
+    const allowed = recruitPositionsFor(pos);
     return pool.filter((r) => {
       if (minStars && r.stars < minStars) return false;
-      const allowed = positionsFor(group, sub);
       if (allowed.length && !allowed.includes(r.position)) return false;
       if (edgeOnly && !r.edges.length) return false;
       if (openOnly && r.committedTo) return false;
       if (boardOnly && !r.onBoard) return false;
       if (needle) {
-        const hay = `${r.name} ${r.position} ${spaceOut(r.homeState)} ${spaceOut(r.pipeline)}`.toLowerCase();
+        const hay =
+          `${r.name} ${recruitPos(r.position)} ${recruitPosPool(r.position)} ${spaceOut(r.homeState)} ${spaceOut(r.pipeline)}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
     });
-  }, [pool, q, group, sub, minStars, edgeOnly, openOnly, boardOnly]);
+  }, [pool, q, pos, minStars, edgeOnly, openOnly, boardOnly]);
 
   const sorted = useMemo(() => {
     const dir = asc ? 1 : -1;
@@ -128,7 +113,11 @@ export default function RecruitingView() {
         case 'name':
           return byName(a, b) * dir;
         case 'pos':
-          return a.position.localeCompare(b.position) * dir || byName(a, b);
+          // Sort by the main type so LT and RT stay together under OT.
+          return (
+            (recruitPosPool(a.position).localeCompare(recruitPosPool(b.position)) ||
+              recruitPos(a.position).localeCompare(recruitPos(b.position))) * dir || byName(a, b)
+          );
         case 'dev':
           return ((DEV_ORDER[a.devTrait] ?? 0) - (DEV_ORDER[b.devTrait] ?? 0)) * dir || byName(a, b);
         case 'pipeline':
@@ -146,8 +135,8 @@ export default function RecruitingView() {
           return (a.edges.length - b.edges.length) * dir || byName(a, b);
         case 'offers':
           return (a.offers - b.offers) * dir || byName(a, b);
-        case 'race':
-          return (a.race.length - b.race.length) * dir || byName(a, b);
+        case 'board':
+          return (Number(a.onBoard) - Number(b.onBoard)) * dir || byName(a, b);
         default:
           return 0;
       }
@@ -163,7 +152,7 @@ export default function RecruitingView() {
   useEffect(() => {
     setPage(0);
     setOpenRow(null);
-  }, [board, q, group, sub, minStars, edgeOnly, openOnly, boardOnly, sortKey, asc]);
+  }, [board, q, pos, minStars, edgeOnly, openOnly, boardOnly, sortKey, asc]);
 
   if (!rc) {
     return (
@@ -251,7 +240,8 @@ export default function RecruitingView() {
         </span>
       </div>
 
-      <div className="filters" style={{ marginTop: 16 }}>
+      {/* One line: search, the game's position vocabulary, then everything else. */}
+      <div className="filters" style={{ marginTop: 16, alignItems: 'center' }}>
         <input
           className="search"
           style={{ width: 230, padding: '5px 10px' }}
@@ -259,32 +249,20 @@ export default function RecruitingView() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        {['ALL', ...Object.keys(POSITION_GROUPS)].map((g) => (
-          <button
-            key={g}
-            className={`filter ${group === g ? 'active' : ''}`}
-            onClick={() => {
-              setGroup(g);
-              setSub('ALL');
-            }}
-          >
-            {g}
-          </button>
-        ))}
-      </div>
-
-      {/* LT and RT are both tackles; LOLB is the Will. Let the side collapse. */}
-      {(SUB_POSITIONS[group]?.length ?? 0) > 0 && (
-        <div className="filters" style={{ marginTop: 0 }}>
-          <span className="filter-label">Role</span>
-          {['ALL', ...SUB_POSITIONS[group].map((s) => s.key)].map((k) => (
-            <button key={k} className={`filter ${sub === k ? 'active' : ''}`} onClick={() => setSub(k)}>
-              {k === 'ALL' ? 'All' : (SUB_POSITIONS[group].find((s) => s.key === k)?.label ?? k)}
-            </button>
+        <select
+          className="scout-select pos-select"
+          value={pos}
+          onChange={(e) => setPos(e.target.value)}
+          title="Position"
+        >
+          <option value="ALL">All positions</option>
+          {RECRUIT_POS_OPTIONS.map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.key}
+            </option>
           ))}
-        </div>
-      )}
-      <div className="filters" style={{ marginTop: 0 }}>
+        </select>
+        <span className="filter-sep" />
         {STAR_FILTERS.map((f) => (
           <button
             key={f.label}
@@ -294,6 +272,7 @@ export default function RecruitingView() {
             {f.label}
           </button>
         ))}
+        <span className="filter-sep" />
         <button className={`filter ${edgeOnly ? 'active' : ''}`} onClick={() => setEdgeOnly(!edgeOnly)}>
           Your Edge
         </button>
@@ -327,7 +306,7 @@ export default function RecruitingView() {
                   {th('Natl Rk', 'natlrk', { num: true, defaultAsc: true })}
                   {th('Edge', 'edge')}
                   {th('Off', 'offers', { num: true })}
-                  {th('The Race', 'race')}
+                  {th('Board', 'board')}
                 </tr>
               </thead>
               <tbody>
@@ -349,7 +328,6 @@ export default function RecruitingView() {
                       </td>
                       <td className="pname cell-clip name">
                         <span className="disclose">{openRow === r.row ? '▾' : '▸'}</span>
-                        {r.onBoard && <span className="fav" title="On your board">▣ </span>}
                         <NameLink req={{ kind: 'player', row: r.playerRow }}>{r.name}</NameLink>
                         <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
                           {' · '}
@@ -358,7 +336,7 @@ export default function RecruitingView() {
                         </span>
                       </td>
                       <td>
-                        <span className="pos-tag">{r.position}</span>
+                        <span className="pos-tag">{recruitPos(r.position)}</span>
                       </td>
                       <td>
                         <span className={devClass(r.devTrait)}>{devLabel(r.devTrait)}</span>
@@ -379,8 +357,12 @@ export default function RecruitingView() {
                           : <span style={{ color: 'var(--ink-3)' }}>—</span>}
                       </td>
                       <td className="num">{r.offers}</td>
-                      <td className="cell-clip race" title={r.race.map((s) => `${s.name} ${s.influence}`).join(' · ')}>
-                        <Race race={r.race} />
+                      <td>
+                        {r.onBoard ? (
+                          <span className="fav" title="On your recruiting board">▣ On Board</span>
+                        ) : (
+                          <span style={{ color: 'var(--ink-3)' }}>—</span>
+                        )}
                       </td>
                     </tr>
                     {openRow === r.row && <RecruitCardRow playerRow={r.playerRow} span={COLS} />}
@@ -410,9 +392,9 @@ export default function RecruitingView() {
           </div>
 
           <p className="foot-note">
-            Click any recruit for their archetype, measurables, attributes and abilities. ▣ marks
-            recruits on your board; edges compare your pipelines and program grades against each
-            recruit's actual pursuers.
+            Click any recruit for an at-a-glance read on the skills their position lives on; the full
+            ratings sheet and the recruiting race are in their profile — click the name. Edges compare
+            your pipelines and program grades against each recruit's actual pursuers.
           </p>
         </>
       )}

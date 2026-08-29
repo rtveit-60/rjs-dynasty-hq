@@ -1434,17 +1434,6 @@ table.tbl {
   font-weight: 600;
 }
 
-.race {
-  font-size: 11.5px;
-  color: var(--ink-2);
-  white-space: nowrap;
-}
-
-.race .lead {
-  color: var(--team-bright, var(--team));
-  font-weight: 700;
-}
-
 .fav {
   color: var(--dev-elite);
 }
@@ -1762,6 +1751,15 @@ table.tbl.tbl-wide {
   white-space: normal;
 }
 
+.rc-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 10px;
+}
+
 .rc-head {
   display: flex;
   align-items: center;
@@ -1786,31 +1784,47 @@ table.tbl.tbl-wide {
   margin-top: 2px;
 }
 
-.rc-ratings {
+/* The At a Glance grid — big, tier-colored skill tiles. */
+.rc-glance {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-  gap: 8px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 12px 16px;
   margin-bottom: 14px;
 }
 
-.rc-stat {
-  display: grid;
-  grid-template-columns: 34px 26px 1fr;
-  align-items: center;
-  gap: 6px;
-}
-
-.rc-stat-k {
+.rc-skill-k {
+  display: block;
   font-size: 10px;
   letter-spacing: 0.08em;
   color: var(--ink-3);
   font-weight: 600;
+  margin-bottom: 1px;
 }
 
-.rc-stat-v {
-  font-size: 12px;
+.rc-skill-v {
+  display: block;
+  font-family: var(--font-display);
   font-weight: 700;
-  text-align: right;
+  font-size: 21px;
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.rc-skill-v.t1 {
+  color: var(--team-bright, var(--ink));
+}
+
+.rc-skill-v.t2,
+.rc-skill-v.t3 {
+  color: var(--ink);
+}
+
+.rc-skill-v.t4 {
+  color: var(--ink-2);
+}
+
+.rc-skill-v.t5 {
+  color: var(--ink-3);
 }
 
 .rc-bar {
@@ -1890,10 +1904,6 @@ table.tbl.tbl-wide {
   text-overflow: ellipsis;
 }
 
-.tbl.tbl-wide .cell-clip.race {
-  max-width: 230px;
-}
-
 .tbl.tbl-wide .cell-clip.name {
   max-width: 210px;
 }
@@ -1970,10 +1980,6 @@ table.tbl.tbl-wide {
 
 .tbl.tbl-wide .cell-clip.name {
   max-width: clamp(140px, 17vw, 280px);
-}
-
-.tbl.tbl-wide .cell-clip.race {
-  max-width: clamp(130px, 21vw, 340px);
 }
 
 /* ——— Scouting reports: attribute criteria builder ——— */
@@ -2109,6 +2115,11 @@ table.tbl.tbl-wide {
   align-self: stretch;
   margin: 2px 4px;
   background: var(--line);
+}
+
+/* Position dropdown on the recruiting boards — the base select, narrower. */
+.pos-select {
+  min-width: 132px;
 }
 
 /* ————————————————————————————————————————————————

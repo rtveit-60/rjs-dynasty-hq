@@ -121,13 +121,15 @@ export function ratingsFor(group: string): RatingDef[] {
 /**
  * The same list split into labelled sections for a <select>. Alphabetical
  * inside each section — a flat A-Z over 56 ratings buries Speed under S.
+ * `displayAs` names the section in the caller's vocabulary (e.g. "EDGE"
+ * while the catalog groups it under DL).
  */
-export function ratingGroupsFor(group: string): { label: string; items: RatingDef[] }[] {
+export function ratingGroupsFor(group: string, displayAs?: string): { label: string; items: RatingDef[] }[] {
   if (!group || group === 'ALL') return [{ label: '', items: [...RATINGS].sort(byName) }];
   const tiers: RatingDef[][] = [[], [], []];
   for (const r of RATINGS) tiers[tierFor(r, group)].push(r);
   return [
-    { label: `Scouted for ${group}`, items: tiers[0].sort(byName) },
+    { label: `Scouted for ${displayAs ?? group}`, items: tiers[0].sort(byName) },
     { label: 'Measurables & athleticism', items: tiers[1].sort(byName) },
     { label: 'Other positions', items: tiers[2].sort(byName) }
   ].filter((t) => t.items.length);
