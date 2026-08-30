@@ -763,12 +763,16 @@ export interface CreateRecruitForm {
   weightMax: number;
   playerRowsFree: number;
   recruitRowsFree: number;
-  /** Gear pickers, options aggregated from the save's dressed players. */
+  /** Gear pickers: the game's loadout vocabulary plus this save's extras. */
   gearSlots: GearSlotOptions[];
   /** Observed skin tones (1–8 in practice). */
   skinTones: number[];
-  /** helmet itemAssetName -> facemasks real players wear with it. */
+  /** helmet itemAssetName -> facemasks real loadouts wear with it. */
   helmetMasks: Record<string, string[]>;
+  /** position -> slot -> the item an unset choice actually keeps. */
+  baseLook: Record<string, Record<string, string>>;
+  /** position -> the base look's skin tone. */
+  baseTones: Record<string, number>;
   /** The face catalog: every observed head, each with a portrait and a tone. */
   faces: FaceOption[];
   targetFileName: string;

@@ -593,12 +593,21 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
       devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: '',
       gear: { FaceMask: 'GearFaceMask_TotallyMadeUp' }
     }, dir));
-  // helmet↔mask compatibility from real co-occurrence
+  // helmet↔mask compatibility: the game's loadout pairings + this save's
   const helmets = Object.keys(cform2.helmetMasks);
-  check('create form: helmet-mask compatibility map', helmets.length >= 5 &&
+  check('create form: helmet-mask compatibility map', helmets.length >= 15 &&
     helmets.every((h) => cform2.helmetMasks[h].length > 0),
-    helmets.map((h) => `${h.replace('GearHelmet_', '')}×${cform2.helmetMasks[h].length}`).join(' '));
-  const h0 = helmets[0];
+    `${helmets.length} helmets, Speed_Flex×${cform2.helmetMasks['GearHelmet_Speed_Flex']?.length}`);
+  // the merged vocabulary carries game items no one in this save wears
+  const helmetOpts = cform2.gearSlots.find((g) => g.slot === 'HeadWear')?.options ?? [];
+  check('create form: game vocabulary merged into options',
+    helmetOpts.includes('GearHelmet_RevolutionSpeed') && helmetOpts.length >= 15 &&
+    (cform2.gearSlots.find((g) => g.slot === 'FaceMask')?.options.length ?? 0) >= 100,
+    `${helmetOpts.length} helmets, ${cform2.gearSlots.find((g) => g.slot === 'FaceMask')?.options.length} masks`);
+  check('create form: base look named per position',
+    !!cform2.baseLook[pos]?.HeadWear && Object.keys(cform2.baseLook).length >= 5,
+    `${pos}: ${cform2.baseLook[pos]?.HeadWear}, tone ${cform2.baseTones[pos]}`);
+  const h0 = 'GearHelmet_Speed_Flex';
   const foreignMask = helmets.map((h) => cform2.helmetMasks[h]).flat()
     .find((m) => !cform2.helmetMasks[h0].includes(m));
   if (foreignMask) {
@@ -609,8 +618,14 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
         gear: { HeadWear: h0, FaceMask: foreignMask }
       }, dir));
   }
-  // a mask alone brings its helmet
-  const soloMask = cform2.helmetMasks[h0][0];
+  // a mask alone keeps a fitting base helmet, else brings a matching one —
+  // written with a game-vocabulary helmet+mask this save never dressed
+  const soloHelmet = 'GearHelmet_RevolutionSpeed';
+  const soloMask = cform2.helmetMasks[soloHelmet][0];
+  const baseHelmet = cform2.baseLook[pos]?.HeadWear;
+  const expectHelmet = baseHelmet && cform2.helmetMasks[baseHelmet]?.includes(soloMask)
+    ? baseHelmet
+    : Object.keys(cform2.helmetMasks).find((h) => cform2.helmetMasks[h].includes(soloMask));
   const frM = await loadFranchise(editedPath);
   const resM = await applyCreateRecruit(frM, editedPath, {
     firstName: 'Paired', lastName: 'Helmet', position: pos, archetype, stars: 2,
@@ -627,8 +642,9 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const els = vjM.loadouts.flatMap((l: any) => l.loadoutElements ?? []);
   const gotHelmet = els.find((e: any) => e.slotType === 'HeadWear')?.itemAssetName;
   const gotMask = els.find((e: any) => e.slotType === 'FaceMask')?.itemAssetName;
-  check('create: solo mask auto-pairs its helmet', gotMask === soloMask && gotHelmet === h0,
-    `${gotHelmet} :: ${gotMask}`);
+  check('create: game-vocab mask lands, helmet resolves per the rules',
+    gotMask === soloMask && gotHelmet === expectHelmet,
+    `${gotHelmet} :: ${gotMask} (base ${baseHelmet}, expected ${expectHelmet})`);
   check('source still untouched after styled creation', sha(work) === sourceHash);
 
   // --- 10c. creation with a chosen face (head + portrait + tone triple) ---
@@ -642,11 +658,12 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     cform2.faces.every((f) => f.assetName.startsWith('Generic_') && Number(f.assetName.split('_')[1]) === f.portraitId),
     face.assetName);
   // frM2 already reflects the current on-disk state — reuse it for the write.
-  // skinTone rides along like the UI sends it (a picked face aligns the tone).
+  // skinTone rides along like the UI sends it (a picked face aligns the tone),
+  // and a helmet-only override exercises the incompatible-base-mask swap.
   const resF = await applyCreateRecruit(frM2, editedPath, {
     firstName: 'Chosen', lastName: 'Face', position: pos, archetype, stars: 3,
     devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 210, homeState: state, homeTown: '',
-    face, skinTone: face.tone
+    face, skinTone: face.tone, gear: { HeadWear: soloHelmet }
   }, dir);
   const frF2 = await loadFranchise(editedPath);
   const pTF = mainTable(frF2, 'Player');
@@ -663,6 +680,21 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const vjF = vTF ? JSON.parse(String(vTF.records[vRefF!.row]._fields.RawData.value)) : null;
   check('create: face tone lands in the visuals blob', vjF?.skinTone === face.tone,
     `tone ${vjF?.skinTone} vs face ${face.tone}`);
+  // helmet-only override: the incompatible base mask swapped to this helmet's own
+  const elsF = (vjF?.loadouts ?? []).flatMap((l: any) => l.loadoutElements ?? []);
+  const helmF = elsF.find((e: any) => e.slotType === 'HeadWear')?.itemAssetName;
+  const maskF = elsF.find((e: any) => e.slotType === 'FaceMask')?.itemAssetName;
+  const baseMaskQB = cform2.baseLook[pos]?.FaceMask;
+  // no base mask → none added; incompatible base mask → this helmet's first;
+  // compatible base mask → kept as is
+  const expectMaskF = !baseMaskQB
+    ? undefined
+    : cform2.helmetMasks[soloHelmet].includes(baseMaskQB)
+      ? baseMaskQB
+      : cform2.helmetMasks[soloHelmet][0];
+  check('create: helmet override never keeps an incompatible base mask',
+    helmF === soloHelmet && maskF === expectMaskF,
+    `${helmF} :: ${maskF} (base mask ${baseMaskQB})`);
   // Validation rejects before any mutation, so frF2 can host the refusal.
   await rejects('create reject: face not in the catalog', async () =>
     applyCreateRecruit(frF2, editedPath, {

@@ -25,6 +25,7 @@ import type {
   TargetActionFlags,
   TargetActionForm
 } from '../shared/types.ts';
+import { GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
@@ -374,7 +375,12 @@ function parseVisuals(rec: any): any | null {
   }
 }
 
-/** Per-slot item vocabulary + observed skin tones, from every dressed player. */
+/**
+ * Per-slot item vocabulary + observed skin tones. Options are the union of
+ * the game's own loadout vocabulary (generated src/shared/gear.ts) and
+ * whatever this save's dressed players wear; helmet↔mask compatibility merges
+ * the game's loadout pairings with the save's observed ones the same way.
+ */
 async function gearCatalog(
   franchise: any
 ): Promise<{ gearSlots: GearSlotOptions[]; skinTones: number[]; helmetMasks: Record<string, string[]> }> {
@@ -406,6 +412,14 @@ async function gearCatalog(
       pairSets.get(helmet)!.add(mask);
     }
   }
+  for (const [slot, list] of Object.entries(GEAR_ITEMS)) {
+    if (!bySlot.has(slot)) bySlot.set(slot, new Set());
+    for (const item of list) bySlot.get(slot)!.add(item);
+  }
+  for (const [h, list] of Object.entries(HELMET_MASKS)) {
+    if (!pairSets.has(h)) pairSets.set(h, new Set());
+    for (const m of list) pairSets.get(h)!.add(m);
+  }
   const gearSlots: GearSlotOptions[] = [];
   for (const g of GEAR_SLOTS) {
     const options = [...(bySlot.get(g.slot) ?? new Set<string>())].sort();
@@ -414,6 +428,47 @@ async function gearCatalog(
   const helmetMasks: Record<string, string[]> = {};
   for (const [h, set] of pairSets) helmetMasks[h] = [...set].sort();
   return { gearSlots, skinTones: [...tones].sort((a, b) => a - b), helmetMasks };
+}
+
+/**
+ * The base look for a new player at this position: the parsed visuals blob of
+ * the first dressed rostered player at the same position (any dressed player
+ * as a fallback). Returns a fresh object per call — callers may mutate it.
+ */
+async function pickBaseVisuals(franchise: any, position: string): Promise<any | null> {
+  const vT = visualsTable(franchise);
+  const players = mainTable(franchise, 'Player');
+  if (!vT) return null;
+  if (!vT.recordsRead) await vT.readRecords();
+  await players.readRecords();
+  for (const p of players.records as any[]) {
+    if (p.isEmpty || String(val(p, 'Position') ?? '') !== position) continue;
+    const ref = refFromRecord(p, 'CharacterVisuals');
+    if (!ref || (ref.tableId === 0 && ref.row === 0)) continue;
+    const base = parseVisuals(vT.records[ref.row]);
+    if (base) return base;
+  }
+  // any dressed player beats nothing
+  for (const rec of vT.records as any[]) {
+    if (rec.isEmpty) continue;
+    const base = parseVisuals(rec);
+    if (base) return base;
+  }
+  return null;
+}
+
+/** The base look's effective item per offered slot (first hit wins), + tone. */
+function baseLookSummary(base: any): { items: Record<string, string>; tone: number | null } {
+  const items: Record<string, string> = {};
+  const wanted = new Set(GEAR_SLOTS.map((g) => g.slot));
+  for (const lo of base?.loadouts ?? []) {
+    for (const el of lo?.loadoutElements ?? []) {
+      if (el?.slotType && el?.itemAssetName && wanted.has(el.slotType) && items[el.slotType] === undefined) {
+        items[el.slotType] = el.itemAssetName;
+      }
+    }
+  }
+  return { items, tone: Number.isInteger(base?.skinTone) ? base.skinTone : null };
 }
 
 /**
@@ -427,27 +482,7 @@ async function buildVisualsJson(
   skinTone: number | undefined,
   gear: Record<string, string> | undefined
 ): Promise<string | null> {
-  const vT = visualsTable(franchise);
-  const players = mainTable(franchise, 'Player');
-  if (!vT) return null;
-  if (!vT.recordsRead) await vT.readRecords();
-  await players.readRecords();
-  let base: any = null;
-  for (const p of players.records as any[]) {
-    if (p.isEmpty || String(val(p, 'Position') ?? '') !== position) continue;
-    const ref = refFromRecord(p, 'CharacterVisuals');
-    if (!ref || (ref.tableId === 0 && ref.row === 0)) continue;
-    base = parseVisuals(vT.records[ref.row]);
-    if (base) break;
-  }
-  if (!base) {
-    // any dressed player beats nothing
-    for (const rec of vT.records as any[]) {
-      if (rec.isEmpty) continue;
-      base = parseVisuals(rec);
-      if (base) break;
-    }
-  }
+  const base = await pickBaseVisuals(franchise, position);
   if (!base) return null;
   if (skinTone && skinTone >= 1) base.skinTone = skinTone;
   if (gear) {
@@ -458,11 +493,20 @@ async function buildVisualsJson(
       const pair = pairOf.get(slot);
       if (pair) wanted.set(pair, item);
     }
+    // An empty-string override removes the slot outright (helmets the data
+    // only shows maskless drop the base mask rather than keep a fake pair).
+    for (const lo of base.loadouts) {
+      if (Array.isArray(lo?.loadoutElements)) {
+        lo.loadoutElements = lo.loadoutElements.filter(
+          (el: any) => wanted.get(el?.slotType) !== ''
+        );
+      }
+    }
     const applied = new Set<string>();
     for (const lo of base.loadouts) {
       for (const el of lo?.loadoutElements ?? []) {
         const item = wanted.get(el.slotType);
-        if (item !== undefined) {
+        if (item !== undefined && item !== '') {
           el.itemAssetName = item;
           applied.add(el.slotType);
         }
@@ -473,7 +517,9 @@ async function buildVisualsJson(
     const home = base.loadouts.find((lo: any) => Array.isArray(lo?.loadoutElements));
     if (home) {
       for (const [slot, item] of wanted) {
-        if (!applied.has(slot)) home.loadoutElements.push({ slotType: slot, itemAssetName: item });
+        if (item !== '' && !applied.has(slot)) {
+          home.loadoutElements.push({ slotType: slot, itemAssetName: item });
+        }
       }
     }
   }
@@ -563,6 +609,17 @@ export async function buildCreateForm(
   let recruitRowsFree = 0;
   for (const r of recruitTable.records) if (r.isEmpty) recruitRowsFree++;
   const { gearSlots, skinTones, helmetMasks } = await gearCatalog(franchise);
+  // What "leave it alone" actually dresses, per position: the same base-look
+  // selection the write path makes, snapshotted so the dialog can name it.
+  const baseLook: Record<string, Record<string, string>> = {};
+  const baseTones: Record<string, number> = {};
+  for (const pos of Object.keys(archetypesByPosition)) {
+    const base = await pickBaseVisuals(franchise, pos);
+    if (!base) continue;
+    const { items, tone } = baseLookSummary(base);
+    baseLook[pos] = items;
+    if (tone !== null) baseTones[pos] = tone;
+  }
   const faces = await faceCatalog(franchise);
   // Faces whose headshot exists in the user's portrait pack sort first within
   // each tone, so the picker leads with browsable photos (same lookup the
@@ -595,6 +652,8 @@ export async function buildCreateForm(
     gearSlots,
     skinTones,
     helmetMasks,
+    baseLook,
+    baseTones,
     faces,
     targetFileName: basename(target),
     targetExists: existsSync(target)
@@ -668,8 +727,8 @@ export async function applyCreateRecruit(
       const def = gearSlots.find((g) => g.slot === slot);
       if (!def || !def.options.includes(item)) throw new Error(`Unknown gear choice for ${slot}.`);
     }
-    // Helmet↔mask must be a combination real players wear; a mask alone
-    // brings its matching helmet with it.
+    // Helmet↔mask must be a combination real loadouts wear; a mask alone
+    // keeps the base helmet when it fits, else brings a matching helmet.
     if (req.gear?.FaceMask) {
       const mask = req.gear.FaceMask;
       if (req.gear.HeadWear) {
@@ -677,8 +736,22 @@ export async function applyCreateRecruit(
           throw new Error('That facemask does not fit the chosen helmet.');
         }
       } else {
-        const owner = Object.keys(helmetMasks).find((h) => helmetMasks[h].includes(mask));
-        if (owner) req.gear = { ...req.gear, HeadWear: owner };
+        const base = await pickBaseVisuals(franchise, req.position);
+        const baseHelmet = base ? baseLookSummary(base).items['HeadWear'] : undefined;
+        if (!baseHelmet || !(helmetMasks[baseHelmet] ?? []).includes(mask)) {
+          const owner = Object.keys(helmetMasks).find((h) => helmetMasks[h].includes(mask));
+          if (owner) req.gear = { ...req.gear, HeadWear: owner };
+        }
+      }
+    } else if (req.gear?.HeadWear) {
+      // A helmet alone must not keep an incompatible base mask: swap it to
+      // one this helmet really wears, or drop it for helmets the data only
+      // shows maskless ('' removes the slot in the written blob).
+      const allowed = helmetMasks[req.gear.HeadWear] ?? [];
+      const base = await pickBaseVisuals(franchise, req.position);
+      const baseMask = base ? baseLookSummary(base).items['FaceMask'] : undefined;
+      if (baseMask && !allowed.includes(baseMask)) {
+        req.gear = { ...req.gear, FaceMask: allowed[0] ?? '' };
       }
     }
     visualsJson = await buildVisualsJson(franchise, req.position, req.skinTone, req.gear);
