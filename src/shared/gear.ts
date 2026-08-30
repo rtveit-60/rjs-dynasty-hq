@@ -723,5 +723,9 @@ export const BODY_TYPES: { value: number; name: string }[] = [
   {
     "value": 3,
     "name": "Heavy_BodyType"
+  },
+  {
+    "value": 4,
+    "name": "Lean_BodyType"
   }
 ];

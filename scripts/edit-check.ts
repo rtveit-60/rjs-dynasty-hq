@@ -626,7 +626,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     homeState: state,
     homeTown: '',
     skinTone: cform2.skinTones[0],
-    bodyType: 3,
+    bodyType: 4,
     gear: mask ? { FaceMask: mask.options[0] } : undefined
   }, dir);
   const frV2 = await loadFranchise(editedPath);
@@ -639,7 +639,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const vj = JSON.parse(String(vT2.records[vRef!.row]._fields.RawData.value));
   const fmEl = vj.loadouts.flatMap((l: any) => l.loadoutElements ?? []).find((e: any) => e.slotType === 'FaceMask');
   check('create: skin tone + body + gear read back from the blob',
-    vj.skinTone === cform2.skinTones[0] && vj.bodyType === 3 &&
+    vj.skinTone === cform2.skinTones[0] && vj.bodyType === 4 &&
     (!mask || fmEl?.itemAssetName === mask.options[0]),
     `tone ${vj.skinTone}, body ${vj.bodyType}, mask ${fmEl?.itemAssetName}`);
   await rejects('create reject: unknown gear item', async () =>

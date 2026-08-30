@@ -67,7 +67,9 @@ let loadoutChunks = 0;
 // happen to wear. Anchor verified in-game (2026-08-30): a maskless Speed
 // Flex wearer shows the Speedflex 2Bar.
 const tbMaskCounts = new Map<string, Map<string, number>>();
-// numeric top-level bodyType :: slot-129 item name — a clean 1:1 in TB data.
+// numeric top-level bodyType :: body element name, across every shipped-player
+// document (characterVisualsPlayerMap + Team Builder). Modes are decisive:
+// 0 Standard / 1 Thin / 2 Muscular / 3 Heavy / 4 Lean.
 const tbBodyPairs = new Map<number, Map<string, number>>();
 let tbPlayers = 0;
 
@@ -78,35 +80,41 @@ function harvestTeamBuilder(s: string): void {
   } catch {
     return;
   }
+  const maps: any[] = [];
   const cv = doc?.teamData?.frostbiteData?.characterVisuals;
-  if (!cv || typeof cv !== 'object') return;
-  for (const key of Object.keys(cv)) {
-    let v = cv[key];
-    if (typeof v === 'string') {
-      try {
-        v = JSON.parse(v);
-      } catch {
-        continue;
+  if (cv && typeof cv === 'object') maps.push({ players: cv, tb: true });
+  if (doc?.characterVisualsPlayerMap) maps.push({ players: doc.characterVisualsPlayerMap, tb: false });
+  for (const { players, tb } of maps) {
+    for (const key of Object.keys(players)) {
+      let v = players[key];
+      if (typeof v === 'string') {
+        try {
+          v = JSON.parse(v);
+        } catch {
+          continue;
+        }
       }
-    }
-    let helmet: string | null = null;
-    let mask: string | null = null;
-    let body: string | null = null;
-    for (const lo of v?.loadouts ?? []) {
-      for (const el of lo?.loadoutElements ?? []) {
-        if (el?.slotType === 106) helmet = el.itemAssetName ?? null;
-        if (el?.slotType === 0) mask = el.itemAssetName ?? null;
-        if (el?.slotType === 129) body = el.itemAssetName ?? null;
+      let helmet: string | null = null;
+      let mask: string | null = null;
+      let body: string | null = null;
+      for (const lo of v?.loadouts ?? []) {
+        for (const el of lo?.loadoutElements ?? []) {
+          if (el?.slotType === 106 || el?.slotType === 'HeadWear') helmet = el.itemAssetName ?? null;
+          if (el?.slotType === 0 || el?.slotType === 'FaceMask') mask = el.itemAssetName ?? null;
+          if (el?.slotType === 129 || el?.slotType === 'CharacterBodyType') body = el.itemAssetName ?? null;
+        }
       }
+      if (body && Number.isInteger(v?.bodyType)) {
+        if (!tbBodyPairs.has(v.bodyType)) tbBodyPairs.set(v.bodyType, new Map());
+        tbBodyPairs.get(v.bodyType)!.set(body, (tbBodyPairs.get(v.bodyType)!.get(body) ?? 0) + 1);
+      }
+      // Default masks stay Team Builder-only: generated players are the
+      // game's default dressing; shipped players wear custom looks.
+      if (!tb || !helmet || !mask) continue;
+      tbPlayers++;
+      if (!tbMaskCounts.has(helmet)) tbMaskCounts.set(helmet, new Map());
+      tbMaskCounts.get(helmet)!.set(mask, (tbMaskCounts.get(helmet)!.get(mask) ?? 0) + 1);
     }
-    if (body && Number.isInteger(v?.bodyType)) {
-      if (!tbBodyPairs.has(v.bodyType)) tbBodyPairs.set(v.bodyType, new Map());
-      tbBodyPairs.get(v.bodyType)!.set(body, (tbBodyPairs.get(v.bodyType)!.get(body) ?? 0) + 1);
-    }
-    if (!helmet || !mask) continue;
-    tbPlayers++;
-    if (!tbMaskCounts.has(helmet)) tbMaskCounts.set(helmet, new Map());
-    tbMaskCounts.get(helmet)!.set(mask, (tbMaskCounts.get(helmet)!.get(mask) ?? 0) + 1);
   }
 }
 
@@ -163,7 +171,7 @@ for (const sb of layout.superBundles) {
     if (data.includes('itemAssetName')) {
       const text = data.toString('latin1');
       harvest(text);
-      if (data[0] === 0x7b && data.includes('"teamData"')) harvestTeamBuilder(text);
+      if (data[0] === 0x7b && (data.includes('"teamData"') || data.includes('characterVisualsPlayerMap'))) harvestTeamBuilder(text);
     }
     if (data.length >= 4 && data[0] === 0x78) {
       try {
@@ -171,7 +179,7 @@ for (const sb of layout.superBundles) {
         if (image.includes('itemAssetName')) {
           const text = image.toString('latin1');
           harvest(text);
-          if (image[0] === 0x7b && image.includes('"teamData"')) harvestTeamBuilder(text);
+          if (image[0] === 0x7b && (image.includes('"teamData"') || image.includes('characterVisualsPlayerMap'))) harvestTeamBuilder(text);
         }
       } catch {
         // not a zlib image after all
@@ -202,12 +210,20 @@ for (const [h, counts] of [...tbMaskCounts.entries()].sort()) {
 if (defaultMasks['GearHelmet_Speed_Flex'] !== 'GearFaceMask_Speedflex2Bar') {
   throw new Error(`anchor failed: Speed_Flex default mask = ${defaultMasks['GearHelmet_Speed_Flex']}`);
 }
-// Body types: numeric value -> the single name TB pairs with it, unambiguously.
+// Body types: numeric value -> its decisive mode name (a few shipped players
+// carry mistagged pairs; a 10x majority separates signal from noise).
 const bodyTypes: { value: number; name: string }[] = [];
 for (const [value, names] of [...tbBodyPairs.entries()].sort((a, b) => a[0] - b[0])) {
-  if (names.size === 1) bodyTypes.push({ value, name: [...names.keys()][0] });
+  const ranked = [...names.entries()].sort((a, b) => b[1] - a[1]);
+  if (ranked.length === 1 || ranked[0][1] >= ranked[1][1] * 10) {
+    bodyTypes.push({ value, name: ranked[0][0] });
+  }
 }
-if (bodyTypes.length < 4 || bodyTypes.find((b) => b.value === 2)?.name !== 'Muscular_BodyType') {
+if (
+  bodyTypes.length < 5 ||
+  bodyTypes.find((b) => b.value === 2)?.name !== 'Muscular_BodyType' ||
+  bodyTypes.find((b) => b.value === 4)?.name !== 'Lean_BodyType'
+) {
   throw new Error(`anchor failed: body types = ${JSON.stringify(bodyTypes)}`);
 }
 
