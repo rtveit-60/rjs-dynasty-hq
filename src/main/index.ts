@@ -375,13 +375,15 @@ function registerGameIconProtocol(): void {
   });
 }
 
-/** portrait://<id> serves <portraitsDir>/<id>.(png|jpg|jpeg|webp), read-only. */
+/** portrait://<id> serves <portraitsDir>/<id>.(png|jpg|jpeg|webp), read-only.
+ *  Player ids are bare numbers; coach ids are c<id> — their own namespace,
+ *  since the save's coach portrait ids overlap the player ids. */
 function registerPortraitProtocol(): void {
   protocol.handle('portrait', (request) => {
     try {
       const id = new URL(request.url).hostname;
       const dir = getSettings().portraitsDir;
-      if (!dir || !/^\d+$/.test(id)) return new Response('', { status: 404 });
+      if (!dir || !/^c?\d+$/.test(id)) return new Response('', { status: 404 });
       for (const ext of ['png', 'jpg', 'jpeg', 'webp']) {
         const file = join(dir, `${id}.${ext}`);
         if (existsSync(file)) return net.fetch(pathToFileURL(file).toString());

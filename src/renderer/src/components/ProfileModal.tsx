@@ -279,6 +279,107 @@ function StatHistory({ p }: { p: PlayerProfile }) {
   );
 }
 
+/** A profile headshot (portrait:// pack or extracted set); absent quietly.
+ *  Players pass their bare portrait id, coaches "c<id>". */
+function ProfilePortrait({ id }: { id: string | null }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [id]);
+  if (id === null || failed) return null;
+  return (
+    <img
+      className="pf-portrait"
+      src={`portrait://${id}`}
+      alt=""
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+/**
+ * The most recent played game as a broadcast score bug — away team on the
+ * left, home on the right, loser dimmed — with the player's line from that
+ * game as stat tiles (primary category) plus compact rows for the rest.
+ */
+function PreviousGame({ p }: { p: PlayerProfile }) {
+  // Newest completed game — kept even when the player logged no statistical
+  // line that day (blockers have quiet box scores).
+  const g = p.games.find((x) => x.result) ?? null;
+  const m = g?.result ? /^([WLT]) (\d+)–(\d+)( \(OT\))?$/.exec(g.result) : null;
+  if (!g || !m) return null;
+  const tied = m[1] === 'T';
+  const won = m[1] === 'W';
+  const mine = {
+    name: p.teamName ?? 'Own team',
+    row: p.teamRow,
+    score: Number(m[2]),
+    dim: !won && !tied
+  };
+  const theirs = {
+    name: g.opponent || 'TBD',
+    row: g.opponentRow,
+    score: Number(m[3]),
+    dim: won && !tied
+  };
+  const [left, right] = g.home ? [theirs, mine] : [mine, theirs];
+  const side = (t: typeof mine, flip: boolean) => (
+    <div className={`pf-prev-team ${t.dim ? 'dim' : ''} ${flip ? 'flip' : ''}`}>
+      {t.row !== null && <TeamLogo row={t.row} size={26} fallback={null} />}
+      <NameLink req={t.row !== null ? { kind: 'school', row: t.row } : null}>{t.name}</NameLink>
+      <span className="pf-prev-score">{t.score}</span>
+    </div>
+  );
+  // Passer rating leads the tiles when the line has one (per-attempt average
+  // gives way); every other category keeps its first six cells.
+  const cells = g.lines[0]?.cells ?? [];
+  const rtg = cells.find((c) => c.label === 'RTG');
+  const tiles = (rtg ? [rtg, ...cells.filter((c) => c.label !== 'RTG' && c.label !== 'AVG')] : cells).slice(0, 6);
+  const rest = g.lines.slice(1);
+  return (
+    <>
+      <SectionTitle>Previous Game</SectionTitle>
+      <div className="pf-prev">
+        <div className="pf-prev-bug">
+          {side(left, false)}
+          <div className="pf-prev-mid">
+            FINAL{m[4] ? ' · OT' : ''}
+            <br />
+            WK {g.week}
+          </div>
+          {side(right, true)}
+        </div>
+        {tiles.length > 0 ? (
+          <div className="pf-prev-tiles">
+            {tiles.map((c) => (
+              <div key={c.label} className="pf-prev-tile">
+                <span className="k">
+                  {g.lines[0].category.toUpperCase()} {c.label}
+                </span>
+                <span className="v">{c.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="pf-prev-more">No statistical line recorded in this one.</div>
+        )}
+        {rest.length > 0 && (
+          <div className="pf-prev-more">
+            {rest.map((l) => (
+              <span key={l.category}>
+                <b>{l.category}</b>{' '}
+                {l.cells
+                  .slice(0, 4)
+                  .map((c) => `${c.value} ${c.label}`)
+                  .join(' · ')}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 function GameLog({ games }: { games: GameLogRow[] }) {
   if (!games.length) return null;
   const cats: string[] = [];
@@ -346,6 +447,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
   return (
     <div className="pf-body">
       <div className="pf-head">
+        <ProfilePortrait id={p.portrait !== null ? String(p.portrait) : null} />
         {p.teamRow !== null && <TeamLogo row={p.teamRow} size={56} fallback={null} />}
         <div className="pf-id">
           <div className="pf-name">
@@ -443,6 +545,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
         </div>
       )}
 
+      <PreviousGame p={p} />
       <StatHistory p={p} />
       <GameLog games={p.games} />
 
@@ -515,6 +618,7 @@ function CoachBody({ c }: { c: CoachProfile }) {
   return (
     <div className="pf-body">
       <div className="pf-head">
+        <ProfilePortrait id={c.portrait !== null ? `c${c.portrait}` : null} />
         {c.teamRow !== null && <TeamLogo row={c.teamRow} size={56} fallback={null} />}
         <div className="pf-id">
           <div className="pf-name">{c.name}</div>

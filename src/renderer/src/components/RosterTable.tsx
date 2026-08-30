@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import type { RosterPlayer, SchoolGrade } from '../../../shared/types.ts';
-import { useHQ } from '../store.ts';
 import { NameLink } from './ProfileModal.tsx';
 import {
   POSITION_GROUPS,
@@ -34,12 +33,6 @@ const DEV_ORDER: Record<string, number> = {
   College_Elite: 3
 };
 
-function Portrait({ id }: { id: number }) {
-  const [failed, setFailed] = useState(false);
-  if (failed || !id) return <span className="avatar avatar-blank" />;
-  return <img className="avatar" src={`portrait://${id}`} alt="" onError={() => setFailed(true)} />;
-}
-
 export default function RosterTable({
   roster,
   proPotential = []
@@ -52,7 +45,6 @@ export default function RosterTable({
   const [menuOpen, setMenuOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('overall');
   const [asc, setAsc] = useState(false);
-  const portraitsOn = useHQ((s) => !!s.settings?.portraitsDir);
 
   const isAll = groups.size === 0;
   const selected = [...groups];
@@ -252,8 +244,7 @@ export default function RosterTable({
             {filtered.map((p) => (
               <tr key={p.row}>
                 <td className="jersey">{p.jersey}</td>
-                <td title={`Portrait #${p.portraitId}`}>
-                  {portraitsOn && <Portrait id={p.portraitId} />}
+                <td>
                   <NameLink req={{ kind: 'player', row: p.row }}>{p.firstName}</NameLink>
                 </td>
                 <td className="pname">
