@@ -206,11 +206,6 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
             {board.hoursAssigned}/{board.hoursTotal}
           </b>
         </span>
-        {!browsing && (
-          <button type="button" className="btn" onClick={() => setHiring(true)}>
-            HIRE ADDITIONAL RECRUITERS
-          </button>
-        )}
         {hiring && !browsing && <ResourceModal kind="hours" onClose={() => setHiring(false)} />}
         <span className="chip">
           <span className="k">COMMITS</span> <b>{committed}</b>
@@ -221,6 +216,17 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
         <span className="chip">
           <span className="k">BUSTS</span> <b>{busts}</b>
         </span>
+        {!browsing && (
+          <button
+            type="button"
+            className="filter"
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setHiring(true)}
+            title="Add weekly recruiting hours (writes a _RJsEdited copy)"
+          >
+            Hire Scouts
+          </button>
+        )}
         <InfoDot title="Recruiting Office">
           <p>Your board, with everything the game knows about each pursuit.</p>
           <InfoRow term="Standing">

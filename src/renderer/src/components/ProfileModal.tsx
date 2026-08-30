@@ -511,7 +511,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
         <>
           <SectionTitle>The Race</SectionTitle>
           <div className="pf-race">
-            {p.recruit.pursuing.map((s, i) => (
+            {p.recruit.pursuing.slice(0, 3).map((s, i) => (
               <div key={`${s.name}-${i}`} className={`pf-race-row ${s.isUser ? 'us' : ''}`}>
                 <span className="rk">{i + 1}</span>
                 <span className="nm">{s.name}</span>
