@@ -20,6 +20,10 @@
  * Default scope is --team of the save's user-controlled program; --recruits
  * adds the whole recruiting class (marked by a live IdealRecruitingPitch —
  * recruits draw from the generic pool, verified pid→asset is one-to-one).
+ * Every named coach is always included (Coach.GenericHeadAssetName →
+ * nilcp bundle, incl. generated coaches from the generic coach pool), written
+ * as c<Coach.Portrait>.png — their own namespace, since coach portrait ids
+ * overlap player ids.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -81,11 +85,22 @@ await player.readRecords([
   'IdealRecruitingPitch'
 ]);
 
+const coach = mainTable(fr, 'Coach');
+const coachReadable = await ensureCoachSchema(fr, coach);
+if (coachReadable) {
+  await coach.readRecords([
+    'FirstName',
+    'LastName',
+    'TeamIndex',
+    'IsUserControlled',
+    'Portrait',
+    'GenericHeadAssetName'
+  ]);
+}
+
 let teamIndex = teamArg;
 if (teamIndex === null && !all) {
-  const coach = mainTable(fr, 'Coach');
-  if (await ensureCoachSchema(fr, coach)) {
-    await coach.readRecords(['TeamIndex', 'IsUserControlled']);
+  if (coachReadable) {
     for (const rec of coach.records) {
       if (rec.isEmpty) continue;
       if (val(rec, 'IsUserControlled') === true) {
@@ -102,8 +117,10 @@ if (teamIndex === null && !all) {
 }
 
 interface Want {
-  pid: number;
-  asset: string;
+  /** Output file stem: the player's portrait id, or c<id> for coaches. */
+  file: string;
+  /** Bundle key: nilpp_/nilcp_ + lowercased asset name. */
+  key: string;
   name: string;
 }
 const wants: Want[] = [];
@@ -119,9 +136,26 @@ for (const rec of player.records as any[]) {
   const asset = String(val(rec, 'GenericHeadAssetName') ?? '').trim();
   const pid = Number(val(rec, 'PLYR_PORTRAIT'));
   if (!asset || !Number.isInteger(pid) || pid < 0) continue;
-  wants.push({ pid, asset, name });
+  wants.push({ file: String(pid), key: `nilpp_${asset.toLowerCase()}`, name });
 }
 console.log(`players in scope with a portrait asset: ${wants.length}`);
+
+// Coaches: always all of them — the carousel and profiles are league-wide and
+// the whole set is a few hundred bundles.
+let coachWants = 0;
+if (coachReadable) {
+  for (const rec of coach.records as any[]) {
+    if (rec.isEmpty) continue;
+    const name = `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
+    if (!name) continue;
+    const asset = String(val(rec, 'GenericHeadAssetName') ?? '').trim();
+    const id = Number(val(rec, 'Portrait'));
+    if (!asset || !Number.isInteger(id) || id < 0) continue;
+    wants.push({ file: `c${id}`, key: `nilcp_${asset.toLowerCase()}`, name });
+    coachWants++;
+  }
+}
+console.log(`coaches with a portrait asset: ${coachWants}`);
 
 // ---- 2. The install: bundle per asset name ----
 const layout = loadLayout(GAME_ROOT_DEFAULT);
@@ -129,10 +163,12 @@ const payload = readTocPayload(path.join(layout.gameRoot, 'Data', 'Win32', 'imag
 const toc = parseSuperbundleToc(payload);
 const bundleByKey = new Map<string, any>();
 for (const b of toc.bundles) {
-  const m = /\/(nilpp_[a-z0-9_']+)_assetlibrary_nil_playerportraits_brt$/.exec(String(b.name));
+  const m = /\/((?:nilpp|nilcp)_[a-z0-9_']+)_assetlibrary_nil_(?:player|coach)portraits_brt$/.exec(
+    String(b.name)
+  );
   if (m) bundleByKey.set(m[1], b);
 }
-console.log(`player portrait bundles in the library: ${bundleByKey.size}`);
+console.log(`portrait bundles in the library: ${bundleByKey.size}`);
 
 fs.mkdirSync(outDir, { recursive: true });
 const tmpDir = path.join(outDir, '.dds-tmp');
@@ -144,18 +180,31 @@ let missing = 0;
 const ddsToPng: [string, string][] = [];
 const doneAsset = new Map<string, string>(); // asset -> dds path (dedupe shared generics)
 for (const w of wants) {
-  const pngPath = path.join(outDir, `${w.pid}.png`);
+  const pngPath = path.join(outDir, `${w.file}.png`);
   if (fs.existsSync(pngPath)) {
     cached++;
     continue;
   }
-  const key = `nilpp_${w.asset.toLowerCase()}`;
-  const prior = doneAsset.get(w.asset);
+  const key = w.key;
+  const prior = doneAsset.get(w.key);
   if (prior) {
     ddsToPng.push([prior, pngPath]);
     continue;
   }
-  const bundle = bundleByKey.get(key);
+  let bundle = bundleByKey.get(key);
+  if (!bundle) {
+    // The save's asset-name field truncates long names with a trailing '-'
+    // ("...desormeauxmicha-_581"); recover by matching stem + trailing id.
+    const t = /^((?:nilpp|nilcp)_[a-z0-9_']*?)-?_(\d+)$/.exec(key);
+    if (t) {
+      for (const [k, b] of bundleByKey) {
+        if (k.endsWith(`_${t[2]}`) && k.startsWith(t[1])) {
+          bundle = b;
+          break;
+        }
+      }
+    }
+  }
   if (!bundle) {
     missing++;
     if (missing <= 5) console.error(`no bundle for ${w.name}: ${key}`);
@@ -172,14 +221,14 @@ for (const w of wants) {
     const width = header.readUInt16LE(0x16);
     const height = header.readUInt16LE(0x18);
     const pixels = await readCasAsset(layout, chunk.location!, chunk.originalSize);
-    const ddsPath = path.join(tmpDir, `${w.pid}.dds`);
+    const ddsPath = path.join(tmpDir, `${w.file}.dds`);
     fs.writeFileSync(ddsPath, ddsBc7(width, height, pixels));
-    doneAsset.set(w.asset, ddsPath);
+    doneAsset.set(w.key, ddsPath);
     ddsToPng.push([ddsPath, pngPath]);
     extracted++;
   } catch (err) {
     missing++;
-    if (missing <= 5) console.error(`${w.name} (${w.asset}): ${err instanceof Error ? err.message : err}`);
+    if (missing <= 5) console.error(`${w.name} (${w.key}): ${err instanceof Error ? err.message : err}`);
   }
 }
 console.log(`extracted ${extracted} textures (${cached} already on disk, ${missing} not found)`);

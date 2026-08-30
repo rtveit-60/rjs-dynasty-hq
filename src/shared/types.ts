@@ -682,6 +682,8 @@ export interface CoachProfile {
   kind: 'coach';
   row: number;
   name: string;
+  /** Coach.Portrait id, served as portrait://c<id>; null when the save has none. */
+  portrait: number | null;
   /** Save enum: HeadCoach / OffensiveCoordinator / DefensiveCoordinator. */
   role: string;
   teamRow: number | null;
