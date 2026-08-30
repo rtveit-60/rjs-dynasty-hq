@@ -15,6 +15,7 @@ import { basename, join } from 'node:path';
 import type {
   CreateRecruitForm,
   CreateRecruitRequest,
+  GearSlotOptions,
   EditMentalSlot,
   PlayerEditChanges,
   PlayerEditForm,
@@ -338,6 +339,133 @@ export async function applyPlayerEdit(
   });
 }
 
+// --- Appearance & gear (CharacterVisuals JSON blobs) ------------------------
+
+const VISUALS_TABLE_NAME = 'CharacterVisuals';
+
+/** The marquee gear slots the dialog offers; left/right pairs edit together. */
+const GEAR_SLOTS: { slot: string; label: string; pair?: string }[] = [
+  { slot: 'FaceMask', label: 'Facemask' },
+  { slot: 'Visor', label: 'Visor' },
+  { slot: 'MouthWear', label: 'Mouthpiece' },
+  { slot: 'FacePaint', label: 'Face paint' },
+  { slot: 'LeftHandWear', label: 'Gloves', pair: 'RightHandWear' },
+  { slot: 'LeftShoe', label: 'Shoes', pair: 'RightShoe' },
+  { slot: 'LeftArmWear', label: 'Arm sleeves', pair: 'RightArmWear' },
+  { slot: 'Towel', label: 'Towel' },
+  { slot: 'BackPlate', label: 'Back plate' },
+  { slot: 'FlakJacket', label: 'Flak jacket' }
+];
+
+function visualsTable(franchise: any): any {
+  return (franchise.tables as any[])
+    .filter((t) => t?.name === VISUALS_TABLE_NAME)
+    .sort((a, b) => (b.header?.recordCapacity ?? 0) - (a.header?.recordCapacity ?? 0))[0];
+}
+
+function parseVisuals(rec: any): any | null {
+  try {
+    const j = JSON.parse(String(rec?._fields?.RawData?.value ?? ''));
+    return j && Array.isArray(j.loadouts) ? j : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Per-slot item vocabulary + observed skin tones, from every dressed player. */
+async function gearCatalog(
+  franchise: any
+): Promise<{ gearSlots: GearSlotOptions[]; skinTones: number[] }> {
+  const vT = visualsTable(franchise);
+  if (!vT) return { gearSlots: [], skinTones: [] };
+  if (!vT.recordsRead) await vT.readRecords();
+  const bySlot = new Map<string, Set<string>>();
+  const tones = new Set<number>();
+  for (const rec of vT.records as any[]) {
+    if (rec.isEmpty) continue;
+    const j = parseVisuals(rec);
+    if (!j) continue;
+    if (Number.isInteger(j.skinTone)) tones.add(j.skinTone);
+    for (const lo of j.loadouts) {
+      for (const el of lo?.loadoutElements ?? []) {
+        if (!el?.slotType || !el?.itemAssetName) continue;
+        if (!bySlot.has(el.slotType)) bySlot.set(el.slotType, new Set());
+        bySlot.get(el.slotType)!.add(el.itemAssetName);
+      }
+    }
+  }
+  const gearSlots: GearSlotOptions[] = [];
+  for (const g of GEAR_SLOTS) {
+    const options = [...(bySlot.get(g.slot) ?? new Set<string>())].sort();
+    if (options.length > 1) gearSlots.push({ slot: g.slot, label: g.label, options });
+  }
+  return { gearSlots, skinTones: [...tones].sort((a, b) => a - b) };
+}
+
+/**
+ * A base visuals JSON for a new player: the loadout of a dressed rostered
+ * player at the same position (sane position-appropriate defaults), with the
+ * chosen skin tone and gear overrides applied. Left/right pairs move together.
+ */
+async function buildVisualsJson(
+  franchise: any,
+  position: string,
+  skinTone: number | undefined,
+  gear: Record<string, string> | undefined
+): Promise<string | null> {
+  const vT = visualsTable(franchise);
+  const players = mainTable(franchise, 'Player');
+  if (!vT) return null;
+  if (!vT.recordsRead) await vT.readRecords();
+  await players.readRecords();
+  let base: any = null;
+  for (const p of players.records as any[]) {
+    if (p.isEmpty || String(val(p, 'Position') ?? '') !== position) continue;
+    const ref = refFromRecord(p, 'CharacterVisuals');
+    if (!ref || (ref.tableId === 0 && ref.row === 0)) continue;
+    base = parseVisuals(vT.records[ref.row]);
+    if (base) break;
+  }
+  if (!base) {
+    // any dressed player beats nothing
+    for (const rec of vT.records as any[]) {
+      if (rec.isEmpty) continue;
+      base = parseVisuals(rec);
+      if (base) break;
+    }
+  }
+  if (!base) return null;
+  if (skinTone && skinTone >= 1) base.skinTone = skinTone;
+  if (gear) {
+    const pairOf = new Map(GEAR_SLOTS.filter((g) => g.pair).map((g) => [g.slot, g.pair!]));
+    const wanted = new Map<string, string>();
+    for (const [slot, item] of Object.entries(gear)) {
+      wanted.set(slot, item);
+      const pair = pairOf.get(slot);
+      if (pair) wanted.set(pair, item);
+    }
+    const applied = new Set<string>();
+    for (const lo of base.loadouts) {
+      for (const el of lo?.loadoutElements ?? []) {
+        const item = wanted.get(el.slotType);
+        if (item !== undefined) {
+          el.itemAssetName = item;
+          applied.add(el.slotType);
+        }
+      }
+    }
+    // A base look without that slot gains it — the game's own rows mix and
+    // match which slots they carry.
+    const home = base.loadouts.find((lo: any) => Array.isArray(lo?.loadoutElements));
+    if (home) {
+      for (const [slot, item] of wanted) {
+        if (!applied.has(slot)) home.loadoutElements.push({ slotType: slot, itemAssetName: item });
+      }
+    }
+  }
+  return JSON.stringify(base);
+}
+
 // --- Create a recruit --------------------------------------------------------
 
 const STAR_ENUM: Record<number, string> = {
@@ -388,6 +516,7 @@ export async function buildCreateForm(franchise: any, savePath: string): Promise
   for (const r of playerTable.records) if (r.isEmpty) playerRowsFree++;
   let recruitRowsFree = 0;
   for (const r of recruitTable.records) if (r.isEmpty) recruitRowsFree++;
+  const { gearSlots, skinTones } = await gearCatalog(franchise);
   const target = editedPathFor(savePath);
   return {
     maxFirstLen: stringCap(sample, 'FirstName', 17),
@@ -402,6 +531,8 @@ export async function buildCreateForm(franchise: any, savePath: string): Promise
     weightMax: 160 + Math.min(240, fieldMax(sample, 'Weight', 255)),
     playerRowsFree,
     recruitRowsFree,
+    gearSlots,
+    skinTones,
     targetFileName: basename(target),
     targetExists: existsSync(target)
   };
@@ -454,10 +585,31 @@ export async function applyCreateRecruit(
   const template = byArchetype.get(req.archetype) ?? byPosition.get(req.position);
   if (!template) throw new Error('No template recruit exists for that archetype or position.');
 
+  if (req.skinTone !== undefined && req.skinTone !== 0 && !(req.skinTone >= 1 && req.skinTone <= 7)) {
+    throw new Error('Skin tone must be 1-7.');
+  }
+  let visualsJson: string | null = null;
+  if ((req.skinTone && req.skinTone >= 1) || (req.gear && Object.keys(req.gear).length)) {
+    const { gearSlots } = await gearCatalog(franchise);
+    for (const [slot, item] of Object.entries(req.gear ?? {})) {
+      const def = gearSlots.find((g) => g.slot === slot);
+      if (!def || !def.options.includes(item)) throw new Error(`Unknown gear choice for ${slot}.`);
+    }
+    visualsJson = await buildVisualsJson(franchise, req.position, req.skinTone, req.gear);
+    if (!visualsJson) throw new Error('No dressed player to base the look on.');
+  }
+
   const newPlayerRow = firstEmptyRow(playerTable);
   const newRecruitRow = firstEmptyRow(recruitTable);
   if (newPlayerRow < 0) throw new Error('The save has no free player rows left.');
   if (newRecruitRow < 0) throw new Error('The save has no free recruit rows left.');
+  const vTable = visualsTable(franchise);
+  let newVisualsRow = -1;
+  if (visualsJson) {
+    if (vTable && !vTable.recordsRead) await vTable.readRecords();
+    newVisualsRow = vTable ? firstEmptyRow(vTable) : -1;
+    if (newVisualsRow < 0) throw new Error('The save has no free appearance rows left.');
+  }
 
   // ---- clone the template player, then override identity ----
   const tp = playerTable.records[template.playerRow];
@@ -485,6 +637,10 @@ export async function applyCreateRecruit(
   if (np._fields?.PLYR_HOME_TOWN) np.PLYR_HOME_TOWN = town;
   // Their own face, not the template's photo: 0 falls back to the generated avatar.
   if (np._fields?.PLYR_PORTRAIT) np.PLYR_PORTRAIT = 0;
+  if (visualsJson && newVisualsRow >= 0) {
+    vTable.records[newVisualsRow].RawData = visualsJson;
+    np.CharacterVisuals = refString(vTable.header?.tableId ?? -1, newVisualsRow);
+  }
 
   // ---- clone the template recruit row, then re-point and reset ----
   const tr = recruitTable.records[template.recruitRow];
@@ -530,6 +686,14 @@ export async function applyCreateRecruit(
       !String(val(wr, 'RecruitStage')).includes('Top10')
     ) {
       throw new Error('The written save did not read back with the new recruit.');
+    }
+    if (visualsJson && newVisualsRow >= 0) {
+      const wvT = visualsTable(check);
+      if (wvT && !wvT.recordsRead) await wvT.readRecords();
+      const wj = wvT && parseVisuals(wvT.records[newVisualsRow]);
+      if (!wj || (req.skinTone && req.skinTone >= 1 && wj.skinTone !== req.skinTone)) {
+        throw new Error('The written save did not read back with the new look.');
+      }
     }
   });
   return { editedPath, recruitRow: newRecruitRow, playerRow: newPlayerRow };

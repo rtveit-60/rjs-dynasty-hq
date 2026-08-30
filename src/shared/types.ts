@@ -763,8 +763,19 @@ export interface CreateRecruitForm {
   weightMax: number;
   playerRowsFree: number;
   recruitRowsFree: number;
+  /** Gear pickers, options aggregated from the save's dressed players. */
+  gearSlots: GearSlotOptions[];
+  /** Observed skin tones (1–7 in practice). */
+  skinTones: number[];
   targetFileName: string;
   targetExists: boolean;
+}
+
+/** One gear slot's choices, learned from every dressed player in the save. */
+export interface GearSlotOptions {
+  slot: string;
+  label: string;
+  options: string[];
 }
 
 export interface CreateRecruitRequest {
@@ -780,6 +791,10 @@ export interface CreateRecruitRequest {
   weightLb: number;
   homeState: string;
   homeTown: string;
+  /** 1–7, or 0 to keep the base look's tone. */
+  skinTone?: number;
+  /** slot -> itemAssetName overrides; unset slots keep the base loadout. */
+  gear?: Record<string, string>;
 }
 
 /** Stage recruits onto or off the user's target board. */

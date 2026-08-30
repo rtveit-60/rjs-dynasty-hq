@@ -26,6 +26,8 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
   const [weightLb, setWeightLb] = useState(210);
   const [homeState, setHomeState] = useState('');
   const [homeTown, setHomeTown] = useState('');
+  const [skinTone, setSkinTone] = useState(0);
+  const [gear, setGear] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let alive = true;
@@ -96,7 +98,9 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         heightIn,
         weightLb,
         homeState,
-        homeTown: homeTown.trim()
+        homeTown: homeTown.trim(),
+        skinTone: skinTone || undefined,
+        gear: Object.keys(gear).length ? gear : undefined
       });
       if (res.ok) {
         setSavedNote(`${res.message} Search the board for the name, then stage + to target them, and refine ratings through the profile's EDIT.`);
@@ -245,6 +249,48 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
               </label>
             </div>
 
+            <div className="ed-sec">Look &amp; gear</div>
+            <p className="cr-note">
+              Optional — unset choices keep a position-matched base look. Item names are the
+              game's own asset identifiers.
+            </p>
+            <div className="cr-grid">
+              <label className="ta-field">
+                <span>Skin tone</span>
+                <select value={skinTone} onChange={(e) => setSkinTone(Number(e.target.value))}>
+                  <option value={0}>Base look</option>
+                  {form.skinTones.map((t) => (
+                    <option key={t} value={t}>
+                      Tone {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {form.gearSlots.map((g) => (
+                <label key={g.slot} className="ta-field">
+                  <span>{g.label}</span>
+                  <select
+                    value={gear[g.slot] ?? ''}
+                    onChange={(e) =>
+                      setGear((prev) => {
+                        const next = { ...prev };
+                        if (e.target.value) next[g.slot] = e.target.value;
+                        else delete next[g.slot];
+                        return next;
+                      })
+                    }
+                  >
+                    <option value="">Base look</option>
+                    {g.options.map((o) => (
+                      <option key={o} value={o}>
+                        {gearLabel(o)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+
             {(error || (nameProblem && (firstName || lastName))) && (
               <div className="ed-error">{error ?? nameProblem}</div>
             )}
@@ -272,4 +318,13 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
       </div>
     </div>
   );
+}
+
+/** 'GearFaceMask_Speedflex2Bar_WR' → 'Speedflex 2 Bar WR' — the asset id, made readable. */
+function gearLabel(asset: string): string {
+  return asset
+    .replace(/^Gear_?[A-Za-z]*?_/, '')
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])(\d)/g, '$1 $2');
 }

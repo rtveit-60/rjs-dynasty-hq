@@ -552,6 +552,48 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
       devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: 'Narnia', homeTown: ''
     }, dir));
   check('source still untouched after creation', sha(work) === sourceHash);
+
+  // --- 10b. creation with a chosen look: skin tone + gear overrides ---
+  const cform2 = await buildCreateForm(await loadFranchise(editedPath), editedPath);
+  check('create form: gear catalog from dressed players',
+    cform2.gearSlots.length >= 6 && cform2.gearSlots.every((g) => g.options.length > 1),
+    cform2.gearSlots.map((g) => `${g.slot}×${g.options.length}`).join(' '));
+  check('create form: observed skin tones', cform2.skinTones.length >= 4, cform2.skinTones.join(','));
+  const mask = cform2.gearSlots.find((g) => g.slot === 'FaceMask');
+  const frV = await loadFranchise(editedPath);
+  const resV = await applyCreateRecruit(frV, editedPath, {
+    firstName: 'Styled',
+    lastName: 'Prospect',
+    position: pos,
+    archetype,
+    stars: 4,
+    devTrait: cform2.devTraits[0],
+    heightIn: 75,
+    weightLb: 220,
+    homeState: state,
+    homeTown: '',
+    skinTone: cform2.skinTones[0],
+    gear: mask ? { FaceMask: mask.options[0] } : undefined
+  }, dir);
+  const frV2 = await loadFranchise(editedPath);
+  const pTV = mainTable(frV2, 'Player');
+  await pTV.readRecords();
+  const vRef = refFromRecord(pTV.records[resV.playerRow], 'CharacterVisuals');
+  check('create: visuals row allocated and referenced', !!vRef && vRef.tableId !== 0, JSON.stringify(vRef));
+  const vT2 = frV2.getTableById(vRef!.tableId);
+  await vT2.readRecords();
+  const vj = JSON.parse(String(vT2.records[vRef!.row]._fields.RawData.value));
+  const fmEl = vj.loadouts.flatMap((l: any) => l.loadoutElements ?? []).find((e: any) => e.slotType === 'FaceMask');
+  check('create: skin tone + gear read back from the blob',
+    vj.skinTone === cform2.skinTones[0] && (!mask || fmEl?.itemAssetName === mask.options[0]),
+    `tone ${vj.skinTone}, mask ${fmEl?.itemAssetName}`);
+  await rejects('create reject: unknown gear item', async () =>
+    applyCreateRecruit(await loadFranchise(editedPath), editedPath, {
+      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
+      devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: '',
+      gear: { FaceMask: 'GearFaceMask_TotallyMadeUp' }
+    }, dir));
+  check('source still untouched after styled creation', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

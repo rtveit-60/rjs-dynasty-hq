@@ -4618,3 +4618,9 @@ tr:hover .bd-btn,
 .cr-grid .ta-field .ed-step {
   width: 100%;
 }
+
+.cr-note {
+  margin: -2px 0 8px;
+  font: 500 11.5px var(--font-ui);
+  color: var(--ink-3);
+}
