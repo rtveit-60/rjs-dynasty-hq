@@ -50,6 +50,7 @@ export interface HQBridge {
     schemeEnum: string
   ) => Promise<PlaybookBook | null>;
   onSnapshot: (cb: (s: Snapshot) => void) => () => void;
+  onSettings: (cb: (s: Settings) => void) => () => void;
   onStatus: (cb: (s: WatchStatus) => void) => () => void;
   onMedia: (cb: (events: MediaEvent[]) => void) => () => void;
   onSystemTheme: (cb: (t: 'light' | 'dark') => void) => () => void;
@@ -78,6 +79,7 @@ const bridge: HQBridge = {
   getPlaybook: (side, coachRow, schemeEnum) =>
     ipcRenderer.invoke('playbook:get', side, coachRow, schemeEnum),
   onSnapshot: subscribe<Snapshot>('snapshot'),
+  onSettings: subscribe<Settings>('settings'),
   onStatus: subscribe<WatchStatus>('status'),
   onMedia: subscribe<MediaEvent[]>('media'),
   onSystemTheme: subscribe<'light' | 'dark'>('system-theme')

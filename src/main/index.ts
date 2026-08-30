@@ -1,7 +1,7 @@
 import { BrowserWindow, app, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import type {
   AppState,
   DetectedSave,
@@ -24,6 +24,8 @@ let status: WatchStatus = { kind: 'idle' };
 let snapshot: Snapshot | null = null;
 let media: MediaEvent[] = [];
 let updateReady: string | null = null;
+/** File name of a freshly selected save whose first parse should re-scope to the user's program. */
+let pendingAutoDefault: string | null = null;
 
 function startUpdateCheck(): void {
   checkForUpdates(getSettings().autoUpdate, (version) => {
@@ -44,8 +46,42 @@ const pipeline = new Pipeline({
   onMedia: (events) => {
     media = events;
     win?.webContents.send('media', events);
+  },
+  onParsed: (s) => {
+    if (!pendingAutoDefault || s.fileName !== pendingAutoDefault) return;
+    pendingAutoDefault = null;
+    // Deferred so the rescope starts after the refresh that fired this fully settles.
+    setImmediate(() => applyUserSchoolDefault(s));
   }
 });
+
+/** Settings changed outside a renderer request (auto-scope) — push, don't wait to be asked. */
+function pushSettings(): void {
+  win?.webContents.send('settings', getSettings());
+}
+
+/**
+ * First parse of a newly selected save: scope the dashboard to the user's own
+ * program instead of whatever school the previous save left behind. One
+ * user-controlled team selects silently. Several drop the scope to null so the
+ * school picker asks, with the user's teams listed first — unless the current
+ * scope already is one of them. None (spectator save) changes nothing.
+ */
+function applyUserSchoolDefault(s: Snapshot): void {
+  const userRows = s.teams.filter((t) => t.isUserTeam).map((t) => t.row);
+  const { savePath, schoolTeamRow } = getSettings();
+  if (!savePath || userRows.length === 0) return;
+  if (userRows.length === 1) {
+    if (userRows[0] === schoolTeamRow) return;
+    updateSettings({ schoolTeamRow: userRows[0] });
+  } else if (schoolTeamRow != null && userRows.includes(schoolTeamRow)) {
+    return;
+  } else {
+    updateSettings({ schoolTeamRow: null });
+  }
+  pushSettings();
+  void pipeline.rescope(savePath, getSettings().schoolTeamRow);
+}
 
 function effectiveTheme(): 'light' | 'dark' {
   const mode = getSettings().theme;
@@ -95,6 +131,9 @@ function startWatching(savePath: string): void {
 }
 
 function useSave(savePath: string): void {
+  // Selecting a different file arms the auto-scope; re-picking the current one must not
+  // yank the user off a school they chose to browse. Watcher refreshes never arm it.
+  if (getSettings().savePath !== savePath) pendingAutoDefault = basename(savePath);
   updateSettings({ savePath });
   pipeline.reset();
   startWatching(savePath);
@@ -420,6 +459,13 @@ function createWindow(): void {
               );
             }
           } else if (capturePath) {
+            // HQ_CAPTURE_USESAVE=<path> selects a save mid-run, as the Setup picker
+            // would — exercises the new-save auto-scope before the shot.
+            const useSaveEnv = process.env['HQ_CAPTURE_USESAVE'];
+            if (useSaveEnv) {
+              useSave(useSaveEnv);
+              await new Promise((r) => setTimeout(r, 12000));
+            }
             // Optional scripted steps so a specific UI state can be captured:
             //   HQ_CAPTURE_NAV=RECRUITING  HQ_CAPTURE_CLICK="QB,4★+"
             const navLabel = process.env['HQ_CAPTURE_NAV'];

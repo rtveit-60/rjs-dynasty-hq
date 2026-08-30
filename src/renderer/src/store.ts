@@ -60,6 +60,8 @@ export const useHQ = create<HQStore>((set, get) => ({
     if (initialized) return;
     initialized = true;
     window.hq.onSnapshot((snapshot) => set({ snapshot }));
+    // Main can change settings on its own (new-save auto-scope) — mirror those too.
+    window.hq.onSettings((settings) => set({ settings }));
     window.hq.onStatus((status) => set({ status }));
     window.hq.onMedia((media) => set({ media }));
     window.hq.onUpdateReady((updateReady) => set({ updateReady }));

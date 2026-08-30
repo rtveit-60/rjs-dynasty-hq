@@ -26,6 +26,8 @@ export interface PipelineEvents {
   onSnapshot: (snapshot: Snapshot) => void;
   onStatus: (status: WatchStatus) => void;
   onMedia: (events: MediaEvent[]) => void;
+  /** End of a full refresh (never a rescope) — fires once per completed parse+extract. */
+  onParsed: (snapshot: Snapshot) => void;
 }
 
 function readJson<T>(path: string): T | null {
@@ -46,7 +48,8 @@ export class Pipeline {
   private lastHash = '';
   private lastUpdate: number | null = null;
   private busy = false;
-  private queued = false;
+  /** Args of a refresh requested while one was in flight — re-run with these, not the stale ones. */
+  private queuedArgs: { savePath: string; schoolTeamRow: number | null } | null = null;
   /** The school scoped by the latest refresh/rescope; marks "us" in profiles. */
   private lastSchoolRow: number | null = null;
   /** League leaders, swept once per parsed save (keyed by its hash). */
@@ -65,7 +68,7 @@ export class Pipeline {
 
   async refresh(savePath: string, schoolTeamRow: number | null, force = false): Promise<void> {
     if (this.busy) {
-      this.queued = true;
+      this.queuedArgs = { savePath, schoolTeamRow };
       return;
     }
     this.busy = true;
@@ -92,6 +95,7 @@ export class Pipeline {
       this.events.onSnapshot(snapshot);
       this.updateMedia(snapshot, await this.leagueLeaders());
       this.events.onStatus({ kind: 'watching', lastUpdate: this.lastUpdate });
+      this.events.onParsed(snapshot);
     } catch (err) {
       this.events.onStatus({
         kind: 'error',
@@ -99,9 +103,10 @@ export class Pipeline {
       });
     } finally {
       this.busy = false;
-      if (this.queued) {
-        this.queued = false;
-        void this.refresh(savePath, schoolTeamRow);
+      if (this.queuedArgs) {
+        const next = this.queuedArgs;
+        this.queuedArgs = null;
+        void this.refresh(next.savePath, next.schoolTeamRow);
       }
     }
   }
