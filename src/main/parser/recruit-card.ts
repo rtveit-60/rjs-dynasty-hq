@@ -212,6 +212,7 @@ export const CARD_FIELDS = [
   'LastName',
   'Position',
   'PlayerType',
+  'IdealRecruitingPitch',
   'Height',
   'Weight',
   'OverallRating',
@@ -301,6 +302,10 @@ export async function extractRecruitCard(franchise: any, playerRow: number): Pro
       devTrait: String(val(rec, 'TraitDevelopment') ?? ''),
       homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? ''),
       homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
+      idealPitch: (() => {
+        const p = String(val(rec, 'IdealRecruitingPitch') ?? '');
+        return /^Invalid/.test(p) || p === 'undefined' ? '' : p;
+      })(),
       glance,
       mental,
       physical

@@ -19,6 +19,7 @@ import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
 import ScoutingView from './ScoutingView.tsx';
+import TeamNeedsStrip from './TeamNeedsStrip.tsx';
 
 type Board = 'hs' | 'portal' | 'scout';
 
@@ -62,8 +63,9 @@ const STAR_FILTERS = [
 
 export default function RecruitingView() {
   const snapshot = useHQ((s) => s.snapshot);
-  const rc = snapshot?.school?.recruiting;
-  const teamName = snapshot?.school?.team.longName;
+  const school = snapshot?.school;
+  const rc = school?.recruiting;
+  const teamName = school?.team.longName;
 
   const [board, setBoard] = useState<Board>('hs');
   const [q, setQ] = useState('');
@@ -233,8 +235,14 @@ export default function RecruitingView() {
           <InfoRow term="The race">
             Every pursuing school and its influence, in the recruit's profile.
           </InfoRow>
+          <InfoRow term="Motivations">
+            Click a row: the three things the recruit cares about and the pitch matching them,
+            from the game's own pitch definitions.
+          </InfoRow>
         </InfoDot>
       </div>
+
+      {board !== 'scout' && school && <TeamNeedsStrip needs={school.teamNeeds} />}
 
       {board === 'scout' ? (
         <ScoutingView

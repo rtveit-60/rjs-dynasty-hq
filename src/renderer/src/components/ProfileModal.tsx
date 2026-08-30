@@ -10,6 +10,7 @@ import type {
   SeasonStatRow,
   StatLine
 } from '../../../shared/types.ts';
+import { PITCHES } from '../../../shared/pitches.ts';
 import { RATINGS } from '../../../shared/ratings.ts';
 import {
   archetypeLabel,
@@ -370,6 +371,12 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
           {p.recruit.dealbreaker && (
             <span>
               <span className="pf-va">Dealbreaker</span> {spaceOut(p.recruit.dealbreaker)}
+            </span>
+          )}
+          {p.recruit.idealPitch && PITCHES[p.recruit.idealPitch] && (
+            <span>
+              <span className="pf-va">Ideal Pitch</span> {PITCHES[p.recruit.idealPitch].name} ·{' '}
+              {PITCHES[p.recruit.idealPitch].motivations.join(' · ')}
             </span>
           )}
           {p.recruit.committedTo && <span className="pf-commit">Committed · {p.recruit.committedTo}</span>}
