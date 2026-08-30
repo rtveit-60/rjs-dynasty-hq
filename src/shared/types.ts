@@ -446,6 +446,8 @@ export interface RecruitCard {
   weightLb: number;
   overall: number;
   devTrait: string;
+  /** The recruit's own jersey number; −1 when the save has none. */
+  jersey: number;
   homeTown: string;
   homeState: string;
   /** IdealRecruitingPitch enum key (ItsGameTime…); '' when none. Display data in shared/pitches. */

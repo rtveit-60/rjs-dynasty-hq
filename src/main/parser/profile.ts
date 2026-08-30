@@ -136,6 +136,15 @@ const sacks = (full: number, half: number): string => {
   const v = full + half / 2;
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 };
+/** NCAA passing efficiency: (8.4·YDS + 330·TD + 100·CMP − 200·INT) / ATT. */
+const passRating = (g: Get): string => {
+  const att = g('PASSATTEMPTS');
+  if (att <= 0) return '0.0';
+  return (
+    (8.4 * g('PASSYARDS') + 330 * g('PASSTDS') + 100 * g('PASSCOMPLETED') - 200 * g('PASSINTS')) /
+    att
+  ).toFixed(1);
+};
 
 const CATEGORIES: CategoryDef[] = [
   {
@@ -149,7 +158,8 @@ const CATEGORIES: CategoryDef[] = [
       ['TD', (g) => n(g('PASSTDS'))],
       ['INT', (g) => n(g('PASSINTS'))],
       ['LNG', (g) => n(g('PASSLONGEST'))],
-      ['SCK', (g) => n(g('PASSSACKED'))]
+      ['SCK', (g) => n(g('PASSSACKED'))],
+      ['RTG', passRating]
     ]
   },
   {
@@ -463,6 +473,7 @@ export async function extractPlayerProfile(
 
     // Recruiting context, when this player is (or was) a board prospect.
     let recruit: PlayerProfile['recruit'] = null;
+    let recruitClass = '';
     try {
       const rt = mainTable(franchise, 'Recruit');
       await rt.readRecords([
@@ -472,7 +483,8 @@ export async function extractPlayerProfile(
         'StateRank',
         'RecruitStage',
         'TotalScholarshipOffers',
-        'TopSchoolsList'
+        'TopSchoolsList',
+        'Class'
       ]);
       const playerTableId = pt.header?.tableId ?? -1;
       for (const rrec of rt.records as any[]) {
@@ -480,6 +492,7 @@ export async function extractPlayerProfile(
         const pref = refFromRecord(rrec, 'Player');
         if (isNullRef(pref) || pref.tableId !== playerTableId || pref.row !== playerRow) continue;
         const stage = String(val(rrec, 'RecruitStage') ?? '');
+        recruitClass = String(val(rrec, 'Class') ?? '');
 
         // The race: every pursuing school with its influence, best first.
         const pursuing: TargetSchool[] = [];
@@ -519,6 +532,17 @@ export async function extractPlayerProfile(
       // no recruit context outside recruiting season — the profile stands without it
     }
 
+    // A prospect not yet in college has TeamIndex pointed at an FCS filler team
+    // ("FCS West") — label the level they play at instead. Transfers keep their
+    // real current school.
+    const prospectLevel = !recruit
+      ? null
+      : recruitClass.startsWith('HighSchool')
+        ? 'High School'
+        : recruitClass.startsWith('JuniorCollege')
+          ? 'Junior College'
+          : null;
+
     const jersey = numOf(rec, 'JerseyNum');
     return {
       kind: 'player',
@@ -526,7 +550,7 @@ export async function extractPlayerProfile(
       name: `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim(),
       position: String(val(rec, 'Position') ?? ''),
       archetype: String(val(rec, 'PlayerType') ?? ''),
-      jersey: teamRow !== null && jersey >= 0 ? jersey : null,
+      jersey: (teamRow !== null || prospectLevel) && jersey >= 0 ? jersey : null,
       heightIn: numOf(rec, 'Height'),
       weightLb: numOf(rec, 'Weight') + 160,
       overall: numOf(rec, 'OverallRating'),
@@ -535,8 +559,8 @@ export async function extractPlayerProfile(
       redshirt: String(val(rec, 'RedshirtStatus') ?? ''),
       homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? ''),
       homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
-      teamRow,
-      teamName: teamRow !== null ? (ctx.nameByRow.get(teamRow) ?? null) : null,
+      teamRow: prospectLevel ? null : teamRow,
+      teamName: prospectLevel ?? (teamRow !== null ? (ctx.nameByRow.get(teamRow) ?? null) : null),
       injury: String(val(rec, 'InjuryStatus') ?? ''),
       yearsWithTeam: numOf(rec, 'PLYR_CONSECYEARSWITHTEAM'),
       awards: numOf(rec, 'YearlyAwardCount'),

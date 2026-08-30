@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { RecruitTargetEntry, Snapshot } from '../../../shared/types.ts';
 import { STAGE_LABELS, spaceOut, stars } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
+import RecruitCardRow from './RecruitCardRow.tsx';
 import TeamNeedsStrip from './TeamNeedsStrip.tsx';
 
 type School = NonNullable<Snapshot['school']>;
@@ -92,6 +93,7 @@ export default function TargetsView({ school }: { school: School }) {
   const currentWeek = useHQ((s) => s.snapshot?.season?.week ?? 0);
   const [sortKey, setSortKey] = useState<SortKey>('stars');
   const [asc, setAsc] = useState(false);
+  const [openRow, setOpenRow] = useState<number | null>(null);
 
   const conflicts = useMemo(
     () => playingTimeConflicts(board?.targets ?? []),
@@ -229,6 +231,10 @@ export default function TargetsView({ school }: { school: School }) {
             playing time at the same spot; hover names the rivals.
           </InfoRow>
           <InfoRow term="♥">Board favorite.</InfoRow>
+          <p>
+            Click a row for At a Glance: the position's key skills, abilities, motivations and the
+            ideal pitch. Click a name for the full profile.
+          </p>
         </InfoDot>
       </div>
 
@@ -251,8 +257,13 @@ export default function TargetsView({ school }: { school: School }) {
           </thead>
           <tbody>
             {sorted.map((t) => (
-              <tr key={`${t.name}-${t.nationalRank}`}>
+              <Fragment key={t.playerRow}>
+              <tr
+                onClick={() => setOpenRow(openRow === t.playerRow ? null : t.playerRow)}
+                className={`clickable ${openRow === t.playerRow ? 'expanded' : ''}`}
+              >
                 <td className="pname">
+                  <span className="disclose">{openRow === t.playerRow ? '▾' : '▸'}</span>
                   {t.isFavorite && <span className="fav">♥ </span>}
                   <NameLink req={{ kind: 'player', row: t.playerRow }}>{t.name}</NameLink>
                   <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}> · {spaceOut(t.homeState)}</span>
@@ -294,6 +305,9 @@ export default function TargetsView({ school }: { school: School }) {
                 <td className="num">{t.positionRank > 0 ? t.positionRank : '—'}</td>
                 <td>{dealCell(t)}</td>
               </tr>
+              {/* Same At a Glance card as the Recruiting board; 11 columns above. */}
+              {openRow === t.playerRow && <RecruitCardRow playerRow={t.playerRow} span={11} />}
+              </Fragment>
             ))}
           </tbody>
         </table>

@@ -52,10 +52,17 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
             <>
               <div className="rc-kicker">At a Glance</div>
               <div className="rc-head">
-                <span className={`ovr ${ovrTier(card.overall)}`}>{card.overall}</span>
+                <div className="rc-ovr">
+                  <span className={`ovr ${ovrTier(card.overall)}`}>{card.overall}</span>
+                  <span className="rc-ovr-k">OVR</span>
+                </div>
                 <div>
-                  <div className="rc-arch">{archetypeLabel(card.archetype)}</div>
+                  <div className="rc-arch">
+                    {card.jersey >= 0 && <span className="rc-jersey">#{card.jersey}</span>}
+                    {card.name}
+                  </div>
                   <div className="rc-meta">
+                    <span>{archetypeLabel(card.archetype)}</span>
                     <span>{recruitPos(card.position)}</span>
                     <span>{heightFt(card.heightIn)}</span>
                     <span>{card.weightLb} lb</span>
