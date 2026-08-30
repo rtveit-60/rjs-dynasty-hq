@@ -136,6 +136,15 @@ const sacks = (full: number, half: number): string => {
   const v = full + half / 2;
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 };
+/** NCAA passing efficiency: (8.4·YDS + 330·TD + 100·CMP − 200·INT) / ATT. */
+const passRating = (g: Get): string => {
+  const att = g('PASSATTEMPTS');
+  if (att <= 0) return '0.0';
+  return (
+    (8.4 * g('PASSYARDS') + 330 * g('PASSTDS') + 100 * g('PASSCOMPLETED') - 200 * g('PASSINTS')) /
+    att
+  ).toFixed(1);
+};
 
 const CATEGORIES: CategoryDef[] = [
   {
@@ -149,7 +158,8 @@ const CATEGORIES: CategoryDef[] = [
       ['TD', (g) => n(g('PASSTDS'))],
       ['INT', (g) => n(g('PASSINTS'))],
       ['LNG', (g) => n(g('PASSLONGEST'))],
-      ['SCK', (g) => n(g('PASSSACKED'))]
+      ['SCK', (g) => n(g('PASSSACKED'))],
+      ['RTG', passRating]
     ]
   },
   {

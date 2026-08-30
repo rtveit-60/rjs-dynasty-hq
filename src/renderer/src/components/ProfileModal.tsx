@@ -290,7 +290,11 @@ function PreviousGame({ p }: { p: PlayerProfile }) {
       <span className="pf-prev-score">{t.score}</span>
     </div>
   );
-  const tiles = g.lines[0]?.cells.slice(0, 6) ?? [];
+  // Passer rating leads the tiles when the line has one (per-attempt average
+  // gives way); every other category keeps its first six cells.
+  const cells = g.lines[0]?.cells ?? [];
+  const rtg = cells.find((c) => c.label === 'RTG');
+  const tiles = (rtg ? [rtg, ...cells.filter((c) => c.label !== 'RTG' && c.label !== 'AVG')] : cells).slice(0, 6);
   const rest = g.lines.slice(1);
   return (
     <>
