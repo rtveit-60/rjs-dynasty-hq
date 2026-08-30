@@ -16,8 +16,10 @@
  * until an in-app decoder lands.
  *
  * Usage:
- *   node scripts/extract-portraits.ts <save> <outDir> [--team <TeamIndex>] [--all] [--size <px>]
- * Default scope is --team of the save's user-controlled program.
+ *   node scripts/extract-portraits.ts <save> <outDir> [--team <TeamIndex>] [--recruits] [--all] [--size <px>]
+ * Default scope is --team of the save's user-controlled program; --recruits
+ * adds the whole recruiting class (marked by a live IdealRecruitingPitch —
+ * recruits draw from the generic pool, verified pid→asset is one-to-one).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,6 +44,7 @@ if (!savePath || !outDir) {
   process.exit(1);
 }
 const all = args.includes('--all');
+const wantRecruits = args.includes('--recruits');
 const teamArg = args.includes('--team') ? Number(args[args.indexOf('--team') + 1]) : null;
 const size = args.includes('--size') ? Number(args[args.indexOf('--size') + 1]) : 256;
 
@@ -69,7 +72,14 @@ function ddsBc7(w: number, h: number, data: Buffer): Buffer {
 // ---- 1. The save: who needs a portrait, keyed how ----
 const fr = await loadFranchise(savePath);
 const player = mainTable(fr, 'Player');
-await player.readRecords(['FirstName', 'LastName', 'PLYR_PORTRAIT', 'GenericHeadAssetName', 'TeamIndex']);
+await player.readRecords([
+  'FirstName',
+  'LastName',
+  'PLYR_PORTRAIT',
+  'GenericHeadAssetName',
+  'TeamIndex',
+  'IdealRecruitingPitch'
+]);
 
 let teamIndex = teamArg;
 if (teamIndex === null && !all) {
@@ -99,11 +109,17 @@ interface Want {
 const wants: Want[] = [];
 for (const rec of player.records as any[]) {
   if (rec.isEmpty) continue;
-  if (!all && Number(val(rec, 'TeamIndex')) !== teamIndex) continue;
+  const name = `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
+  if (!name) continue;
+  if (!all) {
+    const onTeam = Number(val(rec, 'TeamIndex')) === teamIndex;
+    const isRecruit = !/^Invalid/.test(String(val(rec, 'IdealRecruitingPitch') ?? 'Invalid'));
+    if (!(onTeam || (wantRecruits && isRecruit))) continue;
+  }
   const asset = String(val(rec, 'GenericHeadAssetName') ?? '').trim();
   const pid = Number(val(rec, 'PLYR_PORTRAIT'));
   if (!asset || !Number.isInteger(pid) || pid < 0) continue;
-  wants.push({ pid, asset, name: `${val(rec, 'FirstName')} ${val(rec, 'LastName')}` });
+  wants.push({ pid, asset, name });
 }
 console.log(`players in scope with a portrait asset: ${wants.length}`);
 
