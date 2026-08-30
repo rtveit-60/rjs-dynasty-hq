@@ -742,6 +742,15 @@ export interface ResourceEditRequest {
   amount: number;
 }
 
+/**
+ * Depth-chart edit: the full new player order for each touched window.
+ * Size-preserving — every window keeps its game-defined slot count, so
+ * edits are reorders and swaps, never adds or removes.
+ */
+export interface DepthChartEditRequest {
+  changes: { position: string; playerRows: number[] }[];
+}
+
 /** A coach's career ledger, from the save's CareerCoachStats row. */
 export interface CoachCareerStats {
   wins: number;

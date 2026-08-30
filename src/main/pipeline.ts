@@ -9,6 +9,7 @@ import type {
   PlayerEditForm,
   PlayerEditResult,
   Profile,
+  DepthChartEditRequest,
   ResourceEditRequest,
   ResourceForm,
   ProfileRequest,
@@ -17,7 +18,13 @@ import type {
   WatchStatus
 } from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
-import { applyPlayerEdit, applyResourceEdit, buildEditForm, buildResourceForm } from './editor.ts';
+import {
+  applyDepthChartEdit,
+  applyPlayerEdit,
+  applyResourceEdit,
+  buildEditForm,
+  buildResourceForm
+} from './editor.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
 import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from './parser/profile.ts';
@@ -255,6 +262,24 @@ export class Pipeline {
           applied === req.amount
             ? `Added ${applied} ${unit} — saved to ${basename(editedPath)}.`
             : `Added ${applied} ${unit} (the save format caps the field there) — saved to ${basename(editedPath)}.`
+      };
+    });
+  }
+
+  /** Depth-chart reorders/swaps, via the same guarded write shell. */
+  async editDepthChart(req: DepthChartEditRequest, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, windows } = await applyDepthChartEdit(
+        this.franchise,
+        savePath,
+        { teamRow, changes: req.changes },
+        app.getPath('userData')
+      );
+      return {
+        editedPath,
+        message: `Depth chart updated (${windows} window${windows === 1 ? '' : 's'}) — saved to ${basename(editedPath)}.`
       };
     });
   }

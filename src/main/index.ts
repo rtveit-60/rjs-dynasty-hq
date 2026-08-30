@@ -285,6 +285,21 @@ function registerIpc(): void {
     return result;
   });
 
+  // Depth-chart reorders/swaps — the same _RJsEdited write path.
+  ipcMain.handle('depth:edit', async (_e, req: unknown) => {
+    const r = req as { changes?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !Array.isArray(r?.changes) || !r.changes.length) {
+      return { ok: false, message: 'Nothing to save.' };
+    }
+    const result = await pipeline.editDepthChart({ changes: r.changes as never }, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // Returns the pre-extracted playbook the team runs (formations, plays, alignments,
   // routes): the coach's selected book by its playbook row, falling back to the scheme
   // archetype. null if nothing matches.

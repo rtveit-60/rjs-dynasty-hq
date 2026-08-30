@@ -15,6 +15,7 @@ import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync } from
 import os from 'node:os';
 import path from 'node:path';
 import {
+  applyDepthChartEdit,
   applyPlayerEdit,
   applyResourceEdit,
   buildEditForm,
@@ -208,6 +209,71 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   await rejects('resource reject: zero amount', async () =>
     applyResourceEdit(await loadFranchise(editedPath), editedPath, { teamRow, kind: 'nil', amount: 0 }, dir));
   check('source still untouched after resource edits', sha(work) === sourceHash);
+}
+
+// --- 6. depth chart: swap round-trip + whole-payload rejections ---
+{
+  const fr = await loadFranchise(editedPath);
+  const teams = mainTable(fr, 'Team');
+  await teams.readRecords();
+  let teamRow = -1;
+  for (let i = 0; i < teams.records.length; i++) {
+    const r = teams.records[i];
+    if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) {
+      teamRow = i;
+      break;
+    }
+  }
+  const players = mainTable(fr, 'Player');
+  await players.readRecords(['TeamIndex']);
+  const pid = players.header?.tableId ?? -1;
+  const windowOf = async (franchise: any, row: number, pos: string): Promise<number[]> => {
+    const t = mainTable(franchise, 'Team');
+    await t.readRecords();
+    const dcRef = refFromRecord(t.records[row], 'DepthChart');
+    const dcT = franchise.getTableById(dcRef!.tableId);
+    if (!dcT.recordsRead) await dcT.readRecords();
+    const slotRef = refFromRecord(dcT.records[dcRef!.row], pos);
+    const arrT = franchise.getTableById(slotRef!.tableId);
+    if (!arrT.recordsRead) await arrT.readRecords();
+    const arr = arrT.records[slotRef!.row];
+    const out: number[] = [];
+    for (let i = 0; i < (arr.arraySize ?? 0); i++) {
+      const v = arr._fields[`Player${i}`]?.value as string;
+      out.push(parseInt(v.slice(15), 2));
+    }
+    return out;
+  };
+
+  const before = await windowOf(fr, teamRow, 'QB');
+  check('depth: QB window resolves', before.length >= 2, `${before.length} slots`);
+  const swapped = [...before];
+  [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+  const res = await applyDepthChartEdit(
+    fr, editedPath, { teamRow, changes: [{ position: 'QB', playerRows: swapped }] }, dir
+  );
+  check('depth: swap wrote in place', res.editedPath === editedPath && res.windows === 1);
+  const after = await windowOf(await loadFranchise(editedPath), teamRow, 'QB');
+  check('depth: swap persisted through cold reload', after.join(',') === swapped.join(','));
+
+  const fr2 = await loadFranchise(editedPath);
+  await rejects('depth reject: wrong slot count', () =>
+    applyDepthChartEdit(fr2, editedPath, { teamRow, changes: [{ position: 'QB', playerRows: swapped.slice(1) }] }, dir));
+  await rejects('depth reject: duplicate player in a window', () =>
+    applyDepthChartEdit(fr2, editedPath, { teamRow, changes: [{ position: 'QB', playerRows: swapped.map(() => swapped[0]) }] }, dir));
+  await rejects('depth reject: unknown window', () =>
+    applyDepthChartEdit(fr2, editedPath, { teamRow, changes: [{ position: 'QB9', playerRows: swapped }] }, dir));
+  const foreign = (() => {
+    const teamIndex = Number(val(teams.records[teamRow], 'TeamIndex'));
+    for (let i = 0; i < players.records.length; i++) {
+      const p = players.records[i];
+      if (!p.isEmpty && Number(val(p, 'TeamIndex')) !== teamIndex) return i;
+    }
+    return -1;
+  })();
+  await rejects('depth reject: player from another roster', () =>
+    applyDepthChartEdit(fr2, editedPath, { teamRow, changes: [{ position: 'QB', playerRows: [foreign, ...swapped.slice(1)] }] }, dir));
+  check('source still untouched after depth edits', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

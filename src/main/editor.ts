@@ -341,7 +341,9 @@ const BUDGET_FIELDS = [
   'RolloverProgramPoints',
   'NILProgramPointsSpent',
   'LongName',
-  'RecruitingBoard'
+  'RecruitingBoard',
+  'DepthChart',
+  'TeamIndex'
 ];
 
 function fieldMax(rec: any, field: string, fallback: number): number {
@@ -408,6 +410,116 @@ export async function buildResourceForm(
     targetFileName: basename(target),
     targetExists: existsSync(target)
   };
+}
+
+// --- Depth chart -----------------------------------------------------------
+
+const REF_BITS = /^[01]{32}$/;
+
+/** 32-bit binary ref string (15-bit table id + 17-bit row), the array-field write format. */
+function refString(tableId: number, row: number): string {
+  return tableId.toString(2).padStart(15, '0') + row.toString(2).padStart(17, '0');
+}
+
+/** The window's current Player rows, in slot order — direct Player refs only. */
+function windowRows(arrRec: any, playerTableId: number): number[] {
+  const rows: number[] = [];
+  const size = typeof arrRec?.arraySize === 'number' ? arrRec.arraySize : 0;
+  for (let i = 0; i < size; i++) {
+    const v = arrRec._fields?.[`Player${i}`]?.value;
+    if (typeof v !== 'string' || !REF_BITS.test(v)) return [];
+    const tid = parseInt(v.slice(0, 15), 2);
+    const row = parseInt(v.slice(15), 2);
+    if (tid !== playerTableId) return [];
+    rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * Reorder/swap depth-chart windows for the user's school and write the
+ * _RJsEdited sibling. Size-preserving by design: each change must carry
+ * exactly the window's current slot count, with the same team's players and
+ * no duplicates inside a window.
+ */
+export async function applyDepthChartEdit(
+  franchise: any,
+  savePath: string,
+  req: { teamRow: number; changes: { position: string; playerRows: number[] }[] },
+  backupDir: string
+): Promise<{ editedPath: string; windows: number }> {
+  if (!req.changes.length) throw new Error('No depth-chart changes to save.');
+  const teamRec = await teamRecord(franchise, req.teamRow);
+  const teamIndex = Number(val(teamRec, 'TeamIndex'));
+  const dcRef = refFromRecord(teamRec, 'DepthChart');
+  if (!dcRef || (dcRef.tableId === 0 && dcRef.row === 0)) {
+    throw new Error('No depth chart in the save for this school.');
+  }
+  const dcTable = await tableById(franchise, dcRef.tableId);
+  const dcRec = dcTable?.records?.[dcRef.row];
+  if (!dcRec) throw new Error('No depth chart in the save for this school.');
+
+  const players = mainTable(franchise, 'Player');
+  await players.readRecords(['TeamIndex', 'FirstName']);
+  const playerTableId = players.header?.tableId ?? -1;
+
+  // Validate everything before writing anything.
+  const writes: { arrRec: any; rows: number[] }[] = [];
+  for (const change of req.changes) {
+    const pos = change.position;
+    if (pos === 'LockedEntries' || !dcRec._fields?.[pos]) {
+      throw new Error(`Unknown depth-chart window: ${pos}`);
+    }
+    const slotRef = refFromRecord(dcRec, pos);
+    const arrTable = slotRef ? await tableById(franchise, slotRef.tableId) : null;
+    const arrRec = arrTable?.records?.[slotRef!.row];
+    if (!arrRec) throw new Error(`The save carries no ${pos} window.`);
+    const current = windowRows(arrRec, playerTableId);
+    if (!current.length) {
+      throw new Error(`The ${pos} window has gaps or an unexpected shape — edit it in the game.`);
+    }
+    if (change.playerRows.length !== current.length) {
+      throw new Error(`${pos} must keep its ${current.length} slots.`);
+    }
+    if (new Set(change.playerRows).size !== change.playerRows.length) {
+      throw new Error(`A player appears twice in the ${pos} window.`);
+    }
+    for (const row of change.playerRows) {
+      const p = players.records?.[row];
+      if (!Number.isInteger(row) || !p || p.isEmpty) throw new Error(`No player at row ${row}.`);
+      if (Number(val(p, 'TeamIndex')) !== teamIndex) {
+        throw new Error(`${String(val(p, 'FirstName') ?? 'That player')} is not on this roster.`);
+      }
+    }
+    writes.push({ arrRec, rows: change.playerRows });
+  }
+  for (const w of writes) {
+    w.rows.forEach((row, i) => {
+      w.arrRec[`Player${i}`] = refString(playerTableId, row);
+    });
+  }
+
+  const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const t = mainTable(check, 'Team');
+    await t.readRecords(BUDGET_FIELDS);
+    const rec2 = t.records?.[req.teamRow];
+    const ref2 = rec2 && refFromRecord(rec2, 'DepthChart');
+    const dcT2 = ref2 && (await tableById(check, ref2.tableId));
+    const dc2 = dcT2?.records?.[ref2!.row];
+    const players2 = mainTable(check, 'Player');
+    await players2.readRecords(['TeamIndex']);
+    const pid2 = players2.header?.tableId ?? -1;
+    for (const change of req.changes) {
+      const sRef = dc2 && refFromRecord(dc2, change.position);
+      const aT = sRef && (await tableById(check, sRef.tableId));
+      const a2 = aT?.records?.[sRef!.row];
+      const rows = a2 ? windowRows(a2, pid2) : [];
+      if (rows.join(',') !== change.playerRows.join(',')) {
+        throw new Error(`The written save did not read back with the new ${change.position} order.`);
+      }
+    }
+  });
+  return { editedPath, windows: req.changes.length };
 }
 
 /**
