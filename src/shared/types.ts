@@ -588,6 +588,8 @@ export interface PlayerProfile {
   position: string;
   archetype: string;
   jersey: number | null;
+  /** PLYR_PORTRAIT id for the portrait:// protocol; null when the save has none. */
+  portrait: number | null;
   heightIn: number;
   weightLb: number;
   overall: number;
@@ -680,6 +682,8 @@ export interface CoachProfile {
   kind: 'coach';
   row: number;
   name: string;
+  /** Coach.Portrait id, served as portrait://c<id>; null when the save has none. */
+  portrait: number | null;
   /** Save enum: HeadCoach / OffensiveCoordinator / DefensiveCoordinator. */
   role: string;
   teamRow: number | null;
