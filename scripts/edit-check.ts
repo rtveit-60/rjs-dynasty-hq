@@ -17,6 +17,8 @@ import path from 'node:path';
 import {
   applyBoardEdit,
   applyCoachFire,
+  applyTargetActions,
+  buildTargetForm,
   applyDepthChartEdit,
   applyPlayerEdit,
   applyResourceEdit,
@@ -48,6 +50,9 @@ async function rejects(label: string, fn: () => Promise<unknown>): Promise<void>
     check(label, true, err instanceof Error ? err.message : String(err));
   }
 }
+
+let addTargetGlobal = -1;
+let removedTargetGlobal = -1;
 
 const franchise = await loadFranchise(work);
 
@@ -362,6 +367,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const before = await boardRows(fr);
   check('board: resolves', before.size > 0, `${before.size} targets`);
   const removeTarget = [...before][0];
+  removedTargetGlobal = removeTarget;
 
   // an uncommitted recruit who is NOT on this board
   const recruitsT = mainTable(fr, 'Recruit');
@@ -377,6 +383,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     if (addTarget >= 0 && committedRecruit >= 0) break;
   }
   check('board: found an addable recruit', addTarget >= 0, `recruit row ${addTarget}`);
+  addTargetGlobal = addTarget;
 
   const res = await applyBoardEdit(
     fr, editedPath,
@@ -403,6 +410,60 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
       { recruitRow: addTarget, action: 'remove' }, { recruitRow: addTarget, action: 'add' }
     ] }, dir));
   check('source still untouched after board edits', sha(work) === sourceHash);
+}
+
+// --- 9. weekly target actions on the freshly added recruit ---
+{
+  const fr = await loadFranchise(editedPath);
+  const teams = mainTable(fr, 'Team');
+  await teams.readRecords();
+  let teamRow = -1;
+  for (let i = 0; i < teams.records.length; i++) {
+    const r = teams.records[i];
+    if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) {
+      teamRow = i;
+      break;
+    }
+  }
+  // the recruit added in section 8 sits on this board with a fresh row
+  const form = await buildTargetForm(fr, teamRow, addTargetGlobal, editedPath);
+  check('actions form: caps from the schema',
+    form.hoursCap === 127 && form.nilCap === 1023 && form.intelMax === 16383,
+    `${form.hoursCap}/${form.nilCap}/${form.intelMax}`);
+  check('actions form: fresh state', form.hours === 0 && form.intel === 0 && form.scholarship === 'None');
+  check('actions form: sway options carry pitch names',
+    form.swayOptions.length >= 15 && form.swayOptions.every((o) => o.name), `${form.swayOptions.length}`);
+
+  const poolBefore = form.poolAssigned;
+  await applyTargetActions(fr, editedPath, {
+    teamRow,
+    recruitRow: addTargetGlobal,
+    hours: 40,
+    actions: { sendHouse: true, socialMedia: true },
+    scholarship: 'Offered',
+    nilOffer: 300,
+    swayPitch: 'HometownHero',
+    scoutFull: true
+  }, dir);
+  const form2 = await buildTargetForm(await loadFranchise(editedPath), teamRow, addTargetGlobal, editedPath);
+  check('actions: everything persisted through cold reload',
+    form2.hours === 40 && form2.actions.sendHouse && form2.actions.socialMedia &&
+    form2.scholarship === 'Offered' && form2.nilOffer === 300 &&
+    form2.swayPitch === 'HometownHero' && form2.intel === 16383,
+    JSON.stringify({ h: form2.hours, s: form2.scholarship, n: form2.nilOffer, p: form2.swayPitch, i: form2.intel }));
+  check('actions: pool assigned moved with the hours', form2.poolAssigned === poolBefore + 40,
+    `${poolBefore} -> ${form2.poolAssigned}`);
+
+  const fr3 = await loadFranchise(editedPath);
+  await rejects('actions reject: hours past the 7-bit cap', () =>
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, hours: 200 }, dir));
+  await rejects('actions reject: NIL past the 10-bit cap', () =>
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, nilOffer: 2000 }, dir));
+  await rejects('actions reject: unknown pitch', () =>
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, swayPitch: 'MoxiePitch' }, dir));
+  await rejects('actions reject: recruit not on the board', () =>
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: removedTargetGlobal, hours: 5 }, dir));
+  check('source still untouched after action edits', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);
