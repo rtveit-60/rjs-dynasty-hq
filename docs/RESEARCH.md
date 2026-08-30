@@ -189,6 +189,17 @@ The save's `MentalAbilities` enum identifiers have drifted like the archetypes: 
 - `scripts/extract-mental-abilities.ts` regenerates `src/shared/mental-abilities.ts` (anchors: RoadFanFavorite→"Road Dog", DBRally→"Legion"); run after title updates, never hand-edit. `recruit-card.ts` displays through it everywhere (profiles previously showed raw identifiers).
 - Localization corroboration was a dead end on purpose: `fb-scan-chunks` sees the FrTk stores only in compressed form, and `Win32/loc/en` keeps strings in non-chunk resources.
 
+### Scheme→archetype fits — FOUND (2026-08-30): Scheme → DepthChart*Philosophy → DepthChartPositionPhilosophy
+
+The game's scheme-fit data (what its depth-chart auto-fill and fit displays run on) lives in the franchise-common tuning store:
+
+- **`Scheme`** (19 rows): `Field_6` = the save's **BaseScheme** enum value (Team.CurrentOffensiveScheme/CurrentDefensiveScheme; offense 0–10, defense 11–19). Offense rows carry their philosophy ref in **`Field_2`** (→ `DepthChartOffensivePhilosophy`), defense rows in **`Field_0`** (→ `DepthChartDefensivePhilosophy`). `Field_4` is a string-pool offset (scheme name), `Field_5` → SchemePanelPositions (UI layout), `Field_1` → Offensive/DefensiveDepthChartConfig.
+- Each philosophy row has **per-position ref fields** (offense: QB/HB/FB/WR/TE/LT/LG/C/RG/RT; defense: LE/RE/DT/LOLB/MLB/ROLB/CB/FS/SS) plus `ActiveImportanceThreshold`/`RosterImportanceThreshold`. Each position ref → a `DepthChartPositionPhilosophy[]` array → one row per **depth slot**: `{ Importance, PlayerType }` — the game's own "this scheme starts a Pass Protector at C (76), wants an Elusive Power back first and Receiving Backs behind him", etc.
+- **Slot counts are the depth-chart windows** (uniform across schemes: WR×5, QB×3, HB×3, TE×3, OL×2 each, FB×1; CB×5, DT×3, MLB×3, edges/safeties ×2) — directly relevant to depth-chart editing.
+- **BaseScheme value 0 (`OFF_WEST_COAST_ZONE_RUN`) has no Scheme row** — teams running it get no fit data (the UI shows a hyphen and says so on hover). `SchemeEnumTableEntry` (23 rows) maps display names to a *different* internal key space ("3-2-6" → `Cover3_4_3`) — not needed, the app formats the BaseScheme identifiers itself (`schemeLabel`).
+- Importance is bimodal: starter slots ~50–80, depth slots ~10–17 — the board's Fit column tiers at 50.
+- `scripts/extract-scheme-fits.ts` regenerates `src/shared/scheme-fits.ts` (anchors: DEF_BASE3_4.SS carries S_RunSupport@70, OFF_AIR_RAID.WR non-empty; every archetype cross-checked against shared/archetypes.ts). Run after title updates; never hand-edit.
+
 ### Schedule & results (Dynasty Media backbone, verified 2026-08-27)
 
 - Main `SeasonGame` table = the instance with capacity > 100 (id 6347 here, 943 live): `HomeTeam`/`AwayTeam` refs into the Team main table, `HomeScore`/`AwayScore` (+ per-quarter + OT), `GameStatus` (HomeWon/AwayWon/Unplayed/Unscheduled), `SeasonWeek`, `SeasonWeekType`, `SeasonYear` (dynasty-year index, = SeasonInfo.CurrentYear), `IsGameOfTheWeek` + `GameOfTheWeekScore`, `IsOvertimeGame`, `BroadcastNetwork` (NationalTV/Streaming), `Attendance`, weather fields, `IsRematch`.
