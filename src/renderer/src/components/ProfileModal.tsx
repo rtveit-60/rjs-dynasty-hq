@@ -257,6 +257,22 @@ function StatHistory({ p }: { p: PlayerProfile }) {
   );
 }
 
+/** The player's own portrait (portrait:// pack or extracted set); absent quietly. */
+function ProfilePortrait({ id }: { id: number | null }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [id]);
+  if (id === null || failed) return null;
+  return (
+    <img
+      className="pf-portrait"
+      src={`portrait://${id}`}
+      alt=""
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 /**
  * The most recent played game as a broadcast score bug — away team on the
  * left, home on the right, loser dimmed — with the player's line from that
@@ -408,6 +424,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
   return (
     <div className="pf-body">
       <div className="pf-head">
+        <ProfilePortrait id={p.portrait} />
         {p.teamRow !== null && <TeamLogo row={p.teamRow} size={56} fallback={null} />}
         <div className="pf-id">
           <div className="pf-name">

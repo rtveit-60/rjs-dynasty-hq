@@ -588,6 +588,8 @@ export interface PlayerProfile {
   position: string;
   archetype: string;
   jersey: number | null;
+  /** PLYR_PORTRAIT id for the portrait:// protocol; null when the save has none. */
+  portrait: number | null;
   heightIn: number;
   weightLb: number;
   overall: number;

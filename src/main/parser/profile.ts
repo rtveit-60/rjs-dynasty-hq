@@ -310,6 +310,7 @@ const PROFILE_PLAYER_FIELDS = [
   'ProspectStarRating',
   'RecruitingDealbreaker',
   'IdealRecruitingPitch',
+  'PLYR_PORTRAIT',
   'SeasonStats',
   'CareerStats',
   'GameStats'
@@ -551,6 +552,7 @@ export async function extractPlayerProfile(
       position: String(val(rec, 'Position') ?? ''),
       archetype: String(val(rec, 'PlayerType') ?? ''),
       jersey: (teamRow !== null || prospectLevel) && jersey >= 0 ? jersey : null,
+      portrait: numOf(rec, 'PLYR_PORTRAIT') > 0 ? numOf(rec, 'PLYR_PORTRAIT') : null,
       heightIn: numOf(rec, 'Height'),
       weightLb: numOf(rec, 'Weight') + 160,
       overall: numOf(rec, 'OverallRating'),
