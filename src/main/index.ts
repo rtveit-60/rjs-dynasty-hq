@@ -285,6 +285,25 @@ function registerIpc(): void {
     return result;
   });
 
+  // Create-a-recruit: dialog options + the creation write.
+  ipcMain.handle('create:form', () => {
+    const { savePath } = getSettings();
+    return savePath ? pipeline.createForm(savePath) : null;
+  });
+  ipcMain.handle('create:recruit', async (_e, req: unknown) => {
+    const r = req as { firstName?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || typeof r?.firstName !== 'string') {
+      return { ok: false, message: 'Nothing to create.' };
+    }
+    const result = await pipeline.createRecruit(r as never, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // Weekly recruiting plan for one board target: current state + the write.
   ipcMain.handle('target:form', (_e, recruitRow: number) => {
     const { savePath } = getSettings();

@@ -4,6 +4,8 @@ import type {
   BrandPack,
   BoardEditRequest,
   CoachFireRequest,
+  CreateRecruitForm,
+  CreateRecruitRequest,
   DepthChartEditRequest,
   DetectedSave,
   LeagueLeaders,
@@ -60,6 +62,8 @@ export interface HQBridge {
   browseHQ: (teamRow: number) => Promise<Snapshot['school'] | null>;
   fireCoach: (req: CoachFireRequest) => Promise<PlayerEditResult>;
   editBoard: (req: BoardEditRequest) => Promise<PlayerEditResult>;
+  getCreateForm: () => Promise<CreateRecruitForm | null>;
+  createRecruit: (req: CreateRecruitRequest) => Promise<PlayerEditResult>;
   getTargetForm: (recruitRow: number) => Promise<TargetActionForm | null>;
   editTarget: (req: TargetActionChanges) => Promise<PlayerEditResult>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
@@ -102,6 +106,8 @@ const bridge: HQBridge = {
   browseHQ: (teamRow) => ipcRenderer.invoke('hq:browse', teamRow),
   fireCoach: (req) => ipcRenderer.invoke('coach:fire', req),
   editBoard: (req) => ipcRenderer.invoke('board:edit', req),
+  getCreateForm: () => ipcRenderer.invoke('create:form'),
+  createRecruit: (req) => ipcRenderer.invoke('create:recruit', req),
   getTargetForm: (recruitRow) => ipcRenderer.invoke('target:form', recruitRow),
   editTarget: (req) => ipcRenderer.invoke('target:edit', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),

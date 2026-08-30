@@ -11,6 +11,8 @@ import type {
   Profile,
   BoardEditRequest,
   CoachFireRequest,
+  CreateRecruitForm,
+  CreateRecruitRequest,
   TargetActionChanges,
   TargetActionForm,
   DepthChartEditRequest,
@@ -25,10 +27,12 @@ import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
 import {
   applyBoardEdit,
   applyCoachFire,
+  applyCreateRecruit,
   applyTargetActions,
   applyDepthChartEdit,
   applyPlayerEdit,
   applyResourceEdit,
+  buildCreateForm,
   buildEditForm,
   buildResourceForm,
   buildTargetForm
@@ -288,6 +292,32 @@ export class Pipeline {
       return {
         editedPath,
         message: `Depth chart updated (${windows} window${windows === 1 ? '' : 's'}) — saved to ${basename(editedPath)}.`
+      };
+    });
+  }
+
+  /** Options + caps for the Create Recruit dialog. */
+  async createForm(savePath: string): Promise<CreateRecruitForm | null> {
+    if (!this.franchise || !savePath) return null;
+    try {
+      return await buildCreateForm(this.franchise, savePath);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Create a brand-new class recruit, via the guarded shell. */
+  async createRecruit(req: CreateRecruitRequest, savePath: string): Promise<PlayerEditResult> {
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath } = await applyCreateRecruit(
+        this.franchise,
+        savePath,
+        req,
+        app.getPath('userData')
+      );
+      return {
+        editedPath,
+        message: `${req.firstName.trim()} ${req.lastName.trim()} joins the class — saved to ${basename(editedPath)}.`
       };
     });
   }

@@ -4606,3 +4606,15 @@ tr:hover .bd-btn,
   font: 600 12px var(--font-ui);
   color: var(--good);
 }
+
+/* --- Create Recruit dialog grid ------------------------------------------ */
+
+.cr-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.cr-grid .ta-field .ed-step {
+  width: 100%;
+}

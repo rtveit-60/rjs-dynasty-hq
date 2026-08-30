@@ -744,6 +744,44 @@ export interface ResourceEditRequest {
   amount: number;
 }
 
+/** Options + caps for the Create Recruit dialog, all from the save itself. */
+export interface CreateRecruitForm {
+  maxFirstLen: number;
+  maxLastLen: number;
+  maxTownLen: number;
+  /** position -> archetype ids that exist in this class (template availability). */
+  archetypesByPosition: Record<string, string[]>;
+  /** PLYR_HOME_STATE enum member ids. */
+  states: string[];
+  /** TraitDevelopment enum member ids. */
+  devTraits: string[];
+  /** Raw Height field range (inches). */
+  heightMin: number;
+  heightMax: number;
+  /** Displayed pounds range (raw field + 160). */
+  weightMin: number;
+  weightMax: number;
+  playerRowsFree: number;
+  recruitRowsFree: number;
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+export interface CreateRecruitRequest {
+  firstName: string;
+  lastName: string;
+  position: string;
+  /** PlayerType id — must exist in the class at this position (the template). */
+  archetype: string;
+  stars: number;
+  devTrait: string;
+  heightIn: number;
+  /** Pounds (the save stores lbs − 160). */
+  weightLb: number;
+  homeState: string;
+  homeTown: string;
+}
+
 /** Stage recruits onto or off the user's target board. */
 export interface BoardEditRequest {
   changes: { recruitRow: number; action: 'add' | 'remove' }[];

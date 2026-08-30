@@ -13,6 +13,8 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type {
+  CreateRecruitForm,
+  CreateRecruitRequest,
   EditMentalSlot,
   PlayerEditChanges,
   PlayerEditForm,
@@ -334,6 +336,203 @@ export async function applyPlayerEdit(
       throw new Error('The written save did not read back with the edit.');
     }
   });
+}
+
+// --- Create a recruit --------------------------------------------------------
+
+const STAR_ENUM: Record<number, string> = {
+  5: 'FIVE_STAR', 4: 'FOUR_STAR', 3: 'THREE_STAR', 2: 'TWO_STAR', 1: 'ONE_STAR'
+};
+
+/** Class recruits by archetype: recruitRow + playerRow of a clean template. */
+async function templatePool(
+  franchise: any
+): Promise<{ recruitTable: any; playerTable: any; byArchetype: Map<string, { recruitRow: number; playerRow: number }>; byPosition: Map<string, { recruitRow: number; playerRow: number }> }> {
+  const recruitTable = mainTable(franchise, 'Recruit');
+  await recruitTable.readRecords();
+  const playerTable = mainTable(franchise, 'Player');
+  await playerTable.readRecords();
+  const playerTableId = playerTable.header?.tableId ?? -1;
+  const byArchetype = new Map<string, { recruitRow: number; playerRow: number }>();
+  const byPosition = new Map<string, { recruitRow: number; playerRow: number }>();
+  recruitTable.records.forEach((rec: any, recruitRow: number) => {
+    if (rec.isEmpty) return;
+    if (!String(val(rec, 'Class') ?? '').includes('HighSchool')) return;
+    if (String(val(rec, 'RecruitStage') ?? '').includes('Committed')) return;
+    if (String(val(rec, 'QualityModifier') ?? 'NORMAL') !== 'NORMAL') return;
+    const pRef = refFromRecord(rec, 'Player');
+    if (!pRef || pRef.tableId !== playerTableId) return;
+    const p = playerTable.records[pRef.row];
+    if (!p || p.isEmpty) return;
+    const archetype = String(val(p, 'PlayerType') ?? '');
+    const position = String(val(p, 'Position') ?? '');
+    if (archetype && !byArchetype.has(archetype)) byArchetype.set(archetype, { recruitRow, playerRow: pRef.row });
+    if (position && !byPosition.has(position)) byPosition.set(position, { recruitRow, playerRow: pRef.row });
+  });
+  return { recruitTable, playerTable, byArchetype, byPosition };
+}
+
+export async function buildCreateForm(franchise: any, savePath: string): Promise<CreateRecruitForm> {
+  const { recruitTable, playerTable, byArchetype } = await templatePool(franchise);
+  const archetypesByPosition: Record<string, string[]> = {};
+  for (const [archetype, t] of byArchetype) {
+    const pos = String(val(playerTable.records[t.playerRow], 'Position') ?? '');
+    (archetypesByPosition[pos] ??= []).push(archetype);
+  }
+  for (const list of Object.values(archetypesByPosition)) list.sort();
+
+  const sample = playerTable.records[byArchetype.values().next().value!.playerRow];
+  const states = enumMembers(sample, 'PLYR_HOME_STATE').map((m) => m.name);
+  const devTraits = enumMembers(sample, 'TraitDevelopment').map((m) => m.name);
+  let playerRowsFree = 0;
+  for (const r of playerTable.records) if (r.isEmpty) playerRowsFree++;
+  let recruitRowsFree = 0;
+  for (const r of recruitTable.records) if (r.isEmpty) recruitRowsFree++;
+  const target = editedPathFor(savePath);
+  return {
+    maxFirstLen: stringCap(sample, 'FirstName', 17),
+    maxLastLen: stringCap(sample, 'LastName', 21),
+    maxTownLen: stringCap(sample, 'PLYR_HOME_TOWN', 20),
+    archetypesByPosition,
+    states,
+    devTraits,
+    heightMin: 66,
+    heightMax: Math.min(84, fieldMax(sample, 'Height', 127)),
+    weightMin: 160,
+    weightMax: 160 + Math.min(240, fieldMax(sample, 'Weight', 255)),
+    playerRowsFree,
+    recruitRowsFree,
+    targetFileName: basename(target),
+    targetExists: existsSync(target)
+  };
+}
+
+/**
+ * Create a brand-new high-school recruit by cloning an archetype-matched
+ * template from the class (perfect initialization by construction), then
+ * overriding identity, measurables, stars and dev. The new recruit starts at
+ * the wide-open Top10 stage, unranked, with an empty race list — a state one
+ * real recruit in the class already occupies (races are pre-allocated at
+ * class generation and cannot be minted; see RESEARCH).
+ */
+export async function applyCreateRecruit(
+  franchise: any,
+  savePath: string,
+  req: CreateRecruitRequest,
+  backupDir: string
+): Promise<{ editedPath: string; recruitRow: number; playerRow: number }> {
+  // ---- validate ----
+  const nameOk = (s: string): boolean => /^[\x20-\x7e]+$/.test(s);
+  const first = req.firstName.trim();
+  const last = req.lastName.trim();
+  const town = req.homeTown.trim();
+  const { recruitTable, playerTable, byArchetype, byPosition } = await templatePool(franchise);
+  const sample = playerTable.records[byArchetype.values().next().value!.playerRow];
+  if (!first || first.length > stringCap(sample, 'FirstName', 17) || !nameOk(first)) {
+    throw new Error(`First name must be 1–${stringCap(sample, 'FirstName', 17)} plain characters.`);
+  }
+  if (!last || last.length > stringCap(sample, 'LastName', 21) || !nameOk(last)) {
+    throw new Error(`Last name must be 1–${stringCap(sample, 'LastName', 21)} plain characters.`);
+  }
+  if (town && (town.length > stringCap(sample, 'PLYR_HOME_TOWN', 20) || !nameOk(town))) {
+    throw new Error('That hometown does not fit the save format.');
+  }
+  if (!STAR_ENUM[req.stars]) throw new Error('Stars must be 1–5.');
+  if (!Number.isInteger(req.heightIn) || req.heightIn < 60 || req.heightIn > fieldMax(sample, 'Height', 127)) {
+    throw new Error('Height is out of range.');
+  }
+  const rawWeight = req.weightLb - 160;
+  if (!Number.isInteger(rawWeight) || rawWeight < 0 || rawWeight > fieldMax(sample, 'Weight', 255)) {
+    throw new Error('Weight is out of range.');
+  }
+  if (!enumMembers(sample, 'PLYR_HOME_STATE').some((m) => m.name === req.homeState)) {
+    throw new Error('Unknown home state.');
+  }
+  if (!enumMembers(sample, 'TraitDevelopment').some((m) => m.name === req.devTrait)) {
+    throw new Error('Unknown development trait.');
+  }
+  const template = byArchetype.get(req.archetype) ?? byPosition.get(req.position);
+  if (!template) throw new Error('No template recruit exists for that archetype or position.');
+
+  const newPlayerRow = firstEmptyRow(playerTable);
+  const newRecruitRow = firstEmptyRow(recruitTable);
+  if (newPlayerRow < 0) throw new Error('The save has no free player rows left.');
+  if (newRecruitRow < 0) throw new Error('The save has no free recruit rows left.');
+
+  // ---- clone the template player, then override identity ----
+  const tp = playerTable.records[template.playerRow];
+  const np = playerTable.records[newPlayerRow];
+  for (const k of Object.keys(tp._fields)) {
+    try {
+      np[k] = tp._fields[k].value;
+    } catch {
+      // a handful of computed members refuse writes; the template value stands elsewhere
+    }
+  }
+  np.FirstName = first;
+  np.LastName = last;
+  if (byArchetype.has(req.archetype)) {
+    // archetype-matched template — Position/PlayerType already right
+  } else {
+    np.PlayerType = req.archetype;
+  }
+  np.Position = req.position;
+  np.ProspectStarRating = STAR_ENUM[req.stars];
+  np.TraitDevelopment = req.devTrait;
+  np.Height = req.heightIn;
+  np.Weight = rawWeight;
+  np.PLYR_HOME_STATE = req.homeState;
+  if (np._fields?.PLYR_HOME_TOWN) np.PLYR_HOME_TOWN = town;
+  // Their own face, not the template's photo: 0 falls back to the generated avatar.
+  if (np._fields?.PLYR_PORTRAIT) np.PLYR_PORTRAIT = 0;
+
+  // ---- clone the template recruit row, then re-point and reset ----
+  const tr = recruitTable.records[template.recruitRow];
+  const nr = recruitTable.records[newRecruitRow];
+  for (const k of Object.keys(tr._fields)) {
+    try {
+      nr[k] = tr._fields[k].value;
+    } catch {
+      // as above
+    }
+  }
+  nr.Player = refString(playerTable.header?.tableId ?? -1, newPlayerRow);
+  nr.TopSchoolsList = ZERO_REF;
+  nr.RecruitStage = 'Top10';
+  nr.QualityModifier = 'NORMAL';
+  nr.NationalRank = 0;
+  nr.StateRank = 0;
+  nr.PositionRank = 0;
+  nr.TotalScholarshipOffers = 0;
+  if (nr._fields?.CommitScore) nr.CommitScore = 0;
+  if (nr._fields?.SurnameAudioID) nr.SurnameAudioID = 0;
+
+  try {
+    playerTable.recalculateEmptyRecordReferences?.();
+    recruitTable.recalculateEmptyRecordReferences?.();
+  } catch {
+    // bookkeeping helper only; the write is verified below
+  }
+
+  const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const rT = mainTable(check, 'Recruit');
+    await rT.readRecords();
+    const pT = mainTable(check, 'Player');
+    await pT.readRecords(['FirstName', 'LastName', 'Position']);
+    const wr = rT.records?.[newRecruitRow];
+    const wpRef = wr && refFromRecord(wr, 'Player');
+    const wp = wpRef && pT.records?.[wpRef.row];
+    if (
+      !wr || wr.isEmpty || !wp || wp.isEmpty ||
+      String(val(wp, 'FirstName')) !== first ||
+      String(val(wp, 'LastName')) !== last ||
+      String(val(wp, 'Position')) !== req.position ||
+      !String(val(wr, 'RecruitStage')).includes('Top10')
+    ) {
+      throw new Error('The written save did not read back with the new recruit.');
+    }
+  });
+  return { editedPath, recruitRow: newRecruitRow, playerRow: newPlayerRow };
 }
 
 // --- Recruiting board membership (add/remove targets) -----------------------

@@ -17,7 +17,9 @@ import path from 'node:path';
 import {
   applyBoardEdit,
   applyCoachFire,
+  applyCreateRecruit,
   applyTargetActions,
+  buildCreateForm,
   buildTargetForm,
   applyDepthChartEdit,
   applyPlayerEdit,
@@ -464,6 +466,92 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   await rejects('actions reject: recruit not on the board', () =>
     applyTargetActions(fr3, editedPath, { teamRow, recruitRow: removedTargetGlobal, hours: 5 }, dir));
   check('source still untouched after action edits', sha(work) === sourceHash);
+}
+
+// --- 10. create a recruit: clone-with-overrides round-trip + rejections ---
+{
+  const fr = await loadFranchise(editedPath);
+  const cform = await buildCreateForm(fr, editedPath);
+  const positions = Object.keys(cform.archetypesByPosition);
+  check('create form: archetypes per position from the class', positions.length >= 15,
+    `${positions.length} positions`);
+  check('create form: states + dev traits from the schema',
+    cform.states.length >= 40 && cform.devTraits.length >= 3,
+    `${cform.states.length} states, ${cform.devTraits.length} traits`);
+  check('create form: row supply reported', cform.playerRowsFree > 0 && cform.recruitRowsFree > 0,
+    `${cform.playerRowsFree} player / ${cform.recruitRowsFree} recruit rows`);
+
+  const pos = positions.includes('QB') ? 'QB' : positions[0];
+  const archetype = cform.archetypesByPosition[pos][0];
+  const state = cform.states.includes('Ohio') ? 'Ohio' : cform.states[0];
+  const res = await applyCreateRecruit(fr, editedPath, {
+    firstName: 'Custom',
+    lastName: 'Prospect',
+    position: pos,
+    archetype,
+    stars: 5,
+    devTrait: cform.devTraits[cform.devTraits.length - 1],
+    heightIn: 76,
+    weightLb: 215,
+    homeState: state,
+    homeTown: 'Harness City'
+  }, dir);
+  check('create: wrote in place', res.editedPath === editedPath, `recruit row ${res.recruitRow}`);
+
+  const fr2 = await loadFranchise(editedPath);
+  const rT = mainTable(fr2, 'Recruit');
+  await rT.readRecords();
+  const pT = mainTable(fr2, 'Player');
+  await pT.readRecords();
+  const nr = rT.records[res.recruitRow];
+  const npRef = refFromRecord(nr, 'Player');
+  const np = pT.records[npRef!.row];
+  check('create: player row reads back',
+    String(val(np, 'FirstName')) === 'Custom' && String(val(np, 'LastName')) === 'Prospect' &&
+    String(val(np, 'Position')) === pos && String(val(np, 'PlayerType')) === archetype,
+    `${val(np, 'FirstName')} ${val(np, 'LastName')} ${val(np, 'Position')}/${val(np, 'PlayerType')}`);
+  check('create: measurables + identity overrides',
+    Number(val(np, 'Height')) === 76 && Number(val(np, 'Weight')) === 55 &&
+    String(val(np, 'ProspectStarRating')) === 'FIVE_STAR' &&
+    String(val(np, 'PLYR_HOME_STATE')) === state,
+    `H${val(np, 'Height')} W${val(np, 'Weight')} ${val(np, 'ProspectStarRating')}`);
+  check('create: ratings inherited from the template (non-zero sheet)',
+    Number(val(np, 'SpeedRating')) > 0 && Number(val(np, 'AwarenessRating')) > 0);
+  check('create: recruit row state',
+    String(val(nr, 'RecruitStage')) === 'Top10' && Number(val(nr, 'NationalRank')) === 0 &&
+    String(val(nr, 'QualityModifier')) === 'NORMAL',
+    `${val(nr, 'RecruitStage')} rank ${val(nr, 'NationalRank')}`);
+  const raceRef = refFromRecord(nr, 'TopSchoolsList');
+  check('create: race list starts empty (zero ref)', !raceRef || raceRef.tableId === 0);
+
+  // The created recruit can immediately ride the other write families.
+  const boardRes = await applyBoardEdit(
+    fr2, editedPath, { teamRow: 0, changes: [{ recruitRow: res.recruitRow, action: 'add' }] }, dir
+  );
+  check('create: new recruit can join the board', boardRes.added === 1);
+
+  const fr3 = await loadFranchise(editedPath);
+  await rejects('create reject: empty name', () =>
+    applyCreateRecruit(fr3, editedPath, {
+      firstName: ' ', lastName: 'X', position: pos, archetype, stars: 3,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: ''
+    }, dir));
+  await rejects('create reject: bad stars', () =>
+    applyCreateRecruit(fr3, editedPath, {
+      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 7,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: ''
+    }, dir));
+  await rejects('create reject: unknown archetype/position template', () =>
+    applyCreateRecruit(fr3, editedPath, {
+      firstName: 'A', lastName: 'B', position: 'QQ', archetype: 'QQ_Wizard', stars: 3,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: ''
+    }, dir));
+  await rejects('create reject: unknown state', () =>
+    applyCreateRecruit(fr3, editedPath, {
+      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: 'Narnia', homeTown: ''
+    }, dir));
+  check('source still untouched after creation', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);
