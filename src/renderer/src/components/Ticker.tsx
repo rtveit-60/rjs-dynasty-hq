@@ -119,9 +119,11 @@ export default function Ticker({
     ];
     if (mode === 'leaders') {
       const rows = leaders.categories.flatMap((c) =>
-        c.rows.slice(0, 2).map((r, i) => (
+        c.rows.slice(0, 3).map((r, i) => (
           <span key={`${c.key}${i}`} className="tk-item">
-            <span className="rk">{c.short}</span>
+            <span className="rk">
+              #{i + 1} {c.short}
+            </span>
             <NameLink req={{ kind: 'player', row: r.playerRow }} className="tk-team">
               {r.name}
             </NameLink>
