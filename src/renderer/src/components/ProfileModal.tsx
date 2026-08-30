@@ -25,6 +25,7 @@ import {
   yearAbbrev
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import EditPlayerModal from './EditPlayerModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 
 const RANK_COLOR: Record<string, string> = {
@@ -84,8 +85,17 @@ export default function ProfileModal() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'empty'>('idle');
+  const [editing, setEditing] = useState(false);
   const cache = useRef(new Map<string, Profile>());
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Fresh save write → new numbers; drop the cache before the fetch effect
+  // below re-runs, so the open card re-reads instead of serving stale values
+  // (that same re-read is how an edit shows up in its own profile).
+  const parsedAt = useHQ((s) => s.snapshot?.parsedAt);
+  useEffect(() => {
+    cache.current.clear();
+  }, [parsedAt]);
 
   useEffect(() => {
     if (!top) {
@@ -114,13 +124,7 @@ export default function ProfileModal() {
     return () => {
       alive = false;
     };
-  }, [top]);
-
-  // Fresh save write → new numbers; drop the cache so reopened cards re-read.
-  const parsedAt = useHQ((s) => s.snapshot?.parsedAt);
-  useEffect(() => {
-    cache.current.clear();
-  }, [parsedAt]);
+  }, [top, parsedAt]);
 
   useEffect(() => {
     if (!top) return;
@@ -130,6 +134,11 @@ export default function ProfileModal() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [top, back]);
+
+  // A different profile on top closes any editor left open on the previous one.
+  useEffect(() => {
+    setEditing(false);
+  }, [top]);
 
   useEffect(() => {
     panelRef.current?.scrollTo({ top: 0 });
@@ -146,6 +155,16 @@ export default function ProfileModal() {
               ‹ Back
             </button>
           )}
+          {state === 'ready' && profile?.kind === 'player' && (
+            <button
+              type="button"
+              className="pf-btn pf-edit"
+              onClick={() => setEditing(true)}
+              title="Edit this player (writes a separate copy of the save)"
+            >
+              ✎ EDIT
+            </button>
+          )}
           <button type="button" className="pf-btn pf-close" onClick={close} aria-label="Close">
             ✕
           </button>
@@ -155,6 +174,9 @@ export default function ProfileModal() {
         {state === 'ready' && profile?.kind === 'player' && <PlayerBody p={profile} />}
         {state === 'ready' && profile?.kind === 'coach' && <CoachBody c={profile} />}
         {state === 'ready' && profile?.kind === 'school' && <SchoolBody s={profile} />}
+        {editing && profile?.kind === 'player' && (
+          <EditPlayerModal playerRow={profile.row} onClose={() => setEditing(false)} />
+        )}
       </div>
     </div>
   );

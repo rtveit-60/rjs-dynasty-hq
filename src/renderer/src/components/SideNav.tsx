@@ -77,7 +77,7 @@ export default function SideNav() {
           <ThemeToggle />
           <ScaleControl />
         </div>
-        <span className="rail-note">Read-only. Your save file is never modified.</span>
+        <span className="rail-note">Your original save is never modified. Edits write a _RJsEdited copy.</span>
       </div>
     </aside>
   );

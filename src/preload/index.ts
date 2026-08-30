@@ -6,6 +6,9 @@ import type {
   LeagueLeaders,
   MediaEvent,
   PlaybookBook,
+  PlayerEditChanges,
+  PlayerEditForm,
+  PlayerEditResult,
   Profile,
   ProfileRequest,
   RecruitCard,
@@ -42,6 +45,8 @@ export interface HQBridge {
   getRecruitCard: (playerRow: number) => Promise<RecruitCard | null>;
   getLeagueLeaders: () => Promise<LeagueLeaders | null>;
   getProfile: (req: ProfileRequest) => Promise<Profile | null>;
+  getEditForm: (playerRow: number) => Promise<PlayerEditForm | null>;
+  editPlayer: (changes: PlayerEditChanges) => Promise<PlayerEditResult>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
   getPlaybook: (
@@ -74,6 +79,8 @@ const bridge: HQBridge = {
   getRecruitCard: (playerRow) => ipcRenderer.invoke('recruit:card', playerRow),
   getLeagueLeaders: () => ipcRenderer.invoke('league:leaders'),
   getProfile: (req) => ipcRenderer.invoke('profile:get', req),
+  getEditForm: (playerRow) => ipcRenderer.invoke('player:editform', playerRow),
+  editPlayer: (changes) => ipcRenderer.invoke('player:edit', changes),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   getPlaybook: (side, coachRow, schemeEnum) =>

@@ -34,6 +34,16 @@ Every player, coach and school name in the app opens an ESPN-style profile card.
 
 ![Player profile](docs/screenshots/profile.png)
 
+### Player Editor
+
+Every player and recruit profile opens into an editor — hit **✎ Edit**.
+
+- Change **names and jersey numbers**, the position's full **rating sheet**, **mental abilities** and their tiers, and **physical ability tiers** — all validated against the save format's real limits before a single byte is written.
+- **Your original save is never touched.** Saving writes a separate copy named `<save>_RJsEdited` beside the original, and the dashboard follows that copy from then on; load it in the game to play with your changes. Editing again updates the copy in place, after a timestamped backup.
+- Overall recalculates in the game itself the next time it loads the save — the app never invents a number.
+
+![Player editor](docs/screenshots/player-editor.png)
+
 ### Recruiting
 
 Three boards over the national class.
@@ -106,7 +116,9 @@ This reads your own install, pulls the portraits for your roster, the whole recr
 
 ## Is my save safe?
 
-Yes. The app is strictly **read-only** with your game files: it copies the save to its own cache folder before parsing and never opens your save for writing. Nothing it does can corrupt a dynasty.
+Yes. The app never modifies your save: it copies the file to its own cache folder before parsing and never opens the original for writing.
+
+The optional player editor follows the same rule by writing somewhere else entirely — using **Edit** in a player's profile creates a separate copy of your dynasty named `<save>_RJsEdited` next to the original and puts the changes there. Your original file keeps its exact bytes. Re-editing an edited copy updates that copy in place, after a timestamped backup is stored in the app's data folder. Load the `_RJsEdited` save in the game to play with your changes.
 
 ## Build from source
 
@@ -125,6 +137,7 @@ Developer tools worth knowing about:
 node scripts/filter-check.ts     # assert the recruiting filters and scouting queries hold
 node scripts/profile-check.ts    # regression suite over the profile extractor
 node scripts/media-check.ts      # run the media engine against a save and audit its output
+node scripts/edit-check.ts       # regression suite over the player editor's save writes
 node scripts/extract-awards.ts   # regenerate award names from the installed game
 node scripts/extract-pitches.ts  # regenerate pitch names + motivations from the installed game
 ```

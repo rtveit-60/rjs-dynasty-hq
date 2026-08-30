@@ -633,6 +633,79 @@ export interface PlayerProfile {
   } | null;
 }
 
+// --- Player editor ---
+
+/** One editable rating on the edit form, in the profile sheet's display order. */
+export interface EditRating {
+  /** Save field name (SpeedRating…) — what the write goes to. */
+  field: string;
+  /** Short label the sheets already use (SPD…). */
+  label: string;
+  value: number;
+}
+
+/** One mental-ability slot as stored: identity + tier, both save enum member names. */
+export interface EditMentalSlot {
+  slot: number;
+  /** MentalAbilities member ("RoadFanFavorite", "None"…). Display names in shared/mental-abilities. */
+  ability: string;
+  /** AbilitiesRank member: None | Bronze | Silver | Gold | Platinum. */
+  rank: string;
+}
+
+/** One physical-ability slot: the archetype-fixed name plus the stored tier. */
+export interface EditPhysicalSlot {
+  slot: number;
+  /** From the archetype's slot table — not editable (changing it means changing archetype). */
+  name: string;
+  rank: string;
+}
+
+/** Everything the edit dialog needs, read straight from the record and its schema. */
+export interface PlayerEditForm {
+  playerRow: number;
+  name: string;
+  position: string;
+  firstName: string;
+  lastName: string;
+  /** Schema string caps — writes beyond them would silently truncate. */
+  maxFirstLen: number;
+  maxLastLen: number;
+  /** null for recruits, whose jersey the game never shows. */
+  jersey: number | null;
+  isRecruit: boolean;
+  ratings: EditRating[];
+  mental: EditMentalSlot[];
+  /** Assignable mental abilities: save member id + the game's display name/blurb. */
+  mentalOptions: { id: string; name: string; desc: string | null }[];
+  /** Tier member names, None first. */
+  rankOptions: string[];
+  physical: EditPhysicalSlot[];
+  /** File name an edit would write ("…_RJsEdited") and whether it already exists. */
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+/** The changed values only — untouched fields stay untouched in the save. */
+export interface PlayerEditChanges {
+  playerRow: number;
+  firstName?: string;
+  lastName?: string;
+  jersey?: number;
+  /** field name -> new value, 0–99. */
+  ratings?: Record<string, number>;
+  mental?: EditMentalSlot[];
+  physical?: { slot: number; rank: string }[];
+}
+
+export interface PlayerEditResult {
+  ok: boolean;
+  message: string;
+  /** Full path + file name of the edited save that was written. */
+  editedPath?: string;
+  editedFileName?: string;
+}
+
 /** A coach's career ledger, from the save's CareerCoachStats row. */
 export interface CoachCareerStats {
   wins: number;

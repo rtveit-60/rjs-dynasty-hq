@@ -46,7 +46,8 @@ export default function Onboarding() {
         </div>
 
         <p className="foot-note">
-          Read-only. The app parses a copy of the save and never touches your game files.
+          Your save is never modified. The app parses a copy, and player edits are written
+          to a separate _RJsEdited copy — the original file always keeps its exact bytes.
         </p>
       </div>
     </div>

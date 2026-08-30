@@ -4,6 +4,7 @@
  * far too much to serialise on every save write.
  */
 import type { AbilitySlot, RecruitCard } from '../../shared/types.ts';
+import { mentalAbilityName } from '../../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../../shared/physical-abilities.ts';
 import { mainTable, val } from './franchise.ts';
 
@@ -259,10 +260,12 @@ export function glanceFromRecord(rec: any): { label: string; value: number }[] {
 export function abilitiesFromRecord(rec: any): { mental: AbilitySlot[]; physical: AbilitySlot[] } {
   const mental: AbilitySlot[] = [];
   for (let i = 1; i <= 3; i++) {
-    const name = String(val(rec, `MentalAbility${i}`) ?? '');
+    const id = String(val(rec, `MentalAbility${i}`) ?? '');
     const rank = String(val(rec, `MentalAbilityRank${i}`) ?? '');
-    if (!name || name === 'None') continue;
-    mental.push({ name, rank: rank === 'None' ? '' : rank });
+    if (!id || id === 'None') continue;
+    // The save identifier has drifted from the game's names (RoadFanFavorite
+    // shows as "Road Dog") — display through the extracted mapping.
+    mental.push({ name: mentalAbilityName(id), rank: rank === 'None' ? '' : rank });
   }
   // The save keeps only a tier per physical slot; which ability the slot IS
   // comes from the archetype's slot table in the game's own data (see

@@ -168,6 +168,27 @@ The install's `Win32/imageassetlibrarysb` holds every portrait as a named bundle
 
 Verified anchors: `HometownHero` → "Hometown Hero" with Proximity To Home in its triple; `SundayBound` → "Sunday Player" with Pro Potential. Self-consistency: recruits' `RecruitingDealbreaker` values keep landing inside their own pitch's motivation triple (e.g. a Gamer with a Pro Potential dealbreaker). `scripts/extract-pitches.ts` regenerates `src/shared/pitches.ts` (PITCHES: enum key → display name + motivations) — run after title updates, never hand-edit. Parser carries the enum key on RecruitTargetEntry/RecruitCard/profile recruit context as `idealPitch` ('' when Invalid).
 
+### Player editing — PROVEN (2026-08-30): madden-franchise round-trip + in-game acceptance
+
+The library reads AND writes: `record.Field = value` then `franchise.save(path)` re-packs. Proven against real saves, then **in-game**: a library-written save loaded fine (renamed player, jersey, 99 SPD all displayed), and the game **recalculated OVR on load** from the edited ratings (stored 76 + speed 78→99 displayed as 82) — so the app never writes `OverallRating`; it lags in the app until the game's next save writes the recomputed value back.
+
+- **Fidelity**: a zero-edit load→save round trip produces byte-identical *unpacked* content (31.1MB, same SHA-1); only the packed bytes differ (different compressor). Load ~250ms, save ~250ms.
+- **Write traps** (all guarded in `src/main/editor.ts`): ints past the field's bit width **silently wrap** (200 into 7-bit StrengthRating reads back 72 — clamp 0–99 before writing); strings **silently truncate** at the schema cap (FirstName 17, LastName 21); enum fields accept **member-name strings only** (`rec.MentalAbility1 = 'Captain'` works, `= 5` throws), invalid names throw cleanly.
+- **Field map**: names/jersey/56 `*Rating` ints all raw on the Player row. Mental abilities = `MentalAbility1..3` (`MentalAbilities` enum, identity) + `MentalAbilityRank1..3` (`AbilitiesRank`). Physical abilities = `PhysicalAbility1..5`, **tier only** — identity is fixed by `PlayerType` (see PHYSICAL_ABILITY_SLOTS). Recruits are the same Player-row write via `Recruit.Player` (key on the *player* row).
+- **Write policy**: the app never writes the user's file. Edits land in a sibling save `<name>_RJsEdited` (game lists it — keeps the `DYNASTY-` prefix); an already-edited save updates in place after a timestamped backup in `userData/backups` (10 kept per name). Compare-and-swap guard: the source file's hash must still match the parse that's being edited, else the edit aborts and the pipeline refreshes. After a write the dashboard switches to follow the edited file; that one refresh suppresses media events (the diff keys roster moves by name — a rename would read as a fake departure+arrival).
+- **Rename side effect**: commentary speaks the old surname — pronunciation keys off `Recruit.SurnameAudioID` / audio assets, not the string.
+- Regression harness: `node scripts/edit-check.ts` (28 checks: form truth, sibling write with source bytes unchanged, in-place re-edit with backup, whole-payload rejection).
+
+### Mental ability names — FOUND (2026-08-30): MentalAbilitiesEnumTableEntry (+ SignatureAbility)
+
+The save's `MentalAbilities` enum identifiers have drifted like the archetypes: **RoadFanFavorite → "Road Dog"**, **HomeFanFavorite → "Fan Favorite"**, **DBRally → "Legion"**, **HotHead → "Rollercoaster"**, **WinningTime → "Winning Time"**, **ClutchKicker → "Clutch Kicker"**. Sources, both in the franchise-common tuning store:
+
+- **`MentalAbilitiesEnumTableEntry`** (21 rows): `Field_3` = enum value, `Field_2` = the game's canonical key string ("RoadDog", "DynamicPersonality", …). Value 18 legitimately carries two keys (BellCow and Instinct — the save enum has the same alias pair).
+- **`SignatureAbility`** (86 rows, schema injected as in extract-abilities.ts): `Name`/`Description` display strings. Its `MentalAbilityGroup` int is a 3-4 value *category*, NOT the enum — do not join on it.
+- Join for display: canonical key → SignatureAbility.Name (de-spaced match) → else the save identifier itself (catches WinningTime, whose canonical key "DynamicPersonality" has no ability row) → else the key split on case boundaries. 16/20 land on exact game display strings with blurbs; Toughness, Captain, Rhythm, Bell Cow only exist as keys (no ability row, no blurb) — their labels are the game's key, not a verified UI string.
+- `scripts/extract-mental-abilities.ts` regenerates `src/shared/mental-abilities.ts` (anchors: RoadFanFavorite→"Road Dog", DBRally→"Legion"); run after title updates, never hand-edit. `recruit-card.ts` displays through it everywhere (profiles previously showed raw identifiers).
+- Localization corroboration was a dead end on purpose: `fb-scan-chunks` sees the FrTk stores only in compressed form, and `Win32/loc/en` keeps strings in non-chunk resources.
+
 ### Schedule & results (Dynasty Media backbone, verified 2026-08-27)
 
 - Main `SeasonGame` table = the instance with capacity > 100 (id 6347 here, 943 live): `HomeTeam`/`AwayTeam` refs into the Team main table, `HomeScore`/`AwayScore` (+ per-quarter + OT), `GameStatus` (HomeWon/AwayWon/Unplayed/Unscheduled), `SeasonWeek`, `SeasonWeekType`, `SeasonYear` (dynasty-year index, = SeasonInfo.CurrentYear), `IsGameOfTheWeek` + `GameOfTheWeekScore`, `IsOvertimeGame`, `BroadcastNetwork` (NationalTV/Streaming), `Attendance`, weather fields, `IsRematch`.

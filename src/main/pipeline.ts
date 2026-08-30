@@ -5,6 +5,9 @@ import { basename, join } from 'node:path';
 import type {
   LeagueLeaders,
   MediaEvent,
+  PlayerEditChanges,
+  PlayerEditForm,
+  PlayerEditResult,
   Profile,
   ProfileRequest,
   RecruitCard,
@@ -12,6 +15,7 @@ import type {
   WatchStatus
 } from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
+import { applyPlayerEdit, buildEditForm } from './editor.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
 import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from './parser/profile.ts';
@@ -55,6 +59,12 @@ export class Pipeline {
   /** League leaders, swept once per parsed save (keyed by its hash). */
   private leaders: LeagueLeaders | null = null;
   private leadersHash = '';
+  /**
+   * Set when the app itself just wrote the save being parsed. The media diff
+   * keys roster movement by name, so a rename would read as a fake
+   * departure+arrival — that one refresh rebaselines state without stories.
+   */
+  private suppressMediaOnce = false;
 
   constructor(events: PipelineEvents) {
     this.events = events;
@@ -142,6 +152,72 @@ export class Pipeline {
     return null;
   }
 
+  /** Current values + options for the edit dialog, from the cached parse. */
+  async editForm(playerRow: number, savePath: string): Promise<PlayerEditForm | null> {
+    if (!this.franchise || !savePath) return null;
+    try {
+      return await buildEditForm(this.franchise, playerRow, savePath);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The app's only save write. Guarded compare-and-swap: the file on disk must
+   * still be the one this parse read (the game may have written meanwhile) —
+   * then the edit lands in the <name>_RJsEdited sibling, never the original.
+   */
+  async editPlayer(changes: PlayerEditChanges, savePath: string): Promise<PlayerEditResult> {
+    if (!this.franchise || !savePath) {
+      return { ok: false, message: 'No parsed save to edit yet.' };
+    }
+    if (this.busy) {
+      return { ok: false, message: 'A refresh is running — try again in a moment.' };
+    }
+    this.busy = true;
+    try {
+      const onDisk = createHash('sha1').update(readFileSync(savePath)).digest('hex');
+      if (onDisk !== this.lastHash) {
+        this.queuedArgs = { savePath, schoolTeamRow: this.lastSchoolRow };
+        return {
+          ok: false,
+          message: 'The save changed on disk since it was read — refreshing now. Re-apply the edit in a moment.'
+        };
+      }
+      const { editedPath } = await applyPlayerEdit(
+        this.franchise,
+        savePath,
+        changes,
+        app.getPath('userData')
+      );
+      // The in-memory parse now matches the written file byte-for-byte in
+      // content, so the follow-up refresh of the edited save skips the reload
+      // and just re-extracts. Media rebaselines silently for that refresh.
+      this.lastHash = createHash('sha1').update(readFileSync(editedPath)).digest('hex');
+      this.lastUpdate = Date.now();
+      this.suppressMediaOnce = true;
+      return {
+        ok: true,
+        message: `Saved to ${basename(editedPath)}.`,
+        editedPath,
+        editedFileName: basename(editedPath)
+      };
+    } catch (err) {
+      // A failed write can leave the in-memory parse ahead of the disk —
+      // drop it and reparse from the original so the dashboard stays truthful.
+      this.reset();
+      this.queuedArgs = { savePath, schoolTeamRow: this.lastSchoolRow };
+      return { ok: false, message: err instanceof Error ? err.message : String(err) };
+    } finally {
+      this.busy = false;
+      if (this.queuedArgs) {
+        const next = this.queuedArgs;
+        this.queuedArgs = null;
+        void this.refresh(next.savePath, next.schoolTeamRow);
+      }
+    }
+  }
+
   /** Re-scope to a different school without re-parsing the file. */
   async rescope(savePath: string, schoolTeamRow: number | null): Promise<void> {
     if (!this.franchise) {
@@ -187,8 +263,12 @@ export class Pipeline {
       const prev = readJson<MediaState>(stateFile);
       const log = readJson<MediaEvent[]>(eventsFile) ?? [];
       const { state, events } = generateMedia(prev, snapshot, leaders);
+      // An app-written save diffs against itself (a rename reads as roster
+      // churn): rebaseline the state, publish nothing.
+      const suppressed = this.suppressMediaOnce;
+      this.suppressMediaOnce = false;
       const known = new Set(log.map((e) => e.id));
-      const fresh = events.filter((e) => !known.has(e.id));
+      const fresh = suppressed ? [] : events.filter((e) => !known.has(e.id));
       const merged = sortEvents([...fresh, ...log]).slice(0, 400);
 
       if (state) writeFileSync(stateFile, JSON.stringify(state), 'utf8');
