@@ -9,13 +9,15 @@ import type {
   PlayerEditForm,
   PlayerEditResult,
   Profile,
+  ResourceEditRequest,
+  ResourceForm,
   ProfileRequest,
   RecruitCard,
   Snapshot,
   WatchStatus
 } from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
-import { applyPlayerEdit, buildEditForm } from './editor.ts';
+import { applyPlayerEdit, applyResourceEdit, buildEditForm, buildResourceForm } from './editor.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
 import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from './parser/profile.ts';
@@ -163,11 +165,16 @@ export class Pipeline {
   }
 
   /**
-   * The app's only save write. Guarded compare-and-swap: the file on disk must
-   * still be the one this parse read (the game may have written meanwhile) —
-   * then the edit lands in the <name>_RJsEdited sibling, never the original.
+   * The app's only save-write shell. Guarded compare-and-swap: the file on
+   * disk must still be the one this parse read (the game may have written
+   * meanwhile) — then the edit lands in the <name>_RJsEdited sibling, never
+   * the original, and the follow-up refresh is extract-only with media
+   * rebaselining silently.
    */
-  async editPlayer(changes: PlayerEditChanges, savePath: string): Promise<PlayerEditResult> {
+  private async guardedEdit(
+    savePath: string,
+    write: () => Promise<{ editedPath: string; message?: string }>
+  ): Promise<PlayerEditResult> {
     if (!this.franchise || !savePath) {
       return { ok: false, message: 'No parsed save to edit yet.' };
     }
@@ -184,21 +191,16 @@ export class Pipeline {
           message: 'The save changed on disk since it was read — refreshing now. Re-apply the edit in a moment.'
         };
       }
-      const { editedPath } = await applyPlayerEdit(
-        this.franchise,
-        savePath,
-        changes,
-        app.getPath('userData')
-      );
+      const { editedPath, message } = await write();
       // The in-memory parse now matches the written file byte-for-byte in
       // content, so the follow-up refresh of the edited save skips the reload
-      // and just re-extracts. Media rebaselines silently for that refresh.
+      // and just re-extracts.
       this.lastHash = createHash('sha1').update(readFileSync(editedPath)).digest('hex');
       this.lastUpdate = Date.now();
       this.suppressMediaOnce = true;
       return {
         ok: true,
-        message: `Saved to ${basename(editedPath)}.`,
+        message: message ?? `Saved to ${basename(editedPath)}.`,
         editedPath,
         editedFileName: basename(editedPath)
       };
@@ -216,6 +218,45 @@ export class Pipeline {
         void this.refresh(next.savePath, next.schoolTeamRow);
       }
     }
+  }
+
+  /** Player edits ride the guarded shell above. */
+  async editPlayer(changes: PlayerEditChanges, savePath: string): Promise<PlayerEditResult> {
+    return this.guardedEdit(savePath, () =>
+      applyPlayerEdit(this.franchise, savePath, changes, app.getPath('userData'))
+    );
+  }
+
+  /** Current budget/hours for the Fundraising and Hire Recruiters dialogs. */
+  async resourceForm(savePath: string): Promise<ResourceForm | null> {
+    if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
+    try {
+      return await buildResourceForm(this.franchise, this.lastSchoolRow, savePath);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Fundraising / recruiter hours, via the same guarded write shell. */
+  async editResource(req: ResourceEditRequest, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, applied } = await applyResourceEdit(
+        this.franchise,
+        savePath,
+        { teamRow, kind: req.kind, amount: req.amount },
+        app.getPath('userData')
+      );
+      const unit = req.kind === 'nil' ? 'program points' : 'recruiting hours';
+      return {
+        editedPath,
+        message:
+          applied === req.amount
+            ? `Added ${applied} ${unit} — saved to ${basename(editedPath)}.`
+            : `Added ${applied} ${unit} (the save format caps the field there) — saved to ${basename(editedPath)}.`
+      };
+    });
   }
 
   /** Re-scope to a different school without re-parsing the file. */

@@ -5,6 +5,7 @@ import { useHQ } from '../store.ts';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
+import ResourceModal from './ResourceModal.tsx';
 import TeamNeedsStrip from './TeamNeedsStrip.tsx';
 
 type School = NonNullable<Snapshot['school']>;
@@ -94,6 +95,7 @@ export default function TargetsView({ school }: { school: School }) {
   const [sortKey, setSortKey] = useState<SortKey>('stars');
   const [asc, setAsc] = useState(false);
   const [openRow, setOpenRow] = useState<number | null>(null);
+  const [hiring, setHiring] = useState(false);
 
   const conflicts = useMemo(
     () => playingTimeConflicts(board?.targets ?? []),
@@ -204,6 +206,10 @@ export default function TargetsView({ school }: { school: School }) {
             {board.hoursAssigned}/{board.hoursTotal}
           </b>
         </span>
+        <button type="button" className="btn" onClick={() => setHiring(true)}>
+          HIRE ADDITIONAL RECRUITERS
+        </button>
+        {hiring && <ResourceModal kind="hours" onClose={() => setHiring(false)} />}
         <span className="chip">
           <span className="k">COMMITS</span> <b>{committed}</b>
         </span>

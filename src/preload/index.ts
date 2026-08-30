@@ -12,6 +12,8 @@ import type {
   Profile,
   ProfileRequest,
   RecruitCard,
+  ResourceEditRequest,
+  ResourceForm,
   Settings,
   Snapshot,
   ThemeMode,
@@ -47,6 +49,8 @@ export interface HQBridge {
   getProfile: (req: ProfileRequest) => Promise<Profile | null>;
   getEditForm: (playerRow: number) => Promise<PlayerEditForm | null>;
   editPlayer: (changes: PlayerEditChanges) => Promise<PlayerEditResult>;
+  getResourceForm: () => Promise<ResourceForm | null>;
+  editResource: (req: ResourceEditRequest) => Promise<PlayerEditResult>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
   getPlaybook: (
@@ -81,6 +85,8 @@ const bridge: HQBridge = {
   getProfile: (req) => ipcRenderer.invoke('profile:get', req),
   getEditForm: (playerRow) => ipcRenderer.invoke('player:editform', playerRow),
   editPlayer: (changes) => ipcRenderer.invoke('player:edit', changes),
+  getResourceForm: () => ipcRenderer.invoke('resource:form'),
+  editResource: (req) => ipcRenderer.invoke('resource:edit', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   getPlaybook: (side, coachRow, schemeEnum) =>

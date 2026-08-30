@@ -12,11 +12,16 @@
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import type { EditMentalSlot, PlayerEditChanges, PlayerEditForm } from '../shared/types.ts';
+import type {
+  EditMentalSlot,
+  PlayerEditChanges,
+  PlayerEditForm,
+  ResourceForm
+} from '../shared/types.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
-import { loadFranchise, mainTable, refFromRecord, val } from './parser/franchise.ts';
+import { loadFranchise, mainTable, refFromRecord, tableById, val } from './parser/franchise.ts';
 
 export const EDIT_SUFFIX = '_RJsEdited';
 const BACKUPS_KEPT = 10;
@@ -266,9 +271,38 @@ async function saveWithRetry(franchise: any, target: string): Promise<void> {
 }
 
 /**
+ * Shared write plumbing: back up an existing target, save with retries, run
+ * the caller's cold verify against a fresh load of the written file, and roll
+ * back (backup restored / new file removed) on any failure.
+ */
+async function writeEditedSave(
+  franchise: any,
+  savePath: string,
+  backupDir: string,
+  verify: (check: any) => Promise<void>
+): Promise<{ editedPath: string }> {
+  const target = editedPathFor(savePath);
+  const backupPath = backUp(target, join(backupDir, 'backups'));
+  const existedBefore = backupPath !== null;
+  try {
+    await saveWithRetry(franchise, target);
+    await verify(await loadFranchise(target));
+  } catch (err) {
+    try {
+      if (backupPath) copyFileSync(backupPath, target);
+      else if (!existedBefore && existsSync(target)) rmSync(target);
+    } catch {
+      // rollback is best effort; the original save was never touched either way
+    }
+    throw err instanceof Error ? err : new Error(String(err));
+  }
+  return { editedPath: target };
+}
+
+/**
  * Validate, apply to the in-memory franchise, write the _RJsEdited sibling,
  * then reload the written file and read the row back — a write that cannot be
- * verified is rolled back (backup restored / new file removed) and thrown.
+ * verified is rolled back and thrown.
  */
 export async function applyPlayerEdit(
   franchise: any,
@@ -282,14 +316,7 @@ export async function applyPlayerEdit(
 
   apply(rec, changes);
 
-  const target = editedPathFor(savePath);
-  const backupPath = backUp(target, join(backupDir, 'backups'));
-  const existedBefore = backupPath !== null;
-  try {
-    await saveWithRetry(franchise, target);
-
-    // Cold verify: the file loads as a CFB 27 save and carries the edit.
-    const check = await loadFranchise(target);
+  return writeEditedSave(franchise, savePath, backupDir, async (check) => {
     const table = mainTable(check, 'Player');
     await table.readRecords(['FirstName', 'LastName', 'JerseyNum']);
     const written = table.records?.[changes.playerRow];
@@ -303,14 +330,136 @@ export async function applyPlayerEdit(
     ) {
       throw new Error('The written save did not read back with the edit.');
     }
-  } catch (err) {
-    try {
-      if (backupPath) copyFileSync(backupPath, target);
-      else if (!existedBefore && existsSync(target)) rmSync(target);
-    } catch {
-      // rollback is best effort; the original save was never touched either way
-    }
-    throw err instanceof Error ? err : new Error(String(err));
+  });
+}
+
+// --- Program resources (Fundraising / Hire Additional Recruiters) ----------
+
+const BUDGET_FIELDS = [
+  'ProgramPointBudget',
+  'RemainingProgramPoints',
+  'RolloverProgramPoints',
+  'NILProgramPointsSpent',
+  'LongName',
+  'RecruitingBoard'
+];
+
+function fieldMax(rec: any, field: string, fallback: number): number {
+  const n = Number(rec?._fields?.[field]?.offset?.maxValue);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+async function teamRecord(franchise: any, teamRow: number): Promise<any> {
+  const table = mainTable(franchise, 'Team');
+  await table.readRecords(BUDGET_FIELDS);
+  const rec = table.records?.[teamRow];
+  if (!rec || rec.isEmpty) throw new Error('No school at that row in the save.');
+  return rec;
+}
+
+/** The user school's recruiting-board record (Team.RecruitingBoard ref). */
+async function boardRecord(franchise: any, teamRec: any): Promise<any | null> {
+  const ref = refFromRecord(teamRec, 'RecruitingBoard');
+  if (!ref || (ref.tableId === 0 && ref.row === 0)) return null;
+  const table = await tableById(franchise, ref.tableId);
+  return table?.records?.[ref.row] ?? null;
+}
+
+export async function buildResourceForm(
+  franchise: any,
+  teamRow: number,
+  savePath: string
+): Promise<ResourceForm> {
+  const rec = await teamRecord(franchise, teamRow);
+  const n = (k: string): number => Number(val(rec, k) ?? 0);
+  // Fundraising raises total, remaining and the rollover income line together
+  // (the pillar breakdown must keep summing to the total), so the headroom is
+  // whichever of the three caps is nearest.
+  const budgetHeadroom = Math.max(
+    0,
+    Math.min(
+      fieldMax(rec, 'ProgramPointBudget', 30000) - n('ProgramPointBudget'),
+      fieldMax(rec, 'RemainingProgramPoints', 30000) - n('RemainingProgramPoints'),
+      fieldMax(rec, 'RolloverProgramPoints', 20000) - n('RolloverProgramPoints')
+    )
+  );
+  let hours: ResourceForm['hours'] = null;
+  const board = await boardRecord(franchise, rec);
+  if (board && board._fields?.RecruitingHoursTotal) {
+    const total = Number(val(board, 'RecruitingHoursTotal') ?? 0);
+    hours = {
+      total,
+      assigned: Number(val(board, 'RecruitingHoursAssigned') ?? 0),
+      headroom: Math.max(0, fieldMax(board, 'RecruitingHoursTotal', 4095) - total)
+    };
   }
-  return { editedPath: target };
+  const target = editedPathFor(savePath);
+  return {
+    teamRow,
+    school: String(val(rec, 'LongName') ?? ''),
+    budget: {
+      total: n('ProgramPointBudget'),
+      remaining: n('RemainingProgramPoints'),
+      rollover: n('RolloverProgramPoints'),
+      nilSpent: n('NILProgramPointsSpent'),
+      headroom: budgetHeadroom
+    },
+    hours,
+    targetFileName: basename(target),
+    targetExists: existsSync(target)
+  };
+}
+
+/**
+ * Add program points (Fundraising) or recruiting hours (Hire Additional
+ * Recruiters) to the user's school, clamped to the save format's field caps,
+ * and write the _RJsEdited sibling. Returns the delta actually applied.
+ */
+export async function applyResourceEdit(
+  franchise: any,
+  savePath: string,
+  req: { teamRow: number; kind: 'nil' | 'hours'; amount: number },
+  backupDir: string
+): Promise<{ editedPath: string; applied: number }> {
+  if (!Number.isInteger(req.amount) || req.amount <= 0 || req.amount > 30000) {
+    throw new Error('Amount must be a whole number greater than zero.');
+  }
+  const rec = await teamRecord(franchise, req.teamRow);
+  const form = await buildResourceForm(franchise, req.teamRow, savePath);
+
+  let applied: number;
+  let expect: { total: number };
+  if (req.kind === 'nil') {
+    applied = Math.min(req.amount, form.budget.headroom);
+    if (applied <= 0) throw new Error('The program-point budget is already at the save format’s cap.');
+    rec.ProgramPointBudget = form.budget.total + applied;
+    rec.RemainingProgramPoints = form.budget.remaining + applied;
+    rec.RolloverProgramPoints = form.budget.rollover + applied;
+    expect = { total: form.budget.total + applied };
+  } else {
+    if (!form.hours) throw new Error('No recruiting board in the save for this school yet.');
+    applied = Math.min(req.amount, form.hours.headroom);
+    if (applied <= 0) throw new Error('Recruiting hours are already at the save format’s cap.');
+    const board = await boardRecord(franchise, rec);
+    board.RecruitingHoursTotal = form.hours.total + applied;
+    expect = { total: form.hours.total + applied };
+  }
+
+  const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const table = mainTable(check, 'Team');
+    await table.readRecords(BUDGET_FIELDS);
+    const written = table.records?.[req.teamRow];
+    if (!written) throw new Error('The written save did not read back.');
+    if (req.kind === 'nil') {
+      if (Number(val(written, 'ProgramPointBudget')) !== expect.total) {
+        throw new Error('The written save did not read back with the new budget.');
+      }
+    } else {
+      const board = await boardRecord(check, written);
+      if (!board || Number(val(board, 'RecruitingHoursTotal')) !== expect.total) {
+        throw new Error('The written save did not read back with the new hours.');
+      }
+    }
+  });
+  return { editedPath, applied };
 }

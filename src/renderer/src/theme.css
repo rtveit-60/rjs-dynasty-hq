@@ -4267,3 +4267,68 @@ table.tbl.tbl-wide {
   color: var(--ink);
   margin-bottom: 6px;
 }
+
+/* --- Resource dialogs (Fundraising / Hire Additional Recruiters) --------- */
+
+.rs-panel {
+  width: min(560px, 100%);
+}
+
+.rs-now {
+  display: flex;
+  gap: 22px;
+  margin-top: 14px;
+}
+
+.rs-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rs-k {
+  font: 600 10px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
+.rs-v {
+  font-family: var(--font-score, var(--font-ui));
+  font-size: 20px;
+  color: var(--ink);
+}
+
+.rs-amount {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.rs-amount input {
+  flex: 0 0 110px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 15px;
+  text-align: right;
+}
+
+.rs-step {
+  white-space: nowrap;
+}
+
+.rs-preview {
+  margin-top: 12px;
+  font: 500 13px var(--font-ui);
+  color: var(--ink-2);
+}
+
+.rs-preview strong {
+  color: var(--hot);
+  font-weight: 700;
+}
+
+.rs-clamp {
+  color: var(--ink-3);
+}

@@ -706,6 +706,36 @@ export interface PlayerEditResult {
   editedFileName?: string;
 }
 
+/**
+ * Current values for the program-resource editors (Fundraising / Hire
+ * Additional Recruiters), read from the user school's Team row and its
+ * recruiting board. Headrooms come from the save schema's field caps.
+ */
+export interface ResourceForm {
+  teamRow: number;
+  school: string;
+  budget: {
+    /** ProgramPointBudget — the season pool NIL offers spend from. */
+    total: number;
+    remaining: number;
+    /** The rollover income line, which a raise rides so pillars keep summing to the total. */
+    rollover: number;
+    nilSpent: number;
+    /** Largest raise the field caps allow right now. */
+    headroom: number;
+  };
+  /** null when the save carries no recruiting board for the school yet. */
+  hours: { total: number; assigned: number; headroom: number } | null;
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+export interface ResourceEditRequest {
+  kind: 'nil' | 'hours';
+  /** Whole points/hours to add; clamped to the form's headroom. */
+  amount: number;
+}
+
 /** A coach's career ledger, from the save's CareerCoachStats row. */
 export interface CoachCareerStats {
   wins: number;
