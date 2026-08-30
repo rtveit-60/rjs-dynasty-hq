@@ -297,10 +297,10 @@ export class Pipeline {
   }
 
   /** Options + caps for the Create Recruit dialog. */
-  async createForm(savePath: string): Promise<CreateRecruitForm | null> {
+  async createForm(savePath: string, portraitsDir?: string | null): Promise<CreateRecruitForm | null> {
     if (!this.franchise || !savePath) return null;
     try {
-      return await buildCreateForm(this.franchise, savePath);
+      return await buildCreateForm(this.franchise, savePath, portraitsDir);
     } catch {
       return null;
     }

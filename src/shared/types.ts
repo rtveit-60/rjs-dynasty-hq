@@ -769,8 +769,24 @@ export interface CreateRecruitForm {
   skinTones: number[];
   /** helmet itemAssetName -> facemasks real players wear with it. */
   helmetMasks: Record<string, string[]>;
+  /** The face catalog: every observed head, each with a portrait and a tone. */
+  faces: FaceOption[];
   targetFileName: string;
   targetExists: boolean;
+}
+
+/** One selectable face: an observed (head id, asset, portrait) triple + its tone. */
+export interface FaceOption {
+  /** PLYR_GENERICHEAD enum member. */
+  headId: string;
+  /** GenericHeadAssetName string, paired as seen on a real player. */
+  assetName: string;
+  /** PLYR_PORTRAIT id — the headshot the portrait pack serves. */
+  portraitId: number;
+  /** Skin tone this head is modeled for (1–8), encoded in its asset name. */
+  tone: number;
+  /** A headshot for portraitId exists in the user's portrait pack. */
+  hasShot?: boolean;
 }
 
 /** One gear slot's choices, learned from every dressed player in the save. */
@@ -797,6 +813,8 @@ export interface CreateRecruitRequest {
   skinTone?: number;
   /** slot -> itemAssetName overrides; unset slots keep the base loadout. */
   gear?: Record<string, string>;
+  /** A face from the catalog; unset keeps the template's head and the generated avatar. */
+  face?: FaceOption;
 }
 
 /** Stage recruits onto or off the user's target board. */

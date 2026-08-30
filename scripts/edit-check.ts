@@ -630,6 +630,47 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   check('create: solo mask auto-pairs its helmet', gotMask === soloMask && gotHelmet === h0,
     `${gotHelmet} :: ${gotMask}`);
   check('source still untouched after styled creation', sha(work) === sourceHash);
+
+  // --- 10c. creation with a chosen face (head + portrait + tone triple) ---
+  check('create form: face catalog from real players',
+    cform2.faces.length >= 200 &&
+    cform2.faces.every((f) => f.portraitId > 0 && f.tone >= 1 && f.tone <= 8 && !!f.headId && !!f.assetName),
+    `${cform2.faces.length} faces, tones ${[...new Set(cform2.faces.map((f) => f.tone))].sort().join(',')}`);
+  // Prefer a tone-8 face: it exercises the full 1-8 skin-tone range.
+  const face = cform2.faces.find((f) => f.tone === 8) ?? cform2.faces[Math.floor(cform2.faces.length / 2)];
+  check('create form: faces are generic art with embedded portrait ids',
+    cform2.faces.every((f) => f.assetName.startsWith('Generic_') && Number(f.assetName.split('_')[1]) === f.portraitId),
+    face.assetName);
+  // frM2 already reflects the current on-disk state — reuse it for the write.
+  // skinTone rides along like the UI sends it (a picked face aligns the tone).
+  const resF = await applyCreateRecruit(frM2, editedPath, {
+    firstName: 'Chosen', lastName: 'Face', position: pos, archetype, stars: 3,
+    devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 210, homeState: state, homeTown: '',
+    face, skinTone: face.tone
+  }, dir);
+  const frF2 = await loadFranchise(editedPath);
+  const pTF = mainTable(frF2, 'Player');
+  await pTF.readRecords();
+  const npF = pTF.records[resF.playerRow];
+  check('create: chosen face lands on the player',
+    String(val(npF, 'PLYR_GENERICHEAD')) === face.headId &&
+    String(val(npF, 'GenericHeadAssetName')) === face.assetName &&
+    Number(val(npF, 'PLYR_PORTRAIT')) === face.portraitId,
+    `${val(npF, 'PLYR_GENERICHEAD')} / ${val(npF, 'GenericHeadAssetName')} / ${val(npF, 'PLYR_PORTRAIT')}`);
+  const vRefF = refFromRecord(npF, 'CharacterVisuals');
+  const vTF = vRefF && vRefF.tableId !== 0 ? frF2.getTableById(vRefF.tableId) : null;
+  if (vTF && !vTF.recordsRead) await vTF.readRecords();
+  const vjF = vTF ? JSON.parse(String(vTF.records[vRefF!.row]._fields.RawData.value)) : null;
+  check('create: face tone lands in the visuals blob', vjF?.skinTone === face.tone,
+    `tone ${vjF?.skinTone} vs face ${face.tone}`);
+  // Validation rejects before any mutation, so frF2 can host the refusal.
+  await rejects('create reject: face not in the catalog', async () =>
+    applyCreateRecruit(frF2, editedPath, {
+      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
+      devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: '',
+      face: { headId: face.headId, assetName: 'gen_head_madeup_001', portraitId: 99999, tone: face.tone }
+    }, dir));
+  check('source still untouched after face creation', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

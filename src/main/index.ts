@@ -288,7 +288,7 @@ function registerIpc(): void {
   // Create-a-recruit: dialog options + the creation write.
   ipcMain.handle('create:form', () => {
     const { savePath } = getSettings();
-    return savePath ? pipeline.createForm(savePath) : null;
+    return savePath ? pipeline.createForm(savePath, getSettings().portraitsDir) : null;
   });
   ipcMain.handle('create:recruit', async (_e, req: unknown) => {
     const r = req as { firstName?: unknown };
@@ -644,9 +644,14 @@ function createWindow(): void {
               await new Promise((r) => setTimeout(r, 2600));
             }
             for (const label of (process.env['HQ_CAPTURE_CLICK'] ?? '').split(',').filter(Boolean)) {
+              // "~8000" between labels sleeps instead of clicking (form loads).
+              if (label.trim().startsWith('~')) {
+                await new Promise((r) => setTimeout(r, Number(label.trim().slice(1)) || 1000));
+                continue;
+              }
               // Prefix match tolerates count badges inside the control ("THE WIRE 133").
               await win!.webContents.executeJavaScript(
-                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button,.bd-btn')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
+                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button,.bd-btn,.fp-choose')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
               );
               await new Promise((r) => setTimeout(r, 700));
             }

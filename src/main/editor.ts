@@ -15,6 +15,7 @@ import { basename, join } from 'node:path';
 import type {
   CreateRecruitForm,
   CreateRecruitRequest,
+  FaceOption,
   GearSlotOptions,
   EditMentalSlot,
   PlayerEditChanges,
@@ -485,6 +486,34 @@ const STAR_ENUM: Record<number, string> = {
   5: 'FIVE_STAR', 4: 'FOUR_STAR', 3: 'THREE_STAR', 2: 'TWO_STAR', 1: 'ONE_STAR'
 };
 
+/** Every head worn in the save: (head id, asset, portrait) triples + tone. */
+async function faceCatalog(franchise: any): Promise<FaceOption[]> {
+  const players = mainTable(franchise, 'Player');
+  await players.readRecords();
+  const byAsset = new Map<string, FaceOption>();
+  for (const p of players.records as any[]) {
+    if (p.isEmpty) continue;
+    const assetName = String(val(p, 'GenericHeadAssetName') ?? '');
+    const headId = String(val(p, 'PLYR_GENERICHEAD') ?? '');
+    // Generic heads only — Unique_* assets are individual people's scanned
+    // faces and portraits, not shareable art. A generic asset encodes its own
+    // portrait id (Generic_0877_… → portrait 877; observed PLYR_PORTRAIT must
+    // agree) and its native skin tone as the penultimate segment (…_D_5_4 →
+    // tone 5; matches worn visuals skinTone on 392 of 398 dressed wearers —
+    // the six are custom-painted individuals, so the art's own tag wins).
+    // headId rides along as observed: most wearers pair the asset with the
+    // enum's NoHead default, and the game renders them fine, so NoHead stays.
+    if (!assetName.startsWith('Generic_') || !headId || byAsset.has(assetName)) continue;
+    const parts = assetName.split('_');
+    const portraitId = Number(parts[1]);
+    const tone = Number(parts[parts.length - 2]);
+    if (!(portraitId > 0) || portraitId !== Number(val(p, 'PLYR_PORTRAIT') ?? 0)) continue;
+    if (!Number.isInteger(tone) || tone < 1 || tone > 8) continue;
+    byAsset.set(assetName, { headId, assetName, portraitId, tone });
+  }
+  return [...byAsset.values()].sort((a, b) => a.tone - b.tone || a.assetName.localeCompare(b.assetName));
+}
+
 /** Class recruits by archetype: recruitRow + playerRow of a clean template. */
 async function templatePool(
   franchise: any
@@ -513,7 +542,11 @@ async function templatePool(
   return { recruitTable, playerTable, byArchetype, byPosition };
 }
 
-export async function buildCreateForm(franchise: any, savePath: string): Promise<CreateRecruitForm> {
+export async function buildCreateForm(
+  franchise: any,
+  savePath: string,
+  portraitsDir?: string | null
+): Promise<CreateRecruitForm> {
   const { recruitTable, playerTable, byArchetype } = await templatePool(franchise);
   const archetypesByPosition: Record<string, string[]> = {};
   for (const [archetype, t] of byArchetype) {
@@ -530,6 +563,21 @@ export async function buildCreateForm(franchise: any, savePath: string): Promise
   let recruitRowsFree = 0;
   for (const r of recruitTable.records) if (r.isEmpty) recruitRowsFree++;
   const { gearSlots, skinTones, helmetMasks } = await gearCatalog(franchise);
+  const faces = await faceCatalog(franchise);
+  // Faces whose headshot exists in the user's portrait pack sort first within
+  // each tone, so the picker leads with browsable photos (same lookup the
+  // portrait:// protocol makes; absence only means the pack lacks the image).
+  if (portraitsDir && existsSync(portraitsDir)) {
+    for (const f of faces) {
+      f.hasShot = ['png', 'jpg', 'jpeg', 'webp'].some((ext) =>
+        existsSync(join(portraitsDir, `${f.portraitId}.${ext}`))
+      );
+    }
+    faces.sort(
+      (a, b) =>
+        a.tone - b.tone || Number(b.hasShot) - Number(a.hasShot) || a.assetName.localeCompare(b.assetName)
+    );
+  }
   const target = editedPathFor(savePath);
   return {
     maxFirstLen: stringCap(sample, 'FirstName', 17),
@@ -547,6 +595,7 @@ export async function buildCreateForm(franchise: any, savePath: string): Promise
     gearSlots,
     skinTones,
     helmetMasks,
+    faces,
     targetFileName: basename(target),
     targetExists: existsSync(target)
   };
@@ -599,8 +648,18 @@ export async function applyCreateRecruit(
   const template = byArchetype.get(req.archetype) ?? byPosition.get(req.position);
   if (!template) throw new Error('No template recruit exists for that archetype or position.');
 
-  if (req.skinTone !== undefined && req.skinTone !== 0 && !(req.skinTone >= 1 && req.skinTone <= 7)) {
-    throw new Error('Skin tone must be 1-7.');
+  if (req.skinTone !== undefined && req.skinTone !== 0 && !(req.skinTone >= 1 && req.skinTone <= 8)) {
+    throw new Error('Skin tone must be 1-8.');
+  }
+  if (req.face) {
+    const catalog = await faceCatalog(franchise);
+    const hit = catalog.find(
+      (f) =>
+        f.assetName === req.face!.assetName &&
+        f.headId === req.face!.headId &&
+        f.portraitId === req.face!.portraitId
+    );
+    if (!hit) throw new Error('That face is not in the catalog.');
   }
   let visualsJson: string | null = null;
   if ((req.skinTone && req.skinTone >= 1) || (req.gear && Object.keys(req.gear).length)) {
@@ -662,8 +721,15 @@ export async function applyCreateRecruit(
   np.Weight = rawWeight;
   np.PLYR_HOME_STATE = req.homeState;
   if (np._fields?.PLYR_HOME_TOWN) np.PLYR_HOME_TOWN = town;
-  // Their own face, not the template's photo: 0 falls back to the generated avatar.
-  if (np._fields?.PLYR_PORTRAIT) np.PLYR_PORTRAIT = 0;
+  // Their own face: a chosen catalog head brings its real headshot; otherwise
+  // portrait 0 falls back to the generated avatar.
+  if (req.face) {
+    np.PLYR_GENERICHEAD = req.face.headId;
+    np.GenericHeadAssetName = req.face.assetName;
+    if (np._fields?.PLYR_PORTRAIT) np.PLYR_PORTRAIT = req.face.portraitId;
+  } else if (np._fields?.PLYR_PORTRAIT) {
+    np.PLYR_PORTRAIT = 0;
+  }
   if (visualsJson && newVisualsRow >= 0) {
     vTable.records[newVisualsRow].RawData = visualsJson;
     np.CharacterVisuals = refString(vTable.header?.tableId ?? -1, newVisualsRow);
@@ -713,6 +779,13 @@ export async function applyCreateRecruit(
       !String(val(wr, 'RecruitStage')).includes('Top10')
     ) {
       throw new Error('The written save did not read back with the new recruit.');
+    }
+    if (req.face) {
+      const pT2 = mainTable(check, 'Player');
+      await pT2.readRecords();
+      if (String(val(pT2.records?.[wpRef!.row], 'GenericHeadAssetName')) !== req.face.assetName) {
+        throw new Error('The written save did not read back with the chosen face.');
+      }
     }
     if (visualsJson && newVisualsRow >= 0) {
       const wvT = visualsTable(check);

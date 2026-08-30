@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CreateRecruitForm } from '../../../shared/types.ts';
+import type { CreateRecruitForm, FaceOption } from '../../../shared/types.ts';
 import { archetypeLabel, devLabel, heightFt, recruitPos, spaceOut } from '../lib/format.ts';
 import { Stepper } from './EditPlayerModal.tsx';
+import FacePickerModal from './FacePickerModal.tsx';
 import InfoDot from './InfoDot.tsx';
 
 /**
@@ -28,6 +29,8 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
   const [homeTown, setHomeTown] = useState('');
   const [skinTone, setSkinTone] = useState(0);
   const [gear, setGear] = useState<Record<string, string>>({});
+  const [face, setFace] = useState<FaceOption | null>(null);
+  const [pickingFace, setPickingFace] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -100,7 +103,8 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         homeState,
         homeTown: homeTown.trim(),
         skinTone: skinTone || undefined,
-        gear: Object.keys(gear).length ? gear : undefined
+        gear: Object.keys(gear).length ? gear : undefined,
+        face: face ?? undefined
       });
       if (res.ok) {
         setSavedNote(`${res.message} Search the board for the name, then stage + to target them, and refine ratings through the profile's EDIT.`);
@@ -147,6 +151,18 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         {state === 'missing' && <div className="pf-wait">No class to add a recruit to in this save.</div>}
         {state === 'saved' && <div className="ed-saved">{savedNote}</div>}
 
+        {pickingFace && form && (
+          <FacePickerModal
+            faces={form.faces}
+            value={face}
+            onPick={(f) => {
+              setFace(f);
+              // A chosen head carries its native tone — align the visuals tone.
+              if (f) setSkinTone(f.tone);
+            }}
+            onClose={() => setPickingFace(false)}
+          />
+        )}
         {form && (state === 'ready' || state === 'writing') && (
           <>
             <div className="ed-sec">Identity</div>
@@ -256,10 +272,30 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
             </p>
             <div className="cr-grid">
               <label className="ta-field">
+                <span>Face</span>
+                <button
+                  type="button"
+                  className="fp-choose"
+                  onClick={() => setPickingFace(true)}
+                  title="Pick a head from the catalog; headshots come from your portrait pack"
+                >
+                  {face ? (
+                    <>
+                      <FaceThumb face={face} />
+                      <span className="fp-choose-label">Tone {face.tone} head</span>
+                    </>
+                  ) : (
+                    <span className="fp-choose-label">Choose face…</span>
+                  )}
+                </button>
+              </label>
+              <label className="ta-field">
                 <span>Skin tone</span>
                 <select value={skinTone} onChange={(e) => setSkinTone(Number(e.target.value))}>
                   <option value={0}>Base look</option>
-                  {form.skinTones.map((t) => (
+                  {[...new Set([...form.skinTones, ...(skinTone ? [skinTone] : [])])]
+                    .sort((a, b) => a - b)
+                    .map((t) => (
                     <option key={t} value={t}>
                       Tone {t}
                     </option>
@@ -348,4 +384,19 @@ function gearLabel(asset: string): string {
     .replace(/_/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/([A-Za-z])(\d)/g, '$1 $2');
+}
+
+/** Tiny headshot preview for the chosen face; falls back to a tone chip. */
+function FaceThumb({ face }: { face: FaceOption }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <span className="fp-thumb-fallback">T{face.tone}</span>;
+  return (
+    <img
+      className="fp-thumb"
+      src={`portrait://${face.portraitId}`}
+      alt=""
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
 }
