@@ -14,7 +14,13 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { applyPlayerEdit, buildEditForm, editedPathFor } from '../src/main/editor.ts';
+import {
+  applyPlayerEdit,
+  applyResourceEdit,
+  buildEditForm,
+  buildResourceForm,
+  editedPathFor
+} from '../src/main/editor.ts';
 import { loadFranchise, mainTable, refFromRecord, val } from '../src/main/parser/franchise.ts';
 
 const savePath = process.argv[2] ?? 'samples/DYNASTY-VIRGINIA-MIDSEASON';
@@ -150,6 +156,59 @@ await rejects('reject: unknown rating field', () =>
 await rejects('reject: jersey out of range', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, jersey: 100 }, dir));
 check('rejections left the edited file unchanged', sha(editedPath) === before);
+
+// --- 5. program resources: Fundraising + recruiter hours ---
+// A user-controlled team row: find one via isUserTeam? The harness stays
+// save-agnostic — use the first team whose budget reads non-zero.
+{
+  const teams = mainTable(readBack2, 'Team');
+  await teams.readRecords(['ProgramPointBudget', 'LongName']);
+  let teamRow = -1;
+  for (let i = 0; i < teams.records.length; i++) {
+    const r = teams.records[i];
+    if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) {
+      teamRow = i;
+      break;
+    }
+  }
+  const rf = await buildResourceForm(readBack2, teamRow, editedPath);
+  check('resource form: school + caps read', rf.school.length > 0 && rf.budget.headroom >= 0,
+    `${rf.school}, headroom ${rf.budget.headroom}`);
+  check('resource form: hours block present', rf.hours !== null,
+    rf.hours ? `${rf.hours.total} total (headroom ${rf.hours.headroom})` : 'missing');
+
+  const raise = Math.min(500, rf.budget.headroom);
+  const res = await applyResourceEdit(readBack2, editedPath, { teamRow, kind: 'nil', amount: raise }, dir);
+  check('fundraising: applied in full', res.applied === raise, `+${res.applied}`);
+  const fr5 = await loadFranchise(editedPath);
+  const t5 = mainTable(fr5, 'Team');
+  await t5.readRecords();
+  const w = t5.records[teamRow];
+  const pillarSum =
+    Number(val(w, 'BrandExposureProgramPoints')) + Number(val(w, 'ProgramTraditionsProgramPoints')) +
+    Number(val(w, 'StadiumAtmosphereProgramPoints')) + Number(val(w, 'ConferencePrestigeProgramPoints')) +
+    Number(val(w, 'CoachContractGoalsProgramPoints')) + Number(val(w, 'RolloverProgramPoints'));
+  check('fundraising: budget/remaining/rollover moved together',
+    Number(val(w, 'ProgramPointBudget')) === rf.budget.total + raise &&
+    Number(val(w, 'RemainingProgramPoints')) === rf.budget.remaining + raise &&
+    Number(val(w, 'RolloverProgramPoints')) === rf.budget.rollover + raise);
+  check('fundraising: pillars still sum to the total', pillarSum === Number(val(w, 'ProgramPointBudget')),
+    `${pillarSum} vs ${val(w, 'ProgramPointBudget')}`);
+
+  if (rf.hours) {
+    const hourRaise = Math.min(100, rf.hours.headroom);
+    const res2 = await applyResourceEdit(fr5, editedPath, { teamRow, kind: 'hours', amount: hourRaise }, dir);
+    check('hours: applied in full', res2.applied === hourRaise, `+${res2.applied}`);
+    const overCap = await applyResourceEdit(
+      await loadFranchise(editedPath), editedPath, { teamRow, kind: 'hours', amount: 30000 }, dir
+    ).then((r) => r.applied, () => -1);
+    check('hours: oversize raise clamps to the 4095 cap headroom', overCap >= 0 && overCap < 30000,
+      `applied ${overCap}`);
+  }
+  await rejects('resource reject: zero amount', async () =>
+    applyResourceEdit(await loadFranchise(editedPath), editedPath, { teamRow, kind: 'nil', amount: 0 }, dir));
+  check('source still untouched after resource edits', sha(work) === sourceHash);
+}
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

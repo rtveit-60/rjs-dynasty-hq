@@ -263,6 +263,28 @@ function registerIpc(): void {
     return result;
   });
 
+  // Current budget/hours for the Fundraising and Hire Recruiters dialogs.
+  ipcMain.handle('resource:form', () => {
+    const { savePath } = getSettings();
+    return savePath ? pipeline.resourceForm(savePath) : null;
+  });
+
+  // Fundraising / recruiter hours — the same _RJsEdited write path as player
+  // edits, then the dashboard follows the edited file.
+  ipcMain.handle('resource:edit', async (_e, req: unknown) => {
+    const r = req as { kind?: unknown; amount?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || (r?.kind !== 'nil' && r?.kind !== 'hours') || !Number.isInteger(r?.amount)) {
+      return { ok: false, message: 'Nothing to apply.' };
+    }
+    const result = await pipeline.editResource({ kind: r.kind, amount: r.amount as number }, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // Returns the pre-extracted playbook the team runs (formations, plays, alignments,
   // routes): the coach's selected book by its playbook row, falling back to the scheme
   // archetype. null if nothing matches.

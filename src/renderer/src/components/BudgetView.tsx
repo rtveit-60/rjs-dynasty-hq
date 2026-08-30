@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import type { Snapshot } from '../../../shared/types.ts';
 import { fmt, stars } from '../lib/format.ts';
 import InfoDot from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
+import ResourceModal from './ResourceModal.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -11,6 +13,7 @@ function GradeBadge({ grade }: { grade: string | null }) {
 }
 
 export default function BudgetView({ school }: { school: School }) {
+  const [fundraising, setFundraising] = useState(false);
   const b = school.budget;
   if (!b) return <div className="empty">No budget data found in this save.</div>;
   const spent = b.spending.reduce((sum, s) => sum + s.points, 0);
@@ -21,7 +24,13 @@ export default function BudgetView({ school }: { school: School }) {
 
   return (
     <>
-      <div className="statgrid" style={{ marginTop: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+        <button type="button" className="btn" onClick={() => setFundraising(true)}>
+          FUNDRAISING
+        </button>
+      </div>
+      {fundraising && <ResourceModal kind="nil" onClose={() => setFundraising(false)} />}
+      <div className="statgrid" style={{ marginTop: 10 }}>
         <div className="stat">
           <div className="lbl">
             Program Budget <GradeBadge grade={b.overallGrade} />
