@@ -19,6 +19,7 @@ import {
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 import BoardMark from './BoardMark.tsx';
+import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
@@ -378,6 +379,7 @@ export default function RecruitingView() {
         </div>
       ) : (
         <>
+          <BoardSaveBar />
           <div className="tbl-wrap tbl-scroll">
             <table className="tbl tbl-wide">
               <thead>
@@ -417,6 +419,7 @@ export default function RecruitingView() {
                           {board === 'portal' && r.classType !== 'HS' ? ` · ${r.classType}` : ''}
                         </span>
                         {r.onBoard && <BoardMark />}
+                        {!r.committedTo && <BoardToggle recruitRow={r.row} onBoard={r.onBoard} />}
                         {r.quality === 'GEM' && <span className="btag gem">Gem</span>}
                         {r.quality === 'BUST' && <span className="btag bust">Bust</span>}
                       </td>

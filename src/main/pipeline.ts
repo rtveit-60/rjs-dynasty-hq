@@ -9,6 +9,7 @@ import type {
   PlayerEditForm,
   PlayerEditResult,
   Profile,
+  BoardEditRequest,
   CoachFireRequest,
   DepthChartEditRequest,
   ResourceEditRequest,
@@ -20,6 +21,7 @@ import type {
 } from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
 import {
+  applyBoardEdit,
   applyCoachFire,
   applyDepthChartEdit,
   applyPlayerEdit,
@@ -283,6 +285,22 @@ export class Pipeline {
         editedPath,
         message: `Depth chart updated (${windows} window${windows === 1 ? '' : 's'}) — saved to ${basename(editedPath)}.`
       };
+    });
+  }
+
+  /** Stage recruits onto or off the target board, via the guarded shell. */
+  async editBoard(req: BoardEditRequest, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, added, removed } = await applyBoardEdit(
+        this.franchise,
+        savePath,
+        { teamRow, changes: req.changes },
+        app.getPath('userData')
+      );
+      const parts = [added ? `${added} added` : '', removed ? `${removed} removed` : ''].filter(Boolean);
+      return { editedPath, message: `Board updated (${parts.join(', ')}) — saved to ${basename(editedPath)}.` };
     });
   }
 

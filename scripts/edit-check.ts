@@ -15,6 +15,7 @@ import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync } from
 import os from 'node:os';
 import path from 'node:path';
 import {
+  applyBoardEdit,
   applyCoachFire,
   applyDepthChartEdit,
   applyPlayerEdit,
@@ -321,6 +322,87 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const restored = String(val(c3.records[cpuHC], 'ContractStatus'));
   check('fire: undo persisted', restored === 'Signed' || restored === 'First_Active', restored);
   check('source still untouched after fire edits', sha(work) === sourceHash);
+}
+
+// --- 8. board membership: remove + add round-trips + rejections ---
+{
+  const fr = await loadFranchise(editedPath);
+  const teams = mainTable(fr, 'Team');
+  await teams.readRecords();
+  let teamRow = -1;
+  for (let i = 0; i < teams.records.length; i++) {
+    const r = teams.records[i];
+    if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) {
+      teamRow = i;
+      break;
+    }
+  }
+  const boardRows = async (franchise: any): Promise<Set<number>> => {
+    const t = mainTable(franchise, 'Team');
+    await t.readRecords();
+    const bRef = refFromRecord(t.records[teamRow], 'RecruitingBoard');
+    const bT = franchise.getTableById(bRef!.tableId);
+    if (!bT.recordsRead) await bT.readRecords();
+    const lRef = refFromRecord(bT.records[bRef!.row], 'Recruits');
+    const lT = franchise.getTableById(lRef!.tableId);
+    if (!lT.recordsRead) await lT.readRecords();
+    const arr = lT.records[lRef!.row];
+    const out = new Set<number>();
+    for (let i = 0; i < (arr.arraySize ?? 0); i++) {
+      const tr = refFromRecord(arr, `RecruitTarget${i}`);
+      if (!tr || (tr.tableId === 0 && tr.row === 0)) continue;
+      const tT = franchise.getTableById(tr.tableId);
+      if (!tT.recordsRead) await tT.readRecords();
+      const rRef = refFromRecord(tT.records[tr.row], 'Recruit');
+      if (rRef) out.add(rRef.row);
+    }
+    return out;
+  };
+
+  const before = await boardRows(fr);
+  check('board: resolves', before.size > 0, `${before.size} targets`);
+  const removeTarget = [...before][0];
+
+  // an uncommitted recruit who is NOT on this board
+  const recruitsT = mainTable(fr, 'Recruit');
+  await recruitsT.readRecords(['Player', 'RecruitStage']);
+  let addTarget = -1;
+  let committedRecruit = -1;
+  for (let i = 0; i < recruitsT.records.length; i++) {
+    const r = recruitsT.records[i];
+    if (r.isEmpty) continue;
+    const committed = String(val(r, 'RecruitStage') ?? '').includes('Committed');
+    if (committedRecruit < 0 && committed) committedRecruit = i;
+    if (addTarget < 0 && !committed && !before.has(i)) addTarget = i;
+    if (addTarget >= 0 && committedRecruit >= 0) break;
+  }
+  check('board: found an addable recruit', addTarget >= 0, `recruit row ${addTarget}`);
+
+  const res = await applyBoardEdit(
+    fr, editedPath,
+    { teamRow, changes: [{ recruitRow: removeTarget, action: 'remove' }, { recruitRow: addTarget, action: 'add' }] },
+    dir
+  );
+  check('board: batch applied', res.added === 1 && res.removed === 1);
+  const after = await boardRows(await loadFranchise(editedPath));
+  check('board: add persisted through cold reload', after.has(addTarget));
+  check('board: remove persisted through cold reload', !after.has(removeTarget));
+  check('board: count held', after.size === before.size, `${before.size} -> ${after.size}`);
+
+  const fr2 = await loadFranchise(editedPath);
+  await rejects('board reject: already on the board', () =>
+    applyBoardEdit(fr2, editedPath, { teamRow, changes: [{ recruitRow: addTarget, action: 'add' }] }, dir));
+  await rejects('board reject: not on the board', () =>
+    applyBoardEdit(fr2, editedPath, { teamRow, changes: [{ recruitRow: removeTarget, action: 'remove' }] }, dir));
+  if (committedRecruit >= 0) {
+    await rejects('board reject: committed recruit', () =>
+      applyBoardEdit(fr2, editedPath, { teamRow, changes: [{ recruitRow: committedRecruit, action: 'add' }] }, dir));
+  }
+  await rejects('board reject: duplicate change', () =>
+    applyBoardEdit(fr2, editedPath, { teamRow, changes: [
+      { recruitRow: addTarget, action: 'remove' }, { recruitRow: addTarget, action: 'add' }
+    ] }, dir));
+  check('source still untouched after board edits', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

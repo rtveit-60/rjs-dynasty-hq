@@ -27,11 +27,16 @@ interface HQStore {
   profileStack: ProfileRequest[];
   /** Team row whose HQ is being browsed view-only; null = your own program. */
   browseRow: number | null;
+  /** Staged board membership changes, recruit row -> action, shared by both boards. */
+  boardPending: Record<number, 'add' | 'remove'>;
 
   init: () => Promise<void>;
   setNav: (nav: NavKey) => void;
   /** Open another school's Team HQ (view-only); null returns to your own. */
   browseHQ: (row: number | null) => void;
+  /** Stage/unstage a board membership change for a recruit. */
+  toggleBoardPending: (recruitRow: number, action: 'add' | 'remove') => void;
+  clearBoardPending: () => void;
   openProfile: (req: ProfileRequest) => void;
   backProfile: () => void;
   closeProfiles: () => void;
@@ -60,11 +65,13 @@ export const useHQ = create<HQStore>((set, get) => ({
   effectiveZoom: 1,
   profileStack: [],
   browseRow: null,
+  boardPending: {},
 
   init: async () => {
     if (initialized) return;
     initialized = true;
-    window.hq.onSnapshot((snapshot) => set({ snapshot }));
+    // A fresh parse resets staged board changes — the board it staged against moved.
+    window.hq.onSnapshot((snapshot) => set({ snapshot, boardPending: {} }));
     // Main can change settings on its own (new-save auto-scope) — mirror those too.
     window.hq.onSettings((settings) => set({ settings }));
     window.hq.onStatus((status) => set({ status }));
@@ -81,6 +88,15 @@ export const useHQ = create<HQStore>((set, get) => ({
 
   browseHQ: (row) =>
     set(() => (row === null ? { browseRow: null } : { browseRow: row, nav: 'team', profileStack: [] })),
+
+  toggleBoardPending: (recruitRow, action) =>
+    set((s) => {
+      const next = { ...s.boardPending };
+      if (next[recruitRow] === action) delete next[recruitRow];
+      else next[recruitRow] = action;
+      return { boardPending: next };
+    }),
+  clearBoardPending: () => set({ boardPending: {} }),
 
   openProfile: (req) =>
     set((s) => {

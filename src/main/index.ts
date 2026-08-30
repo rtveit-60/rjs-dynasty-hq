@@ -285,6 +285,21 @@ function registerIpc(): void {
     return result;
   });
 
+  // Stage recruits onto or off the user's target board — the _RJsEdited path.
+  ipcMain.handle('board:edit', async (_e, req: unknown) => {
+    const r = req as { changes?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !Array.isArray(r?.changes) || !r.changes.length) {
+      return { ok: false, message: 'Nothing to save.' };
+    }
+    const result = await pipeline.editBoard({ changes: r.changes as never }, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // Mark a CPU coach to be fired at season's end (the game's own PendingFire state).
   ipcMain.handle('coach:fire', async (_e, req: unknown) => {
     const r = req as { coachRow?: unknown; undo?: unknown };
@@ -592,7 +607,7 @@ function createWindow(): void {
             for (const label of (process.env['HQ_CAPTURE_CLICK'] ?? '').split(',').filter(Boolean)) {
               // Prefix match tolerates count badges inside the control ("THE WIRE 133").
               await win!.webContents.executeJavaScript(
-                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
+                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button,.bd-btn')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
               );
               await new Promise((r) => setTimeout(r, 700));
             }

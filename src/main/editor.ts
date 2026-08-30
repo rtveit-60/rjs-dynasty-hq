@@ -333,6 +333,240 @@ export async function applyPlayerEdit(
   });
 }
 
+// --- Recruiting board membership (add/remove targets) -----------------------
+
+const ZERO_REF = '0'.repeat(32);
+/** Fresh-target defaults, from the 966 untouched targets across all 138 boards. */
+const FRESH_INFLUENCE_DELTA = 700;
+const FRESH_SCHOLARSHIP_BONUS = 700;
+
+interface BoardHandles {
+  board: any;
+  arr: any;
+  arrCapacity: number;
+  targetTable: any;
+  pitchTable: any;
+  recruitTable: any;
+  recruitTableId: number;
+  /** recruitRow -> board array slot index. */
+  slotOf: Map<number, number>;
+}
+
+async function boardHandles(franchise: any, teamRow: number): Promise<BoardHandles> {
+  const teamRec = await teamRecord(franchise, teamRow);
+  const bRef = refFromRecord(teamRec, 'RecruitingBoard');
+  const bTable = bRef && (await tableById(franchise, bRef.tableId));
+  const board = bTable?.records?.[bRef!.row];
+  if (!board?._fields?.Recruits) throw new Error('No recruiting board in the save for this school.');
+  const lRef = refFromRecord(board, 'Recruits');
+  const lTable = lRef && (await tableById(franchise, lRef.tableId));
+  const arr = lTable?.records?.[lRef!.row];
+  if (!arr) throw new Error('The board carries no target list.');
+  const arrCapacity = Object.keys(arr._fields ?? {}).length;
+
+  const recruitTable = mainTable(franchise, 'Recruit');
+  await recruitTable.readRecords(['Player', 'RecruitStage']);
+  const recruitTableId = recruitTable.header?.tableId ?? -1;
+
+  // The user's target table, from an existing entry when one exists.
+  let targetTable: any = null;
+  const slotOf = new Map<number, number>();
+  for (let i = 0; i < (arr.arraySize ?? 0); i++) {
+    const tr = refFromRecord(arr, `RecruitTarget${i}`);
+    if (!tr || (tr.tableId === 0 && tr.row === 0)) continue;
+    const tT = await tableById(franchise, tr.tableId);
+    const rec = tT?.records?.[tr.row];
+    if (!targetTable && tT) targetTable = tT;
+    const rRef = rec && refFromRecord(rec, 'Recruit');
+    if (rRef && rRef.tableId === recruitTableId) slotOf.set(rRef.row, i);
+  }
+  if (!targetTable) {
+    targetTable = (franchise.tables as any[]).find((t) => t?.name === 'UserRecruitTarget') ?? null;
+    if (targetTable && !targetTable.recordsRead) await targetTable.readRecords();
+  }
+  if (!targetTable) throw new Error('No user target table in the save.');
+
+  // The pitch table, from an existing target's ActivePitches ref.
+  let pitchTable: any = null;
+  for (const rec of targetTable.records as any[]) {
+    if (rec.isEmpty) continue;
+    const pRef = refFromRecord(rec, 'ActivePitches');
+    if (pRef && !(pRef.tableId === 0 && pRef.row === 0)) {
+      pitchTable = await tableById(franchise, pRef.tableId);
+      break;
+    }
+  }
+  if (!pitchTable) {
+    pitchTable = (franchise.tables as any[])
+      .filter((t) => t?.name === 'ActiveRecruitingPitch[]')
+      .sort((a, b) => (b.header?.recordCapacity ?? 0) - (a.header?.recordCapacity ?? 0))[0];
+    if (pitchTable && !pitchTable.recordsRead) await pitchTable.readRecords();
+  }
+  if (!pitchTable) throw new Error('No pitch table in the save.');
+  return { board, arr, arrCapacity, targetTable, pitchTable, recruitTable, recruitTableId, slotOf };
+}
+
+function firstEmptyRow(table: any): number {
+  for (let i = 0; i < table.records.length; i++) if (table.records[i].isEmpty) return i;
+  return -1;
+}
+
+/**
+ * Add existing class recruits to the user's target board, or remove targets
+ * from it, and write the _RJsEdited sibling. Initialization for new targets
+ * mirrors the fresh-target pattern the game itself leaves on every AI board
+ * (see RESEARCH); removal mirrors the game's own churn: the target row and
+ * its pitch row empty, and the array compacts.
+ */
+export async function applyBoardEdit(
+  franchise: any,
+  savePath: string,
+  req: { teamRow: number; changes: { recruitRow: number; action: 'add' | 'remove' }[] },
+  backupDir: string
+): Promise<{ editedPath: string; added: number; removed: number }> {
+  if (!req.changes.length) throw new Error('No board changes to save.');
+  const h = await boardHandles(franchise, req.teamRow);
+
+  // NIL expectations for a recruit, learned from any other school's target row.
+  const aiTable = (franchise.tables as any[])
+    .filter((t) => t?.name === 'RecruitTarget')
+    .sort((a, b) => (b.header?.recordCapacity ?? 0) - (a.header?.recordCapacity ?? 0))[0];
+  const nilByRecruit = new Map<number, { exp: number; orig: number; bonus: number }>();
+  if (aiTable) {
+    if (!aiTable.recordsRead) await aiTable.readRecords();
+    for (const rec of aiTable.records as any[]) {
+      if (rec.isEmpty) continue;
+      const rRef = refFromRecord(rec, 'Recruit');
+      if (!rRef || rRef.tableId !== h.recruitTableId || nilByRecruit.has(rRef.row)) continue;
+      nilByRecruit.set(rRef.row, {
+        exp: Number(val(rec, 'NILExpectation') ?? 0),
+        orig: Number(val(rec, 'OriginalNILExpectation') ?? 0),
+        bonus: Number(val(rec, 'CurrentScholarshipBonus') ?? FRESH_SCHOLARSHIP_BONUS)
+      });
+    }
+  }
+
+  // ---- validate everything before touching anything ----
+  const seen = new Set<number>();
+  const adds: number[] = [];
+  const removes: number[] = [];
+  for (const c of req.changes) {
+    if (!Number.isInteger(c.recruitRow) || c.recruitRow < 0) throw new Error('Bad recruit row.');
+    if (seen.has(c.recruitRow)) throw new Error('The same recruit appears twice in the changes.');
+    seen.add(c.recruitRow);
+    const rRec = h.recruitTable.records?.[c.recruitRow];
+    if (!rRec || rRec.isEmpty) throw new Error(`No recruit at row ${c.recruitRow}.`);
+    const committed = String(val(rRec, 'RecruitStage') ?? '').includes('Committed');
+    if (committed) {
+      throw new Error('Committed recruits are managed by the game — the board cannot change them here.');
+    }
+    if (c.action === 'remove') {
+      if (!h.slotOf.has(c.recruitRow)) throw new Error(`That recruit is not on the board.`);
+      removes.push(c.recruitRow);
+    } else {
+      if (h.slotOf.has(c.recruitRow)) throw new Error(`That recruit is already on the board.`);
+      adds.push(c.recruitRow);
+    }
+  }
+  const finalCount = (h.arr.arraySize ?? 0) - removes.length + adds.length;
+  if (finalCount > h.arrCapacity) {
+    throw new Error(`The board holds at most ${h.arrCapacity} targets.`);
+  }
+  // Empty-row supply for the adds (rows freed by this batch's removes count).
+  let targetSupply = removes.length;
+  let pitchSupply = removes.length;
+  for (const rec of h.targetTable.records as any[]) if (rec.isEmpty) targetSupply++;
+  for (const rec of h.pitchTable.records as any[]) if (rec.isEmpty) pitchSupply++;
+  if (adds.length > targetSupply || adds.length > pitchSupply) {
+    throw new Error('The save has no free target slots left.');
+  }
+
+  // ---- removes, highest slot first so compaction never moves a pending one ----
+  const removeSlots = removes
+    .map((recruitRow) => ({ recruitRow, slot: h.slotOf.get(recruitRow)! }))
+    .sort((a, b) => b.slot - a.slot);
+  for (const { slot } of removeSlots) {
+    const tr = refFromRecord(h.arr, `RecruitTarget${slot}`)!;
+    const target = h.targetTable.records[tr.row];
+    const hours = Number(val(target, 'ProspectHoursSpentCurrent') ?? 0);
+    if (hours > 0) {
+      const assigned = Number(val(h.board, 'RecruitingHoursAssigned') ?? 0);
+      h.board.RecruitingHoursAssigned = Math.max(0, assigned - hours);
+    }
+    const pRef = refFromRecord(target, 'ActivePitches');
+    const last = (h.arr.arraySize ?? 1) - 1;
+    if (slot !== last) {
+      h.arr[`RecruitTarget${slot}`] = h.arr._fields[`RecruitTarget${last}`].value;
+    }
+    h.arr[`RecruitTarget${last}`] = ZERO_REF; // shrinks arraySize
+    target.empty();
+    if (pRef && !(pRef.tableId === 0 && pRef.row === 0)) {
+      h.pitchTable.records[pRef.row]?.empty();
+    }
+  }
+
+  // ---- adds: allocate pitch + target rows, then append to the array ----
+  const targetTableId = h.targetTable.header?.tableId ?? -1;
+  const pitchTableId = h.pitchTable.header?.tableId ?? -1;
+  for (const recruitRow of adds) {
+    const pitchRow = firstEmptyRow(h.pitchTable);
+    const targetRow = firstEmptyRow(h.targetTable);
+    if (pitchRow < 0 || targetRow < 0) throw new Error('The save has no free target slots left.');
+    const pitch = h.pitchTable.records[pitchRow];
+    // A fresh pitch row is three zero refs — the dominant shape on every board.
+    pitch.ActiveRecruitingPitch0 = ZERO_REF;
+
+    const t = h.targetTable.records[targetRow];
+    const nil = nilByRecruit.get(recruitRow) ?? { exp: 0, orig: 0, bonus: FRESH_SCHOLARSHIP_BONUS };
+    t.Recruit = refString(h.recruitTableId, recruitRow);
+    t.ActivePitches = refString(pitchTableId, pitchRow);
+    t.ScheduledVisit = ZERO_REF;
+    if (t._fields?.RecruitingFeedback) t.RecruitingFeedback = ZERO_REF;
+    if (t._fields?.ImmediateRecruitingFeedback) t.ImmediateRecruitingFeedback = ZERO_REF;
+    t.ProspectHoursSpentCurrent = 0;
+    t.ProspectInfluenceDelta = FRESH_INFLUENCE_DELTA;
+    t.ProspectInfluenceTotal = 0;
+    t.ProspectInfluenceTotalLastWeek = 0;
+    t.UnlockedIntelBitfield = 0;
+    t.VisitRecruitsSchool = false;
+    t.IsFavorite = false;
+    t.SendTheHouse = false;
+    t.ContactFriendsAndFamily = false;
+    t.ContactHighSchoolCoaches = false;
+    t.SearchSocialMedia = false;
+    t.CommittedWeekNumber = 0;
+    t.NILExpectation = nil.exp;
+    t.OriginalNILExpectation = nil.orig;
+    t.CurrentNILOffer = 0;
+    t.CurrentScholarshipBonus = nil.bonus;
+    t.ScholarshipStatus = 'None';
+    t.SwayPitch = 'Invalid';
+
+    h.arr[`RecruitTarget${h.arr.arraySize}`] = refString(targetTableId, targetRow); // grows
+  }
+  // The library's own crash-prevention pass over the empty chains we touched.
+  try {
+    h.targetTable.recalculateEmptyRecordReferences?.();
+    h.pitchTable.recalculateEmptyRecordReferences?.();
+  } catch {
+    // bookkeeping helper only; the write itself is verified below
+  }
+
+  const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const h2 = await boardHandles(check, req.teamRow);
+    for (const r of adds) {
+      if (!h2.slotOf.has(r)) throw new Error('An added recruit did not read back on the board.');
+    }
+    for (const r of removes) {
+      if (h2.slotOf.has(r)) throw new Error('A removed recruit still reads back on the board.');
+    }
+    if ((h2.arr.arraySize ?? 0) !== finalCount) {
+      throw new Error('The board count did not read back as expected.');
+    }
+  });
+  return { editedPath, added: adds.length, removed: removes.length };
+}
+
 // --- Fire Coach -------------------------------------------------------------
 
 /** Names the library may hand back for the two contract states we flip. */

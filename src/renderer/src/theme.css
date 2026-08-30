@@ -4482,3 +4482,45 @@ table.tbl.tbl-wide {
 .fire-copy strong {
   color: var(--ink);
 }
+
+/* --- Board membership stage buttons (+ add / x remove) ------------------- */
+
+.bd-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-3);
+  font: 700 11px/1 var(--font-ui);
+  cursor: pointer;
+  vertical-align: middle;
+  opacity: 0;
+  transition: opacity 80ms;
+}
+
+tr:hover .bd-btn,
+.bd-btn.staged {
+  opacity: 1;
+}
+
+.bd-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-3);
+}
+
+.bd-btn.staged.add {
+  color: var(--good);
+  border-color: var(--good);
+}
+
+.bd-btn.staged.remove {
+  color: var(--bad);
+  border-color: var(--bad);
+}
