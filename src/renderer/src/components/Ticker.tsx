@@ -110,8 +110,15 @@ export default function Ticker({
         </span>
       ];
     }
+    // Data honesty for a season with no stats yet: an empty strip reads as a
+    // bug, so say why it is empty instead.
+    const empty = [
+      <span key="empty" className="tk-item">
+        <span className="rec">Season stats fill in after the first games.</span>
+      </span>
+    ];
     if (mode === 'leaders') {
-      return leaders.categories.flatMap((c) =>
+      const rows = leaders.categories.flatMap((c) =>
         c.rows.slice(0, 2).map((r, i) => (
           <span key={`${c.key}${i}`} className="tk-item">
             <span className="rk">{c.short}</span>
@@ -123,8 +130,9 @@ export default function Ticker({
           </span>
         ))
       );
+      return rows.length ? rows : empty;
     }
-    return AWARD_WATCH.flatMap((a) => {
+    const races = AWARD_WATCH.flatMap((a) => {
       const cat = leaders.categories.find((c) => c.key === a.cat);
       const r = cat?.rows[0];
       if (!r) return [];
@@ -140,6 +148,7 @@ export default function Ticker({
         </span>
       ];
     });
+    return races.length ? races : empty;
   }, [mode, top25, records, leaders]);
 
   // Marquee only when there is something to scroll; content doubles for a

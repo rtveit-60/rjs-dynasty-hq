@@ -3136,7 +3136,8 @@ table.tbl.tbl-wide {
   margin-top: 14px;
   border: 1px solid var(--line);
   background: var(--paper);
-  overflow: hidden;
+  /* No overflow clip here: the mode menu hangs below the bar. The marquee is
+     already clipped by .tk-strip. */
 }
 
 .tk-cap {
