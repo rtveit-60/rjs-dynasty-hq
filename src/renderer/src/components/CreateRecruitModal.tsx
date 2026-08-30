@@ -266,29 +266,50 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
                   ))}
                 </select>
               </label>
-              {form.gearSlots.map((g) => (
-                <label key={g.slot} className="ta-field">
-                  <span>{g.label}</span>
-                  <select
-                    value={gear[g.slot] ?? ''}
-                    onChange={(e) =>
-                      setGear((prev) => {
-                        const next = { ...prev };
-                        if (e.target.value) next[g.slot] = e.target.value;
-                        else delete next[g.slot];
-                        return next;
-                      })
-                    }
-                  >
-                    <option value="">Base look</option>
-                    {g.options.map((o) => (
-                      <option key={o} value={o}>
-                        {gearLabel(o)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
+              {form.gearSlots.map((g) => {
+                // The facemask list locks to what real players wear with the
+                // chosen helmet; picking a mask first brings its helmet along.
+                const options =
+                  g.slot === 'FaceMask' && gear.HeadWear
+                    ? (form.helmetMasks[gear.HeadWear] ?? g.options)
+                    : g.options;
+                return (
+                  <label key={g.slot} className="ta-field">
+                    <span>{g.label}</span>
+                    <select
+                      value={gear[g.slot] ?? ''}
+                      onChange={(e) =>
+                        setGear((prev) => {
+                          const next = { ...prev };
+                          if (e.target.value) next[g.slot] = e.target.value;
+                          else delete next[g.slot];
+                          if (g.slot === 'HeadWear') {
+                            // A helmet change drops a now-incompatible mask.
+                            const allowed = e.target.value ? (form.helmetMasks[e.target.value] ?? []) : null;
+                            if (next.FaceMask && allowed && !allowed.includes(next.FaceMask)) {
+                              delete next.FaceMask;
+                            }
+                          }
+                          if (g.slot === 'FaceMask' && e.target.value && !next.HeadWear) {
+                            const owner = Object.keys(form.helmetMasks).find((h) =>
+                              form.helmetMasks[h].includes(e.target.value)
+                            );
+                            if (owner) next.HeadWear = owner;
+                          }
+                          return next;
+                        })
+                      }
+                    >
+                      <option value="">Base look</option>
+                      {options.map((o) => (
+                        <option key={o} value={o}>
+                          {gearLabel(o)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })}
             </div>
 
             {(error || (nameProblem && (firstName || lastName))) && (

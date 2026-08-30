@@ -593,6 +593,42 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
       devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: '',
       gear: { FaceMask: 'GearFaceMask_TotallyMadeUp' }
     }, dir));
+  // helmet↔mask compatibility from real co-occurrence
+  const helmets = Object.keys(cform2.helmetMasks);
+  check('create form: helmet-mask compatibility map', helmets.length >= 5 &&
+    helmets.every((h) => cform2.helmetMasks[h].length > 0),
+    helmets.map((h) => `${h.replace('GearHelmet_', '')}×${cform2.helmetMasks[h].length}`).join(' '));
+  const h0 = helmets[0];
+  const foreignMask = helmets.map((h) => cform2.helmetMasks[h]).flat()
+    .find((m) => !cform2.helmetMasks[h0].includes(m));
+  if (foreignMask) {
+    await rejects('create reject: facemask incompatible with helmet', async () =>
+      applyCreateRecruit(await loadFranchise(editedPath), editedPath, {
+        firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
+        devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: '',
+        gear: { HeadWear: h0, FaceMask: foreignMask }
+      }, dir));
+  }
+  // a mask alone brings its helmet
+  const soloMask = cform2.helmetMasks[h0][0];
+  const frM = await loadFranchise(editedPath);
+  const resM = await applyCreateRecruit(frM, editedPath, {
+    firstName: 'Paired', lastName: 'Helmet', position: pos, archetype, stars: 2,
+    devTrait: cform2.devTraits[0], heightIn: 73, weightLb: 205, homeState: state, homeTown: '',
+    gear: { FaceMask: soloMask }
+  }, dir);
+  const frM2 = await loadFranchise(editedPath);
+  const pTM = mainTable(frM2, 'Player');
+  await pTM.readRecords();
+  const vRefM = refFromRecord(pTM.records[resM.playerRow], 'CharacterVisuals');
+  const vTM = frM2.getTableById(vRefM!.tableId);
+  await vTM.readRecords();
+  const vjM = JSON.parse(String(vTM.records[vRefM!.row]._fields.RawData.value));
+  const els = vjM.loadouts.flatMap((l: any) => l.loadoutElements ?? []);
+  const gotHelmet = els.find((e: any) => e.slotType === 'HeadWear')?.itemAssetName;
+  const gotMask = els.find((e: any) => e.slotType === 'FaceMask')?.itemAssetName;
+  check('create: solo mask auto-pairs its helmet', gotMask === soloMask && gotHelmet === h0,
+    `${gotHelmet} :: ${gotMask}`);
   check('source still untouched after styled creation', sha(work) === sourceHash);
 }
 

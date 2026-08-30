@@ -765,8 +765,10 @@ export interface CreateRecruitForm {
   recruitRowsFree: number;
   /** Gear pickers, options aggregated from the save's dressed players. */
   gearSlots: GearSlotOptions[];
-  /** Observed skin tones (1–7 in practice). */
+  /** Observed skin tones (1–8 in practice). */
   skinTones: number[];
+  /** helmet itemAssetName -> facemasks real players wear with it. */
+  helmetMasks: Record<string, string[]>;
   targetFileName: string;
   targetExists: boolean;
 }

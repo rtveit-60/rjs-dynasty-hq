@@ -345,6 +345,7 @@ const VISUALS_TABLE_NAME = 'CharacterVisuals';
 
 /** The marquee gear slots the dialog offers; left/right pairs edit together. */
 const GEAR_SLOTS: { slot: string; label: string; pair?: string }[] = [
+  { slot: 'HeadWear', label: 'Helmet' },
   { slot: 'FaceMask', label: 'Facemask' },
   { slot: 'Visor', label: 'Visor' },
   { slot: 'MouthWear', label: 'Mouthpiece' },
@@ -375,23 +376,33 @@ function parseVisuals(rec: any): any | null {
 /** Per-slot item vocabulary + observed skin tones, from every dressed player. */
 async function gearCatalog(
   franchise: any
-): Promise<{ gearSlots: GearSlotOptions[]; skinTones: number[] }> {
+): Promise<{ gearSlots: GearSlotOptions[]; skinTones: number[]; helmetMasks: Record<string, string[]> }> {
   const vT = visualsTable(franchise);
-  if (!vT) return { gearSlots: [], skinTones: [] };
+  if (!vT) return { gearSlots: [], skinTones: [], helmetMasks: {} };
   if (!vT.recordsRead) await vT.readRecords();
   const bySlot = new Map<string, Set<string>>();
   const tones = new Set<number>();
+  const pairSets = new Map<string, Set<string>>();
   for (const rec of vT.records as any[]) {
     if (rec.isEmpty) continue;
     const j = parseVisuals(rec);
     if (!j) continue;
     if (Number.isInteger(j.skinTone)) tones.add(j.skinTone);
+    let helmet: string | null = null;
+    let mask: string | null = null;
     for (const lo of j.loadouts) {
       for (const el of lo?.loadoutElements ?? []) {
         if (!el?.slotType || !el?.itemAssetName) continue;
         if (!bySlot.has(el.slotType)) bySlot.set(el.slotType, new Set());
         bySlot.get(el.slotType)!.add(el.itemAssetName);
+        if (el.slotType === 'HeadWear') helmet = el.itemAssetName;
+        if (el.slotType === 'FaceMask') mask = el.itemAssetName;
       }
+    }
+    // Helmet↔mask compatibility is whatever real players actually wear.
+    if (helmet && mask) {
+      if (!pairSets.has(helmet)) pairSets.set(helmet, new Set());
+      pairSets.get(helmet)!.add(mask);
     }
   }
   const gearSlots: GearSlotOptions[] = [];
@@ -399,7 +410,9 @@ async function gearCatalog(
     const options = [...(bySlot.get(g.slot) ?? new Set<string>())].sort();
     if (options.length > 1) gearSlots.push({ slot: g.slot, label: g.label, options });
   }
-  return { gearSlots, skinTones: [...tones].sort((a, b) => a - b) };
+  const helmetMasks: Record<string, string[]> = {};
+  for (const [h, set] of pairSets) helmetMasks[h] = [...set].sort();
+  return { gearSlots, skinTones: [...tones].sort((a, b) => a - b), helmetMasks };
 }
 
 /**
@@ -516,7 +529,7 @@ export async function buildCreateForm(franchise: any, savePath: string): Promise
   for (const r of playerTable.records) if (r.isEmpty) playerRowsFree++;
   let recruitRowsFree = 0;
   for (const r of recruitTable.records) if (r.isEmpty) recruitRowsFree++;
-  const { gearSlots, skinTones } = await gearCatalog(franchise);
+  const { gearSlots, skinTones, helmetMasks } = await gearCatalog(franchise);
   const target = editedPathFor(savePath);
   return {
     maxFirstLen: stringCap(sample, 'FirstName', 17),
@@ -533,6 +546,7 @@ export async function buildCreateForm(franchise: any, savePath: string): Promise
     recruitRowsFree,
     gearSlots,
     skinTones,
+    helmetMasks,
     targetFileName: basename(target),
     targetExists: existsSync(target)
   };
@@ -590,10 +604,23 @@ export async function applyCreateRecruit(
   }
   let visualsJson: string | null = null;
   if ((req.skinTone && req.skinTone >= 1) || (req.gear && Object.keys(req.gear).length)) {
-    const { gearSlots } = await gearCatalog(franchise);
+    const { gearSlots, helmetMasks } = await gearCatalog(franchise);
     for (const [slot, item] of Object.entries(req.gear ?? {})) {
       const def = gearSlots.find((g) => g.slot === slot);
       if (!def || !def.options.includes(item)) throw new Error(`Unknown gear choice for ${slot}.`);
+    }
+    // Helmet↔mask must be a combination real players wear; a mask alone
+    // brings its matching helmet with it.
+    if (req.gear?.FaceMask) {
+      const mask = req.gear.FaceMask;
+      if (req.gear.HeadWear) {
+        if (!(helmetMasks[req.gear.HeadWear] ?? []).includes(mask)) {
+          throw new Error('That facemask does not fit the chosen helmet.');
+        }
+      } else {
+        const owner = Object.keys(helmetMasks).find((h) => helmetMasks[h].includes(mask));
+        if (owner) req.gear = { ...req.gear, HeadWear: owner };
+      }
     }
     visualsJson = await buildVisualsJson(franchise, req.position, req.skinTone, req.gear);
     if (!visualsJson) throw new Error('No dressed player to base the look on.');
