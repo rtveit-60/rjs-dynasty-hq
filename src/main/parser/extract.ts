@@ -1041,6 +1041,13 @@ const PRO_POTENTIAL_GROUP: Record<string, string> = {
   P: 'P'
 };
 
+/**
+ * Edge-verdict threshold: |net score| past this reads as a real advantage or
+ * disadvantage. Signals cap at race ±3, pipeline ±3, pro potential ±3, home
+ * state ±2 — so 2.5 needs one dominant signal or two moderate ones.
+ */
+const EDGE_SIGNIFICANT = 2.5;
+
 interface SchoolAssets {
   pipelines: Map<string, { level: string; tier: number; value: number }>;
   proGrades: Map<string, number>;
@@ -1222,6 +1229,69 @@ async function extractRecruiting(
         if (race[0]?.isUser && userInfluence > 0) edges.push('Leading');
       }
 
+      // Edge verdict (RJ's rule, 2026-08-30): the user school scored against
+      // the strongest school in the recruit's race. Two regimes: in the race,
+      // the game's own live standing dominates and program comparisons only
+      // modulate (leading must not read red); outside it, program pull can
+      // flag an opportunity but never a loss — you aren't losing a race you
+      // aren't running. Green/red past ±EDGE_SIGNIFICANT; committed recruits
+      // are settled and read neutral.
+      let edgeScore = 0;
+      const edgeParts: string[] = [];
+      const inRace = userInfluence > 0;
+      if (!committed && own) {
+        const part = (d: number, label: string): void => {
+          if (Math.abs(d) < 0.05) return;
+          edgeScore += d;
+          edgeParts.push(`${label} ${d > 0 ? '+' : ''}${(Math.round(d * 10) / 10).toFixed(1)}`);
+        };
+        const topRival = race.find((s) => !s.isUser) ?? null;
+        if (inRace && topRival) {
+          part(
+            (4 * (userInfluence - topRival.influence)) /
+              Math.max(userInfluence, topRival.influence, 1),
+            'race standing'
+          );
+          // Front-runner bump: being the race's #1 is an edge in itself, the
+          // way the old Leading chip treated it.
+          if (race[0]?.isUser) part(1, 'leading');
+        }
+        const staticWeight = inRace ? 0.5 : 1;
+        const rivals = rivalIndexes
+          .map((ti) => schoolAssets.get(ti))
+          .filter((a): a is SchoolAssets => !!a);
+        if (pipeline) {
+          const userTier = own.pipelines.get(pipeline)?.tier ?? 0;
+          const bestRivalTier = Math.max(0, ...rivals.map((r) => r.pipelines.get(pipeline)?.tier ?? 0));
+          part(staticWeight * Math.max(-2, Math.min(2, userTier - bestRivalTier)), 'pipeline');
+        }
+        const group = PRO_POTENTIAL_GROUP[position];
+        if (group) {
+          const userGrade = own.proGrades.get(group) ?? -1;
+          const bestRivalGrade = Math.max(-1, ...rivals.map((r) => r.proGrades.get(group) ?? -1));
+          if (userGrade >= 0 && bestRivalGrade >= 0) {
+            part(staticWeight * Math.max(-2, Math.min(2, (userGrade - bestRivalGrade) / 3)), 'pro potential');
+          }
+        }
+        const stateName = wordSpace(homeState);
+        if (own.state && stateName === own.state) part(staticWeight * 1.5, 'home state');
+        else if (rivals.some((r) => r.state && r.state === stateName)) {
+          part(staticWeight * -1.5, 'rival home state');
+        }
+      }
+      const edgeCall: 'up' | 'even' | 'down' = committed
+        ? 'even'
+        : edgeScore >= EDGE_SIGNIFICANT
+          ? 'up'
+          : inRace && edgeScore <= -EDGE_SIGNIFICANT
+            ? 'down'
+            : 'even';
+      const edgeWhy = committed
+        ? 'Committed — race decided'
+        : edgeParts.length
+          ? `Net ${edgeScore > 0 ? '+' : ''}${(Math.round(edgeScore * 10) / 10).toFixed(1)} vs the top rival${inRace ? '' : ' (not in this race — program pull only)'} — ${edgeParts.join(' · ')}`
+          : 'No comparative signal on this recruit';
+
       const classRaw = String(val(rec, 'Class') ?? '');
       recruits.push({
         row,
@@ -1250,7 +1320,10 @@ async function extractRecruiting(
         userInfluence,
         onBoard: boardRecruitRows.has(row),
         committedTo: committed ? (race[0]?.name ?? null) : null,
-        edges
+        edges,
+        edgeScore: Math.round(edgeScore * 10) / 10,
+        edgeCall,
+        edgeWhy
       });
     }
 
