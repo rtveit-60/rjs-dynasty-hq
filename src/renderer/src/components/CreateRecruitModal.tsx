@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { DEFAULT_MASKS } from '../../../shared/gear.ts';
 import type { CreateRecruitForm, FaceOption } from '../../../shared/types.ts';
 import { archetypeLabel, devLabel, heightFt, recruitPos, spaceOut } from '../lib/format.ts';
 import { Stepper } from './EditPlayerModal.tsx';
-import FacePickerModal from './FacePickerModal.tsx';
+import LookSection, { effectiveLook } from './LookSection.tsx';
 import InfoDot from './InfoDot.tsx';
 
 /**
@@ -12,14 +11,6 @@ import InfoDot from './InfoDot.tsx';
  * here; ratings start from that template and are refined afterwards through
  * the profile's EDIT, like any other recruit.
  */
-/** What the player at this position wears with nothing changed: the base
- *  look, plus the game's own default mask when the base look is maskless. */
-function effectiveBase(form: CreateRecruitForm, position: string): Record<string, string> {
-  const b = { ...(form.baseLook[position] ?? {}) };
-  if (!b.FaceMask && b.HeadWear && DEFAULT_MASKS[b.HeadWear]) b.FaceMask = DEFAULT_MASKS[b.HeadWear];
-  return b;
-}
-
 export default function CreateRecruitModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<CreateRecruitForm | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'writing' | 'saved'>('loading');
@@ -37,9 +28,9 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
   const [homeState, setHomeState] = useState('');
   const [homeTown, setHomeTown] = useState('');
   const [skinTone, setSkinTone] = useState(0);
+  const [bodyType, setBodyType] = useState(0);
   const [gear, setGear] = useState<Record<string, string>>({});
   const [face, setFace] = useState<FaceOption | null>(null);
-  const [pickingFace, setPickingFace] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -59,8 +50,9 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         setArchetype(f.archetypesByPosition[firstPos][0]);
         setHomeState(f.states[0] ?? '');
         setDevTrait(f.devTraits[0] ?? 'Normal');
-        setGear(effectiveBase(f, firstPos));
+        setGear(effectiveLook(f.baseLook[firstPos] ?? {}));
         setSkinTone(f.baseTones[firstPos] ?? 0);
+        setBodyType(f.baseBodies[firstPos] ?? 0);
         setState('ready');
       })
       .catch(() => alive && setState('missing'));
@@ -104,7 +96,7 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
     try {
       // Only differences from the position's shown base are written — an
       // untouched Look & Gear section writes nothing, and '' drops a slot.
-      const base = effectiveBase(form, position);
+      const base = effectiveLook(form.baseLook[position] ?? {});
       const gearOut: Record<string, string> = {};
       for (const g of form.gearSlots) {
         const shown = gear[g.slot] ?? '';
@@ -123,6 +115,7 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         homeState,
         homeTown: homeTown.trim(),
         skinTone: skinTone !== baseTone ? skinTone || undefined : undefined,
+        bodyType: bodyType !== (form.baseBodies[position] ?? 0) ? bodyType : undefined,
         gear: Object.keys(gearOut).length ? gearOut : undefined,
         face: face ?? undefined
       });
@@ -171,18 +164,6 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         {state === 'missing' && <div className="pf-wait">No class to add a recruit to in this save.</div>}
         {state === 'saved' && <div className="ed-saved">{savedNote}</div>}
 
-        {pickingFace && form && (
-          <FacePickerModal
-            faces={form.faces}
-            value={face}
-            onPick={(f) => {
-              setFace(f);
-              // A chosen head carries its native tone — align the visuals tone.
-              if (f) setSkinTone(f.tone);
-            }}
-            onClose={() => setPickingFace(false)}
-          />
-        )}
         {form && (state === 'ready' || state === 'writing') && (
           <>
             <div className="ed-sec">Identity</div>
@@ -208,8 +189,9 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
                     setPosition(pos);
                     setArchetype(form.archetypesByPosition[pos][0]);
                     // A new position wears its own base look.
-                    setGear(effectiveBase(form, pos));
+                    setGear(effectiveLook(form.baseLook[pos] ?? {}));
                     setSkinTone(face ? face.tone : (form.baseTones[pos] ?? 0));
+                    setBodyType(form.baseBodies[pos] ?? 0);
                   }}
                 >
                   {positions.map((p) => (
@@ -294,95 +276,21 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
               facemask list follows the helmet. Item names are the game's own asset
               identifiers, and only your changes are written.
             </p>
-            <div className="cr-grid">
-              <label className="ta-field">
-                <span>Face</span>
-                <button
-                  type="button"
-                  className="fp-choose"
-                  onClick={() => setPickingFace(true)}
-                  title="Pick a head from the catalog; headshots come from your portrait pack"
-                >
-                  {face ? (
-                    <>
-                      <FaceThumb face={face} />
-                      <span className="fp-choose-label">Tone {face.tone} head</span>
-                    </>
-                  ) : (
-                    <span className="fp-choose-label">Choose face…</span>
-                  )}
-                </button>
-              </label>
-              <label className="ta-field">
-                <span>Skin tone</span>
-                <select value={skinTone} onChange={(e) => setSkinTone(Number(e.target.value))}>
-                  {!skinTone && <option value={0}>None</option>}
-                  {[...new Set([...form.skinTones, ...(skinTone ? [skinTone] : [])])]
-                    .sort((a, b) => a - b)
-                    .map((t) => (
-                    <option key={t} value={t}>
-                      Tone {t}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {form.gearSlots.map((g) => {
-                const base = effectiveBase(form, position);
-                const shown = gear[g.slot] ?? '';
-                // The facemask list locks to what real loadouts wear with the
-                // shown helmet.
-                const options =
-                  g.slot === 'FaceMask' && gear.HeadWear
-                    ? (form.helmetMasks[gear.HeadWear] ?? [])
-                    : g.options;
-                return (
-                  <label key={g.slot} className="ta-field">
-                    <span>{g.label}</span>
-                    <select
-                      value={shown}
-                      onChange={(e) =>
-                        setGear((prev) => {
-                          const next = { ...prev };
-                          const v = e.target.value;
-                          if (v) next[g.slot] = v;
-                          else delete next[g.slot];
-                          if (g.slot === 'HeadWear') {
-                            // The mask follows the helmet: kept when it fits,
-                            // else the helmet's own default, else its first,
-                            // else none (some helmets are only worn maskless).
-                            const allowed = v ? (form.helmetMasks[v] ?? []) : [];
-                            if (!next.FaceMask || !allowed.includes(next.FaceMask)) {
-                              const def = DEFAULT_MASKS[v];
-                              const pick = def && allowed.includes(def) ? def : allowed[0];
-                              if (pick) next.FaceMask = pick;
-                              else delete next.FaceMask;
-                            }
-                          }
-                          if (g.slot === 'FaceMask' && v && !next.HeadWear) {
-                            // No helmet shown at all: the mask brings one.
-                            const owner = Object.keys(form.helmetMasks).find((h) =>
-                              form.helmetMasks[h].includes(v)
-                            );
-                            if (owner) next.HeadWear = owner;
-                          }
-                          return next;
-                        })
-                      }
-                    >
-                      {(!base[g.slot] || !shown) && <option value="">None</option>}
-                      {shown && !options.includes(shown) && (
-                        <option value={shown}>{gearLabel(shown)}</option>
-                      )}
-                      {options.map((o) => (
-                        <option key={o} value={o}>
-                          {gearLabel(o)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                );
-              })}
-            </div>
+            <LookSection
+              gearSlots={form.gearSlots}
+              helmetMasks={form.helmetMasks}
+              skinTones={form.skinTones}
+              faces={form.faces}
+              base={effectiveLook(form.baseLook[position] ?? {})}
+              gear={gear}
+              setGear={setGear}
+              skinTone={skinTone}
+              setSkinTone={setSkinTone}
+              face={face}
+              setFace={setFace}
+              bodyType={bodyType}
+              setBodyType={setBodyType}
+            />
 
             {(error || (nameProblem && (firstName || lastName))) && (
               <div className="ed-error">{error ?? nameProblem}</div>
@@ -410,31 +318,5 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         )}
       </div>
     </div>
-  );
-}
-
-/** 'GearFaceMask_Speedflex2Bar_WR' → 'Speedflex 2 Bar WR' — the asset id, made readable. */
-function gearLabel(asset: string): string {
-  return asset
-    .replace(/^Gear_?[A-Za-z]*?_/, '')
-    .replace(/^(Towel|FaceMarks|Backplate|Flakjacket|ArmSleeve)_/, '')
-    .replace(/^shoe_(low|mid|high)_/, '')
-    .replace(/_/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/([A-Za-z])(\d)/g, '$1 $2');
-}
-
-/** Tiny headshot preview for the chosen face; falls back to a tone chip. */
-function FaceThumb({ face }: { face: FaceOption }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <span className="fp-thumb-fallback">T{face.tone}</span>;
-  return (
-    <img
-      className="fp-thumb"
-      src={`portrait://${face.portraitId}`}
-      alt=""
-      draggable={false}
-      onError={() => setFailed(true)}
-    />
   );
 }

@@ -705,3 +705,23 @@ export const DEFAULT_MASKS: Record<string, string> = {
   "GearHelmet_Speed_Flex": "GearFaceMask_Speedflex2Bar",
   "GearHelmet_VicisZero2Trench": "GearFaceMask_VicisZero2Robot"
 };
+/** Top-level blob bodyType value -> the game's name for it (from Team
+ * Builder generated players; the save stores the number). */
+export const BODY_TYPES: { value: number; name: string }[] = [
+  {
+    "value": 0,
+    "name": "Standard_BodyType"
+  },
+  {
+    "value": 1,
+    "name": "Thin_BodyType"
+  },
+  {
+    "value": 2,
+    "name": "Muscular_BodyType"
+  },
+  {
+    "value": 3,
+    "name": "Heavy_BodyType"
+  }
+];

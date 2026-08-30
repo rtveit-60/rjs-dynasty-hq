@@ -25,7 +25,7 @@ import type {
   TargetActionFlags,
   TargetActionForm
 } from '../shared/types.ts';
-import { DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
+import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
@@ -87,7 +87,9 @@ function stringCap(rec: any, field: string, fallback: number): number {
 
 async function playerRecord(franchise: any, playerRow: number): Promise<any> {
   const table = mainTable(franchise, 'Player');
-  await table.readRecords([...EDIT_BASE_FIELDS, ...allRatingFields()]);
+  // Full read: the edit touches fields well past the base list (face, look
+  // refs), and a table first read with a narrow field list never widens.
+  await table.readRecords();
   const rec = table.records?.[playerRow];
   if (!rec || rec.isEmpty) throw new Error('No player at that row in the save.');
   return rec;
@@ -113,7 +115,8 @@ async function isRecruitRow(franchise: any, playerRow: number): Promise<boolean>
 export async function buildEditForm(
   franchise: any,
   playerRow: number,
-  savePath: string
+  savePath: string,
+  portraitsDir?: string | null
 ): Promise<PlayerEditForm> {
   const rec = await playerRecord(franchise, playerRow);
   const recruit = await isRecruitRow(franchise, playerRow);
@@ -149,6 +152,31 @@ export async function buildEditForm(
       rank: String(val(rec, `PhysicalAbility${slot}`) ?? 'None')
     }));
 
+  // Appearance: the player's own look (recruits are usually undressed until
+  // enrollment), plus the same catalogs the create dialog offers.
+  let look: Record<string, string> | null = null;
+  let lookTone: number | null = null;
+  let lookBody: number | null = null;
+  const vT = visualsTable(franchise);
+  const lookRef = refFromRecord(rec, 'CharacterVisuals');
+  if (vT && lookRef && !(lookRef.tableId === 0 && lookRef.row === 0)) {
+    if (!vT.recordsRead) await vT.readRecords();
+    const own = parseVisuals(vT.records[lookRef.row]);
+    if (own) {
+      const summary = baseLookSummary(own);
+      look = summary.items;
+      lookTone = summary.tone;
+      lookBody = summary.body;
+    }
+  }
+  const { gearSlots, skinTones, helmetMasks } = await gearCatalog(franchise);
+  const faces = annotateFaceShots(await faceCatalog(franchise), portraitsDir);
+  const ownAsset = String(val(rec, 'GenericHeadAssetName') ?? '');
+  const currentFace = {
+    portraitId: Number(val(rec, 'PLYR_PORTRAIT') ?? 0),
+    unique: !!ownAsset && !ownAsset.startsWith('Generic_')
+  };
+
   const target = editedPathFor(savePath);
   const jerseyRaw = Number(val(rec, 'JerseyNum'));
   return {
@@ -169,6 +197,14 @@ export async function buildEditForm(
     mentalOptions,
     rankOptions,
     physical,
+    look,
+    lookTone,
+    lookBody,
+    gearSlots,
+    skinTones,
+    helmetMasks,
+    faces,
+    currentFace,
     targetFileName: basename(target),
     targetExists: existsSync(target)
   };
@@ -322,11 +358,61 @@ export async function applyPlayerEdit(
   const problem = validate(rec, changes);
   if (problem) throw new Error(problem);
 
+  // Appearance settles before anything is applied — a bad look changes nothing.
+  if (changes.face) await validateFace(franchise, changes.face);
+  let lookJson: string | null = null;
+  let lookRow = -1;
+  let lookNewRef = false;
+  let vT: any = null;
+  if (
+    (changes.skinTone && changes.skinTone >= 1) ||
+    changes.bodyType !== undefined ||
+    (changes.gear && Object.keys(changes.gear).length)
+  ) {
+    vT = visualsTable(franchise);
+    if (!vT) throw new Error('This save has no appearance table.');
+    if (!vT.recordsRead) await vT.readRecords();
+    const ref = refFromRecord(rec, 'CharacterVisuals');
+    const own = ref && !(ref.tableId === 0 && ref.row === 0) ? parseVisuals(vT.records[ref.row]) : null;
+    changes.gear = await resolveLook(
+      franchise,
+      own ? baseLookSummary(own).items : {},
+      changes.skinTone,
+      changes.gear,
+      changes.bodyType
+    );
+    if (own) {
+      // the player's own blob updates in place
+      applyLookToObject(own, changes.skinTone, changes.gear, changes.bodyType);
+      lookJson = JSON.stringify(own);
+      lookRow = ref!.row;
+    } else {
+      // an undressed prospect gains a row built from a position-matched base
+      const position = String(val(rec, 'Position') ?? '');
+      lookJson = await buildVisualsJson(franchise, position, changes.skinTone, changes.gear, changes.bodyType);
+      if (!lookJson) throw new Error('No dressed player to base the look on.');
+      lookRow = firstEmptyRow(vT);
+      if (lookRow < 0) throw new Error('The save has no free appearance rows left.');
+      lookNewRef = true;
+    }
+  } else if (changes.skinTone !== undefined) {
+    await resolveLook(franchise, {}, changes.skinTone, undefined); // range check only
+  }
+
   apply(rec, changes);
+  if (changes.face) {
+    rec.PLYR_GENERICHEAD = changes.face.headId;
+    rec.GenericHeadAssetName = changes.face.assetName;
+    if (rec._fields?.PLYR_PORTRAIT) rec.PLYR_PORTRAIT = changes.face.portraitId;
+  }
+  if (lookJson && lookRow >= 0) {
+    vT.records[lookRow].RawData = lookJson;
+    if (lookNewRef) rec.CharacterVisuals = refString(vT.header?.tableId ?? -1, lookRow);
+  }
 
   return writeEditedSave(franchise, savePath, backupDir, async (check) => {
     const table = mainTable(check, 'Player');
-    await table.readRecords(['FirstName', 'LastName', 'JerseyNum']);
+    await table.readRecords(['FirstName', 'LastName', 'JerseyNum', 'GenericHeadAssetName']);
     const written = table.records?.[changes.playerRow];
     const expectFirst = changes.firstName?.trim();
     const expectLast = changes.lastName?.trim();
@@ -334,9 +420,23 @@ export async function applyPlayerEdit(
       !written ||
       (expectFirst !== undefined && String(val(written, 'FirstName')) !== expectFirst) ||
       (expectLast !== undefined && String(val(written, 'LastName')) !== expectLast) ||
-      (changes.jersey !== undefined && Number(val(written, 'JerseyNum')) !== changes.jersey)
+      (changes.jersey !== undefined && Number(val(written, 'JerseyNum')) !== changes.jersey) ||
+      (changes.face !== undefined &&
+        String(val(written, 'GenericHeadAssetName')) !== changes.face.assetName)
     ) {
       throw new Error('The written save did not read back with the edit.');
+    }
+    if (lookJson && lookRow >= 0) {
+      const wvT = visualsTable(check);
+      if (wvT && !wvT.recordsRead) await wvT.readRecords();
+      const wj = wvT && parseVisuals(wvT.records[lookRow]);
+      if (
+        !wj ||
+        (changes.skinTone && changes.skinTone >= 1 && wj.skinTone !== changes.skinTone) ||
+        (changes.bodyType !== undefined && wj.bodyType !== changes.bodyType)
+      ) {
+        throw new Error('The written save did not read back with the new look.');
+      }
     }
   });
 }
@@ -457,8 +557,8 @@ async function pickBaseVisuals(franchise: any, position: string): Promise<any | 
   return null;
 }
 
-/** The base look's effective item per offered slot (first hit wins), + tone. */
-function baseLookSummary(base: any): { items: Record<string, string>; tone: number | null } {
+/** The look's effective item per offered slot (first hit wins), + tone + body. */
+function baseLookSummary(base: any): { items: Record<string, string>; tone: number | null; body: number } {
   const items: Record<string, string> = {};
   const wanted = new Set(GEAR_SLOTS.map((g) => g.slot));
   for (const lo of base?.loadouts ?? []) {
@@ -468,7 +568,12 @@ function baseLookSummary(base: any): { items: Record<string, string>; tone: numb
       }
     }
   }
-  return { items, tone: Number.isInteger(base?.skinTone) ? base.skinTone : null };
+  return {
+    items,
+    tone: Number.isInteger(base?.skinTone) ? base.skinTone : null,
+    // An absent bodyType renders as the game's 0 = Standard.
+    body: Number.isInteger(base?.bodyType) ? base.bodyType : 0
+  };
 }
 
 /**
@@ -480,50 +585,127 @@ async function buildVisualsJson(
   franchise: any,
   position: string,
   skinTone: number | undefined,
-  gear: Record<string, string> | undefined
+  gear: Record<string, string> | undefined,
+  bodyType?: number
 ): Promise<string | null> {
   const base = await pickBaseVisuals(franchise, position);
   if (!base) return null;
+  applyLookToObject(base, skinTone, gear, bodyType);
+  return JSON.stringify(base);
+}
+
+/** Apply tone + gear overrides to a parsed visuals blob, in place. Left/right
+ *  pairs move together; an '' override removes the slot outright. */
+function applyLookToObject(
+  base: any,
+  skinTone: number | undefined,
+  gear: Record<string, string> | undefined,
+  bodyType?: number
+): void {
   if (skinTone && skinTone >= 1) base.skinTone = skinTone;
-  if (gear) {
-    const pairOf = new Map(GEAR_SLOTS.filter((g) => g.pair).map((g) => [g.slot, g.pair!]));
-    const wanted = new Map<string, string>();
-    for (const [slot, item] of Object.entries(gear)) {
-      wanted.set(slot, item);
-      const pair = pairOf.get(slot);
-      if (pair) wanted.set(pair, item);
+  if (bodyType !== undefined) base.bodyType = bodyType;
+  if (!gear) return;
+  const pairOf = new Map(GEAR_SLOTS.filter((g) => g.pair).map((g) => [g.slot, g.pair!]));
+  const wanted = new Map<string, string>();
+  for (const [slot, item] of Object.entries(gear)) {
+    wanted.set(slot, item);
+    const pair = pairOf.get(slot);
+    if (pair) wanted.set(pair, item);
+  }
+  // An empty-string override removes the slot outright (helmets the data
+  // only shows maskless drop the mask rather than keep a fake pair).
+  for (const lo of base.loadouts) {
+    if (Array.isArray(lo?.loadoutElements)) {
+      lo.loadoutElements = lo.loadoutElements.filter(
+        (el: any) => wanted.get(el?.slotType) !== ''
+      );
     }
-    // An empty-string override removes the slot outright (helmets the data
-    // only shows maskless drop the base mask rather than keep a fake pair).
-    for (const lo of base.loadouts) {
-      if (Array.isArray(lo?.loadoutElements)) {
-        lo.loadoutElements = lo.loadoutElements.filter(
-          (el: any) => wanted.get(el?.slotType) !== ''
-        );
-      }
-    }
-    const applied = new Set<string>();
-    for (const lo of base.loadouts) {
-      for (const el of lo?.loadoutElements ?? []) {
-        const item = wanted.get(el.slotType);
-        if (item !== undefined && item !== '') {
-          el.itemAssetName = item;
-          applied.add(el.slotType);
-        }
-      }
-    }
-    // A base look without that slot gains it — the game's own rows mix and
-    // match which slots they carry.
-    const home = base.loadouts.find((lo: any) => Array.isArray(lo?.loadoutElements));
-    if (home) {
-      for (const [slot, item] of wanted) {
-        if (item !== '' && !applied.has(slot)) {
-          home.loadoutElements.push({ slotType: slot, itemAssetName: item });
-        }
+  }
+  const applied = new Set<string>();
+  for (const lo of base.loadouts) {
+    for (const el of lo?.loadoutElements ?? []) {
+      const item = wanted.get(el.slotType);
+      if (item !== undefined && item !== '') {
+        el.itemAssetName = item;
+        applied.add(el.slotType);
       }
     }
   }
-  return JSON.stringify(base);
+  // A look without that slot gains it — the game's own rows mix and match
+  // which slots they carry.
+  const home = base.loadouts.find((lo: any) => Array.isArray(lo?.loadoutElements));
+  if (home) {
+    for (const [slot, item] of wanted) {
+      if (item !== '' && !applied.has(slot)) {
+        home.loadoutElements.push({ slotType: slot, itemAssetName: item });
+      }
+    }
+  }
+}
+
+/**
+ * Validate a look request against the merged catalog and settle the
+ * helmet↔mask coupling against the reference look — the position base for a
+ * new player, the player's own current look for an edit. Returns the gear map
+ * to apply, possibly with a helmet added or the mask swapped/removed.
+ */
+async function resolveLook(
+  franchise: any,
+  refItems: Record<string, string>,
+  skinTone: number | undefined,
+  gear: Record<string, string> | undefined,
+  bodyType?: number
+): Promise<Record<string, string> | undefined> {
+  if (skinTone !== undefined && skinTone !== 0 && !(skinTone >= 1 && skinTone <= 8)) {
+    throw new Error('Skin tone must be 1-8.');
+  }
+  if (bodyType !== undefined && !BODY_TYPES.some((b) => b.value === bodyType)) {
+    throw new Error('Unknown body type.');
+  }
+  if (!gear || !Object.keys(gear).length) return gear;
+  const { gearSlots, helmetMasks } = await gearCatalog(franchise);
+  for (const [slot, item] of Object.entries(gear)) {
+    if (item === '') continue; // explicit removal of the slot
+    const def = gearSlots.find((g) => g.slot === slot);
+    if (!def || !def.options.includes(item)) throw new Error(`Unknown gear choice for ${slot}.`);
+  }
+  // Helmet↔mask must be a combination real loadouts wear; a mask alone keeps
+  // the reference helmet when it fits, else brings a matching helmet.
+  if (gear.FaceMask) {
+    const mask = gear.FaceMask;
+    if (gear.HeadWear) {
+      if (!(helmetMasks[gear.HeadWear] ?? []).includes(mask)) {
+        throw new Error('That facemask does not fit the chosen helmet.');
+      }
+    } else {
+      const refHelmet = refItems['HeadWear'];
+      if (!refHelmet || !(helmetMasks[refHelmet] ?? []).includes(mask)) {
+        const owner = Object.keys(helmetMasks).find((h) => helmetMasks[h].includes(mask));
+        if (owner) gear = { ...gear, HeadWear: owner };
+      }
+    }
+  } else if (gear.HeadWear && gear.FaceMask === undefined) {
+    // A helmet alone must not keep an incompatible mask: swap it to the
+    // helmet's own default (else its first), or drop it for helmets the data
+    // only shows maskless ('' removes the slot). An explicit FaceMask '' is
+    // respected as removal.
+    const allowed = helmetMasks[gear.HeadWear] ?? [];
+    const refMask = refItems['FaceMask'];
+    if (refMask && !allowed.includes(refMask)) {
+      const def = DEFAULT_MASKS[gear.HeadWear];
+      gear = { ...gear, FaceMask: (def && allowed.includes(def) ? def : allowed[0]) ?? '' };
+    }
+  }
+  return gear;
+}
+
+/** The catalog triple must exist exactly as offered — faces are never minted. */
+async function validateFace(franchise: any, face: FaceOption): Promise<void> {
+  const catalog = await faceCatalog(franchise);
+  const hit = catalog.find(
+    (f) => f.assetName === face.assetName && f.headId === face.headId && f.portraitId === face.portraitId
+  );
+  if (!hit) throw new Error('That face is not in the catalog.');
 }
 
 // --- Create a recruit --------------------------------------------------------
@@ -558,6 +740,24 @@ async function faceCatalog(franchise: any): Promise<FaceOption[]> {
     byAsset.set(assetName, { headId, assetName, portraitId, tone });
   }
   return [...byAsset.values()].sort((a, b) => a.tone - b.tone || a.assetName.localeCompare(b.assetName));
+}
+
+/** Faces whose headshot exists in the user's portrait pack sort first within
+ *  each tone, so pickers lead with browsable photos (same lookup the
+ *  portrait:// protocol makes; absence only means the pack lacks the image). */
+function annotateFaceShots(faces: FaceOption[], portraitsDir?: string | null): FaceOption[] {
+  if (portraitsDir && existsSync(portraitsDir)) {
+    for (const f of faces) {
+      f.hasShot = ['png', 'jpg', 'jpeg', 'webp'].some((ext) =>
+        existsSync(join(portraitsDir, `${f.portraitId}.${ext}`))
+      );
+    }
+    faces.sort(
+      (a, b) =>
+        a.tone - b.tone || Number(b.hasShot) - Number(a.hasShot) || a.assetName.localeCompare(b.assetName)
+    );
+  }
+  return faces;
 }
 
 /** Class recruits by archetype: recruitRow + playerRow of a clean template. */
@@ -613,28 +813,16 @@ export async function buildCreateForm(
   // selection the write path makes, snapshotted so the dialog can name it.
   const baseLook: Record<string, Record<string, string>> = {};
   const baseTones: Record<string, number> = {};
+  const baseBodies: Record<string, number> = {};
   for (const pos of Object.keys(archetypesByPosition)) {
     const base = await pickBaseVisuals(franchise, pos);
     if (!base) continue;
-    const { items, tone } = baseLookSummary(base);
+    const { items, tone, body } = baseLookSummary(base);
     baseLook[pos] = items;
     if (tone !== null) baseTones[pos] = tone;
+    baseBodies[pos] = body;
   }
-  const faces = await faceCatalog(franchise);
-  // Faces whose headshot exists in the user's portrait pack sort first within
-  // each tone, so the picker leads with browsable photos (same lookup the
-  // portrait:// protocol makes; absence only means the pack lacks the image).
-  if (portraitsDir && existsSync(portraitsDir)) {
-    for (const f of faces) {
-      f.hasShot = ['png', 'jpg', 'jpeg', 'webp'].some((ext) =>
-        existsSync(join(portraitsDir, `${f.portraitId}.${ext}`))
-      );
-    }
-    faces.sort(
-      (a, b) =>
-        a.tone - b.tone || Number(b.hasShot) - Number(a.hasShot) || a.assetName.localeCompare(b.assetName)
-    );
-  }
+  const faces = annotateFaceShots(await faceCatalog(franchise), portraitsDir);
   const target = editedPathFor(savePath);
   return {
     maxFirstLen: stringCap(sample, 'FirstName', 17),
@@ -654,6 +842,7 @@ export async function buildCreateForm(
     helmetMasks,
     baseLook,
     baseTones,
+    baseBodies,
     faces,
     targetFileName: basename(target),
     targetExists: existsSync(target)
@@ -707,58 +896,25 @@ export async function applyCreateRecruit(
   const template = byArchetype.get(req.archetype) ?? byPosition.get(req.position);
   if (!template) throw new Error('No template recruit exists for that archetype or position.');
 
-  if (req.skinTone !== undefined && req.skinTone !== 0 && !(req.skinTone >= 1 && req.skinTone <= 8)) {
-    throw new Error('Skin tone must be 1-8.');
-  }
-  if (req.face) {
-    const catalog = await faceCatalog(franchise);
-    const hit = catalog.find(
-      (f) =>
-        f.assetName === req.face!.assetName &&
-        f.headId === req.face!.headId &&
-        f.portraitId === req.face!.portraitId
-    );
-    if (!hit) throw new Error('That face is not in the catalog.');
-  }
+  if (req.face) await validateFace(franchise, req.face);
   let visualsJson: string | null = null;
-  if ((req.skinTone && req.skinTone >= 1) || (req.gear && Object.keys(req.gear).length)) {
-    const { gearSlots, helmetMasks } = await gearCatalog(franchise);
-    for (const [slot, item] of Object.entries(req.gear ?? {})) {
-      if (item === '') continue; // explicit removal of the slot
-      const def = gearSlots.find((g) => g.slot === slot);
-      if (!def || !def.options.includes(item)) throw new Error(`Unknown gear choice for ${slot}.`);
-    }
-    // Helmet↔mask must be a combination real loadouts wear; a mask alone
-    // keeps the base helmet when it fits, else brings a matching helmet.
-    if (req.gear?.FaceMask) {
-      const mask = req.gear.FaceMask;
-      if (req.gear.HeadWear) {
-        if (!(helmetMasks[req.gear.HeadWear] ?? []).includes(mask)) {
-          throw new Error('That facemask does not fit the chosen helmet.');
-        }
-      } else {
-        const base = await pickBaseVisuals(franchise, req.position);
-        const baseHelmet = base ? baseLookSummary(base).items['HeadWear'] : undefined;
-        if (!baseHelmet || !(helmetMasks[baseHelmet] ?? []).includes(mask)) {
-          const owner = Object.keys(helmetMasks).find((h) => helmetMasks[h].includes(mask));
-          if (owner) req.gear = { ...req.gear, HeadWear: owner };
-        }
-      }
-    } else if (req.gear?.HeadWear && req.gear.FaceMask === undefined) {
-      // A helmet alone must not keep an incompatible base mask: swap it to
-      // the helmet's own default mask (else its first), or drop it for
-      // helmets the data only shows maskless ('' removes the slot in the
-      // blob). An explicit FaceMask '' is respected as removal.
-      const allowed = helmetMasks[req.gear.HeadWear] ?? [];
-      const base = await pickBaseVisuals(franchise, req.position);
-      const baseMask = base ? baseLookSummary(base).items['FaceMask'] : undefined;
-      if (baseMask && !allowed.includes(baseMask)) {
-        const def = DEFAULT_MASKS[req.gear.HeadWear];
-        req.gear = { ...req.gear, FaceMask: (def && allowed.includes(def) ? def : allowed[0]) ?? '' };
-      }
-    }
-    visualsJson = await buildVisualsJson(franchise, req.position, req.skinTone, req.gear);
+  if (
+    (req.skinTone && req.skinTone >= 1) ||
+    req.bodyType !== undefined ||
+    (req.gear && Object.keys(req.gear).length)
+  ) {
+    const base = await pickBaseVisuals(franchise, req.position);
+    req.gear = await resolveLook(
+      franchise,
+      base ? baseLookSummary(base).items : {},
+      req.skinTone,
+      req.gear,
+      req.bodyType
+    );
+    visualsJson = await buildVisualsJson(franchise, req.position, req.skinTone, req.gear, req.bodyType);
     if (!visualsJson) throw new Error('No dressed player to base the look on.');
+  } else if (req.skinTone !== undefined) {
+    await resolveLook(franchise, {}, req.skinTone, undefined); // range check only
   }
 
   const newPlayerRow = firstEmptyRow(playerTable);

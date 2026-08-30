@@ -67,6 +67,8 @@ let loadoutChunks = 0;
 // happen to wear. Anchor verified in-game (2026-08-30): a maskless Speed
 // Flex wearer shows the Speedflex 2Bar.
 const tbMaskCounts = new Map<string, Map<string, number>>();
+// numeric top-level bodyType :: slot-129 item name — a clean 1:1 in TB data.
+const tbBodyPairs = new Map<number, Map<string, number>>();
 let tbPlayers = 0;
 
 function harvestTeamBuilder(s: string): void {
@@ -89,11 +91,17 @@ function harvestTeamBuilder(s: string): void {
     }
     let helmet: string | null = null;
     let mask: string | null = null;
+    let body: string | null = null;
     for (const lo of v?.loadouts ?? []) {
       for (const el of lo?.loadoutElements ?? []) {
         if (el?.slotType === 106) helmet = el.itemAssetName ?? null;
         if (el?.slotType === 0) mask = el.itemAssetName ?? null;
+        if (el?.slotType === 129) body = el.itemAssetName ?? null;
       }
+    }
+    if (body && Number.isInteger(v?.bodyType)) {
+      if (!tbBodyPairs.has(v.bodyType)) tbBodyPairs.set(v.bodyType, new Map());
+      tbBodyPairs.get(v.bodyType)!.set(body, (tbBodyPairs.get(v.bodyType)!.get(body) ?? 0) + 1);
     }
     if (!helmet || !mask) continue;
     tbPlayers++;
@@ -194,6 +202,14 @@ for (const [h, counts] of [...tbMaskCounts.entries()].sort()) {
 if (defaultMasks['GearHelmet_Speed_Flex'] !== 'GearFaceMask_Speedflex2Bar') {
   throw new Error(`anchor failed: Speed_Flex default mask = ${defaultMasks['GearHelmet_Speed_Flex']}`);
 }
+// Body types: numeric value -> the single name TB pairs with it, unambiguously.
+const bodyTypes: { value: number; name: string }[] = [];
+for (const [value, names] of [...tbBodyPairs.entries()].sort((a, b) => a[0] - b[0])) {
+  if (names.size === 1) bodyTypes.push({ value, name: [...names.keys()][0] });
+}
+if (bodyTypes.length < 4 || bodyTypes.find((b) => b.value === 2)?.name !== 'Muscular_BodyType') {
+  throw new Error(`anchor failed: body types = ${JSON.stringify(bodyTypes)}`);
+}
 
 const items: Record<string, string[]> = {};
 for (const [slot, set] of bySlot) items[slot] = [...set].sort();
@@ -204,6 +220,7 @@ console.log(`loadout-bearing chunks: ${loadoutChunks}`);
 for (const [slot, list] of Object.entries(items)) console.log(`${slot}: ${list.length}`);
 console.log(`helmets with mask pairs: ${Object.keys(compat).length}`);
 console.log(`team-builder players: ${tbPlayers}; default masks: ${JSON.stringify(defaultMasks)}`);
+console.log(`body types: ${JSON.stringify(bodyTypes)}`);
 console.log(`coach-wardrobe items dropped: ${[...dropped].sort().join(', ')}`);
 
 const banner = `/**
@@ -225,7 +242,12 @@ const body =
   `\nexport const HELMET_MASKS: Record<string, string[]> = ${JSON.stringify(compat, null, 2)};\n` +
   `\n/** helmet → the facemask the game's own generated players wear by default` +
   `\n * (mode across Team Builder payloads; only decisive modes ship). */` +
-  `\nexport const DEFAULT_MASKS: Record<string, string> = ${JSON.stringify(defaultMasks, null, 2)};\n`;
+  `\nexport const DEFAULT_MASKS: Record<string, string> = ${JSON.stringify(defaultMasks, null, 2)};` +
+  `
+/** Top-level blob bodyType value -> the game's name for it (from Team
+ * Builder generated players; the save stores the number). */` +
+  `
+export const BODY_TYPES: { value: number; name: string }[] = ${JSON.stringify(bodyTypes, null, 2)};\n`;
 
 if (printOnly) {
   console.log(body);

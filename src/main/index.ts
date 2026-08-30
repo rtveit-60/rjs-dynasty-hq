@@ -244,7 +244,7 @@ function registerIpc(): void {
   ipcMain.handle('player:editform', (_e, playerRow: number) => {
     const { savePath } = getSettings();
     if (!Number.isInteger(playerRow) || playerRow < 0 || !savePath) return null;
-    return pipeline.editForm(playerRow, savePath);
+    return pipeline.editForm(playerRow, savePath, getSettings().portraitsDir);
   });
 
   // The app's only write path: lands in <save>_RJsEdited (never the original),
@@ -711,6 +711,11 @@ function createWindow(): void {
             }
             // HQ_CAPTURE_PFCLICK="‹,‹" clicks pop-up buttons by text, in order.
             for (const label of (process.env['HQ_CAPTURE_PFCLICK'] ?? '').split(',').filter(Boolean)) {
+              // "~8000" between labels sleeps instead of clicking (form loads).
+              if (label.trim().startsWith('~')) {
+                await new Promise((r) => setTimeout(r, Number(label.trim().slice(1)) || 1000));
+                continue;
+              }
               await win!.webContents.executeJavaScript(
                 `[...document.querySelectorAll('.pf-panel button')].find((b) => b.textContent.trim() === ${JSON.stringify(label.trim())})?.click()`
               );

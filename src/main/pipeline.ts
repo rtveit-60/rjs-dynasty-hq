@@ -174,10 +174,10 @@ export class Pipeline {
   }
 
   /** Current values + options for the edit dialog, from the cached parse. */
-  async editForm(playerRow: number, savePath: string): Promise<PlayerEditForm | null> {
+  async editForm(playerRow: number, savePath: string, portraitsDir?: string | null): Promise<PlayerEditForm | null> {
     if (!this.franchise || !savePath) return null;
     try {
-      return await buildEditForm(this.franchise, playerRow, savePath);
+      return await buildEditForm(this.franchise, playerRow, savePath, portraitsDir);
     } catch {
       return null;
     }

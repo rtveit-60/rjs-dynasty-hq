@@ -93,12 +93,24 @@ check('form: tier options', ['Bronze', 'Silver', 'Gold', 'Platinum'].every((t) =
 check('form: rostered player has a jersey', form.jersey !== null && !form.isRecruit);
 check('form: target is the _RJsEdited sibling', form.targetFileName === 'DYNASTY-EDITCHECK_RJsEdited' && !form.targetExists);
 
+check('form: rostered player carries his own look record',
+  form.look !== null && (form.lookTone === null || (form.lookTone >= 1 && form.lookTone <= 8)),
+  `${Object.keys(form.look ?? {}).length} slots, tone ${form.lookTone}`);
+check('form: appearance catalogs ride the edit form',
+  form.faces.length >= 200 && form.gearSlots.length >= 6 && Object.keys(form.helmetMasks).length >= 15,
+  `${form.faces.length} faces, ${form.gearSlots.length} slots`);
+
 const recruitForm = await buildEditForm(franchise, recruitRow, work);
 check('form: recruit flagged, no jersey', recruitForm.isRecruit && recruitForm.jersey === null);
+check('form: recruit is undressed until enrollment', recruitForm.look === null);
 
 // --- 2. the edit writes the sibling; the source file never changes ---
 const ratingField = form.ratings[0].field;
 const mentalPick = form.mentalOptions[0].id;
+const editFace = form.faces.find((f) => f.tone === 4) ?? form.faces[0];
+const preLookRef = refFromRecord(
+  (mainTable(franchise, 'Player')).records[rosterRow], 'CharacterVisuals'
+);
 const { editedPath } = await applyPlayerEdit(
   franchise,
   work,
@@ -109,7 +121,11 @@ const { editedPath } = await applyPlayerEdit(
     jersey: 7,
     ratings: { [ratingField]: 99 },
     mental: [{ slot: 1, ability: mentalPick, rank: 'Gold' }],
-    physical: form.physical.length ? [{ slot: form.physical[0].slot, rank: 'Platinum' }] : []
+    physical: form.physical.length ? [{ slot: form.physical[0].slot, rank: 'Platinum' }] : [],
+    face: editFace,
+    skinTone: editFace.tone,
+    bodyType: 2,
+    gear: { Towel: 'Towel_West' }
   },
   dir
 );
@@ -118,8 +134,7 @@ check('write: source file bytes untouched', sha(work) === sourceHash);
 
 const readBack = await loadFranchise(editedPath);
 const p2 = mainTable(readBack, 'Player');
-await p2.readRecords(['FirstName', 'LastName', 'JerseyNum', ratingField, 'MentalAbility1', 'MentalAbilityRank1',
-  ...(form.physical.length ? [`PhysicalAbility${form.physical[0].slot}`] : [])]);
+await p2.readRecords();
 const rb = p2.records[rosterRow];
 check('write: names + jersey persisted',
   String(val(rb, 'FirstName')) === 'Harness' && String(val(rb, 'LastName')) === 'Verified' && Number(val(rb, 'JerseyNum')) === 7);
@@ -131,6 +146,22 @@ if (form.physical.length) {
   check('write: physical tier persisted',
     String(val(rb, `PhysicalAbility${form.physical[0].slot}`)) === 'Platinum');
 }
+check('write: face swap persisted on the player row',
+  String(val(rb, 'GenericHeadAssetName')) === editFace.assetName &&
+  Number(val(rb, 'PLYR_PORTRAIT')) === editFace.portraitId,
+  `${val(rb, 'GenericHeadAssetName')} / ${val(rb, 'PLYR_PORTRAIT')}`);
+{
+  const ref2 = refFromRecord(rb, 'CharacterVisuals');
+  const vT2 = ref2 && ref2.tableId !== 0 ? readBack.getTableById(ref2.tableId) : null;
+  if (vT2 && !vT2.recordsRead) await vT2.readRecords();
+  const blob = vT2 ? JSON.parse(String(vT2.records[ref2!.row]._fields.RawData.value)) : null;
+  const towel = (blob?.loadouts ?? []).flatMap((l: any) => l.loadoutElements ?? [])
+    .find((e: any) => e.slotType === 'Towel')?.itemAssetName;
+  check('write: look edited in the player\'s own visuals row',
+    !!preLookRef && ref2?.tableId === preLookRef.tableId && ref2?.row === preLookRef.row &&
+    blob?.skinTone === editFace.tone && blob?.bodyType === 2 && towel === 'Towel_West',
+    `row ${ref2?.row} (was ${preLookRef?.row}), tone ${blob?.skinTone}, body ${blob?.bodyType}, towel ${towel}`);
+}
 
 // --- 3. editing the edited save updates it in place, with a backup ---
 const secondForm = await buildEditForm(readBack, recruitRow, editedPath);
@@ -139,7 +170,7 @@ check('form: on an edited save the target is itself',
 const second = await applyPlayerEdit(
   readBack,
   editedPath,
-  { playerRow: recruitRow, firstName: 'Second', lastName: 'Pass' },
+  { playerRow: recruitRow, firstName: 'Second', lastName: 'Pass', gear: { Towel: 'Towel_West' } },
   dir
 );
 check('in-place: same file', second.editedPath === editedPath);
@@ -147,8 +178,19 @@ const backups = existsSync(path.join(dir, 'backups')) ? readdirSync(path.join(di
 check('in-place: backup taken first', backups.length === 1, backups.join(', '));
 const readBack2 = await loadFranchise(editedPath);
 const p3 = mainTable(readBack2, 'Player');
-await p3.readRecords(['FirstName', 'LastName']);
+await p3.readRecords();
 check('in-place: second edit persisted', String(val(p3.records[recruitRow], 'FirstName')) === 'Second');
+{
+  const ref3 = refFromRecord(p3.records[recruitRow], 'CharacterVisuals');
+  const vT3 = ref3 && ref3.tableId !== 0 ? readBack2.getTableById(ref3.tableId) : null;
+  if (vT3 && !vT3.recordsRead) await vT3.readRecords();
+  const blob = vT3 ? JSON.parse(String(vT3.records[ref3!.row]._fields.RawData.value)) : null;
+  const towel = (blob?.loadouts ?? []).flatMap((l: any) => l.loadoutElements ?? [])
+    .find((e: any) => e.slotType === 'Towel')?.itemAssetName;
+  check('in-place: undressed recruit gained a visuals row',
+    !!ref3 && ref3.tableId !== 0 && towel === 'Towel_West',
+    `ref ${JSON.stringify(ref3)}, towel ${towel}`);
+}
 check('in-place: first edit survives', String(val(p3.records[rosterRow], 'FirstName')) === 'Harness');
 check('source still untouched after everything', sha(work) === sourceHash);
 
@@ -166,6 +208,17 @@ await rejects('reject: unknown rating field', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, ratings: { OverallRating: 99 } }, dir));
 await rejects('reject: jersey out of range', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, jersey: 100 }, dir));
+await rejects('reject: face outside the catalog', () =>
+  applyPlayerEdit(readBack2, editedPath, {
+    playerRow: rosterRow,
+    face: { headId: 'NoHead', assetName: 'gen_head_madeup_001', portraitId: 99999, tone: 4 }
+  }, dir));
+await rejects('reject: unknown gear on an edit', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, gear: { Towel: 'Towel_Imaginary' } }, dir));
+await rejects('reject: skin tone off the scale', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, skinTone: 9 }, dir));
+await rejects('reject: unknown body type', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, bodyType: 9 }, dir));
 check('rejections left the edited file unchanged', sha(editedPath) === before);
 
 // --- 5. program resources: Fundraising + recruiter hours ---
@@ -573,6 +626,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     homeState: state,
     homeTown: '',
     skinTone: cform2.skinTones[0],
+    bodyType: 3,
     gear: mask ? { FaceMask: mask.options[0] } : undefined
   }, dir);
   const frV2 = await loadFranchise(editedPath);
@@ -584,9 +638,10 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   await vT2.readRecords();
   const vj = JSON.parse(String(vT2.records[vRef!.row]._fields.RawData.value));
   const fmEl = vj.loadouts.flatMap((l: any) => l.loadoutElements ?? []).find((e: any) => e.slotType === 'FaceMask');
-  check('create: skin tone + gear read back from the blob',
-    vj.skinTone === cform2.skinTones[0] && (!mask || fmEl?.itemAssetName === mask.options[0]),
-    `tone ${vj.skinTone}, mask ${fmEl?.itemAssetName}`);
+  check('create: skin tone + body + gear read back from the blob',
+    vj.skinTone === cform2.skinTones[0] && vj.bodyType === 3 &&
+    (!mask || fmEl?.itemAssetName === mask.options[0]),
+    `tone ${vj.skinTone}, body ${vj.bodyType}, mask ${fmEl?.itemAssetName}`);
   await rejects('create reject: unknown gear item', async () =>
     applyCreateRecruit(await loadFranchise(editedPath), editedPath, {
       firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,

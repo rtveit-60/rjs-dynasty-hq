@@ -689,6 +689,18 @@ export interface PlayerEditForm {
   /** Tier member names, None first. */
   rankOptions: string[];
   physical: EditPhysicalSlot[];
+  /** slot -> the item the player's own visuals blob wears; null = undressed. */
+  look: Record<string, string> | null;
+  /** The blob's skin tone, when it carries one. */
+  lookTone: number | null;
+  /** The blob's body type (0 = Standard when absent); null = undressed. */
+  lookBody: number | null;
+  gearSlots: GearSlotOptions[];
+  skinTones: number[];
+  helmetMasks: Record<string, string[]>;
+  faces: FaceOption[];
+  /** The player's current head: portrait id + whether it is a unique scan. */
+  currentFace: { portraitId: number; unique: boolean };
   /** File name an edit would write ("…_RJsEdited") and whether it already exists. */
   targetFileName: string;
   targetExists: boolean;
@@ -704,6 +716,12 @@ export interface PlayerEditChanges {
   ratings?: Record<string, number>;
   mental?: EditMentalSlot[];
   physical?: { slot: number; rank: string }[];
+  /** A catalog face to put on the player (replaces a unique scan if present). */
+  face?: FaceOption;
+  skinTone?: number;
+  bodyType?: number;
+  /** slot -> item; '' removes the slot from the player's blob. */
+  gear?: Record<string, string>;
 }
 
 export interface PlayerEditResult {
@@ -773,6 +791,8 @@ export interface CreateRecruitForm {
   baseLook: Record<string, Record<string, string>>;
   /** position -> the base look's skin tone. */
   baseTones: Record<string, number>;
+  /** position -> the base look's body type (0 = Standard when absent). */
+  baseBodies: Record<string, number>;
   /** The face catalog: every observed head, each with a portrait and a tone. */
   faces: FaceOption[];
   targetFileName: string;
@@ -815,6 +835,7 @@ export interface CreateRecruitRequest {
   homeTown: string;
   /** 1–7, or 0 to keep the base look's tone. */
   skinTone?: number;
+  bodyType?: number;
   /** slot -> itemAssetName overrides; unset slots keep the base loadout. */
   gear?: Record<string, string>;
   /** A face from the catalog; unset keeps the template's head and the generated avatar. */

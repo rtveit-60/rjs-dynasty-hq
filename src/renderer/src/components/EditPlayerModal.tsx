@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { EditMentalSlot, PlayerEditChanges, PlayerEditForm } from '../../../shared/types.ts';
+import type { EditMentalSlot, FaceOption, PlayerEditChanges, PlayerEditForm } from '../../../shared/types.ts';
 import InfoDot from './InfoDot.tsx';
+import LookSection, { effectiveLook } from './LookSection.tsx';
 
 /**
  * Broadcast-style number stepper: a segmented − / value / + plate replacing
@@ -119,6 +120,10 @@ export default function EditPlayerModal({
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [mental, setMental] = useState<EditMentalSlot[]>([]);
   const [physical, setPhysical] = useState<Record<number, string>>({});
+  const [gear, setGear] = useState<Record<string, string>>({});
+  const [skinTone, setSkinTone] = useState(0);
+  const [bodyType, setBodyType] = useState(0);
+  const [face, setFace] = useState<FaceOption | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -137,6 +142,9 @@ export default function EditPlayerModal({
         setRatings(Object.fromEntries(f.ratings.map((r) => [r.field, r.value])));
         setMental(f.mental.map((m) => ({ ...m })));
         setPhysical(Object.fromEntries(f.physical.map((p) => [p.slot, p.rank])));
+        setGear(effectiveLook(f.look ?? {}));
+        setSkinTone(f.lookTone ?? 0);
+        setBodyType(f.lookBody ?? 0);
         setState('ready');
       })
       .catch(() => alive && setState('missing'));
@@ -199,8 +207,32 @@ export default function EditPlayerModal({
       out.physical = changedPhysical;
       any = true;
     }
+    if (face) {
+      out.face = face;
+      any = true;
+    }
+    // Appearance diffs against the shown look, so untouched dropdowns write
+    // nothing and '' drops a slot from the player's blob.
+    const baseLook = effectiveLook(form.look ?? {});
+    const changedGear: Record<string, string> = {};
+    for (const g of form.gearSlots) {
+      const shown = gear[g.slot] ?? '';
+      if (shown !== (baseLook[g.slot] ?? '')) changedGear[g.slot] = shown;
+    }
+    if (Object.keys(changedGear).length) {
+      out.gear = changedGear;
+      any = true;
+    }
+    if (skinTone !== (form.lookTone ?? 0) && skinTone !== 0) {
+      out.skinTone = skinTone;
+      any = true;
+    }
+    if (bodyType !== (form.lookBody ?? 0)) {
+      out.bodyType = bodyType;
+      any = true;
+    }
     return any ? out : null;
-  }, [form, firstName, lastName, jersey, ratings, mental, physical]);
+  }, [form, firstName, lastName, jersey, ratings, mental, physical, face, gear, skinTone, bodyType]);
 
   const nameProblem =
     !firstName.trim() || !lastName.trim()
@@ -390,6 +422,36 @@ export default function EditPlayerModal({
                 </div>
               </>
             )}
+
+            <div className="ed-sec">Appearance</div>
+            {form.look === null && (
+              <p className="cr-note">
+                No appearance record yet — the game dresses this one at enrollment. Any
+                choice here creates the record early, from a position-matched base.
+              </p>
+            )}
+            {form.currentFace.unique && (
+              <p className="cr-note">
+                This player has an individually scanned face. Picking a catalog face
+                replaces it in the edited copy; the original save keeps the scan.
+              </p>
+            )}
+            <LookSection
+              gearSlots={form.gearSlots}
+              helmetMasks={form.helmetMasks}
+              skinTones={form.skinTones}
+              faces={form.faces}
+              base={effectiveLook(form.look ?? {})}
+              gear={gear}
+              setGear={setGear}
+              skinTone={skinTone}
+              setSkinTone={setSkinTone}
+              face={face}
+              setFace={setFace}
+              bodyType={bodyType}
+              setBodyType={setBodyType}
+              currentPortraitId={form.currentFace.portraitId || undefined}
+            />
 
             {(error || nameProblem) && <div className="ed-error">{error ?? nameProblem}</div>}
 
