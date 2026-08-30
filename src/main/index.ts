@@ -285,6 +285,26 @@ function registerIpc(): void {
     return result;
   });
 
+  // Weekly recruiting plan for one board target: current state + the write.
+  ipcMain.handle('target:form', (_e, recruitRow: number) => {
+    const { savePath } = getSettings();
+    if (!Number.isInteger(recruitRow) || recruitRow < 0 || !savePath) return null;
+    return pipeline.targetForm(recruitRow, savePath);
+  });
+  ipcMain.handle('target:edit', async (_e, req: unknown) => {
+    const r = req as { recruitRow?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !Number.isInteger(r?.recruitRow) || (r.recruitRow as number) < 0) {
+      return { ok: false, message: 'Nothing to save.' };
+    }
+    const result = await pipeline.editTarget(r as never, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // Stage recruits onto or off the user's target board — the _RJsEdited path.
   ipcMain.handle('board:edit', async (_e, req: unknown) => {
     const r = req as { changes?: unknown };

@@ -749,6 +749,54 @@ export interface BoardEditRequest {
   changes: { recruitRow: number; action: 'add' | 'remove' }[];
 }
 
+/** The five weekly contact/visit actions the game offers per target. */
+export interface TargetActionFlags {
+  contactFamily: boolean;
+  contactCoaches: boolean;
+  socialMedia: boolean;
+  sendHouse: boolean;
+  visitSchool: boolean;
+}
+
+/** Current weekly-action state for one board target, plus caps and options. */
+export interface TargetActionForm {
+  recruitRow: number;
+  name: string;
+  position: string;
+  stars: number;
+  /** Hours assigned to this recruit this week. */
+  hours: number;
+  /** Per-recruit field cap (7-bit). */
+  hoursCap: number;
+  poolTotal: number;
+  poolAssigned: number;
+  actions: TargetActionFlags;
+  /** Normalized: None | Revoked | New | Offered | Committed. */
+  scholarship: string;
+  nilOffer: number;
+  /** Field cap (10-bit). */
+  nilCap: number;
+  nilExpectation: number;
+  /** RecruitingPitchType member id; 'Invalid' = none selected. */
+  swayPitch: string;
+  swayOptions: { id: string; name: string }[];
+  intel: number;
+  intelMax: number;
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+/** Changed values only; absent fields stay untouched in the save. */
+export interface TargetActionChanges {
+  recruitRow: number;
+  hours?: number;
+  actions?: Partial<TargetActionFlags>;
+  scholarship?: 'Offered' | 'Revoked' | 'None';
+  nilOffer?: number;
+  swayPitch?: string;
+  scoutFull?: boolean;
+}
+
 /** Fire (or un-fire) a CPU coach: flips the game's own PendingFire contract state. */
 export interface CoachFireRequest {
   coachRow: number;

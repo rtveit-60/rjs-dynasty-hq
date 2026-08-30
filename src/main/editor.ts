@@ -16,7 +16,10 @@ import type {
   EditMentalSlot,
   PlayerEditChanges,
   PlayerEditForm,
-  ResourceForm
+  ResourceForm,
+  TargetActionChanges,
+  TargetActionFlags,
+  TargetActionForm
 } from '../shared/types.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
@@ -565,6 +568,173 @@ export async function applyBoardEdit(
     }
   });
   return { editedPath, added: adds.length, removed: removes.length };
+}
+
+// --- Weekly recruit actions (hours, contacts, offers, scouting) -------------
+
+const ACTION_FIELDS: Record<keyof TargetActionFlags, string> = {
+  contactFamily: 'ContactFriendsAndFamily',
+  contactCoaches: 'ContactHighSchoolCoaches',
+  socialMedia: 'SearchSocialMedia',
+  sendHouse: 'SendTheHouse',
+  visitSchool: 'VisitRecruitsSchool'
+};
+
+/** Aliased range markers → the semantic member name. */
+const SCHOLARSHIP_ALIAS: Record<string, string> = { First_: 'None', Last_: 'Committed' };
+
+async function targetRecordFor(
+  franchise: any,
+  teamRow: number,
+  recruitRow: number
+): Promise<{ h: BoardHandles; target: any }> {
+  const h = await boardHandles(franchise, teamRow);
+  const slot = h.slotOf.get(recruitRow);
+  if (slot === undefined) throw new Error('That recruit is not on the board.');
+  const tr = refFromRecord(h.arr, `RecruitTarget${slot}`)!;
+  const target = h.targetTable.records[tr.row];
+  if (!target || target.isEmpty) throw new Error('That recruit is not on the board.');
+  return { h, target };
+}
+
+export async function buildTargetForm(
+  franchise: any,
+  teamRow: number,
+  recruitRow: number,
+  savePath: string
+): Promise<TargetActionForm> {
+  const { h, target } = await targetRecordFor(franchise, teamRow, recruitRow);
+
+  // Name from the recruit's Player row.
+  const rRec = h.recruitTable.records[recruitRow];
+  const pRef = refFromRecord(rRec, 'Player');
+  const players = mainTable(franchise, 'Player');
+  await players.readRecords(['FirstName', 'LastName', 'Position', 'ProspectStarRating']);
+  const pRec = pRef ? players.records?.[pRef.row] : null;
+  const STAR_MAP: Record<string, number> = {
+    FIVE_STAR: 5, FOUR_STAR: 4, THREE_STAR: 3, TWO_STAR: 2, ONE_STAR: 1
+  };
+
+  const rawStatus = String(val(target, 'ScholarshipStatus') ?? 'None');
+  const sway = String(val(target, 'SwayPitch') ?? 'Invalid');
+  const swayMembers = enumMembers(target, 'SwayPitch').filter((m) => m.name !== 'Invalid');
+  const { PITCHES } = await import('../shared/pitches.ts');
+
+  const targetPath = editedPathFor(savePath);
+  return {
+    recruitRow,
+    name: pRec
+      ? `${String(val(pRec, 'FirstName') ?? '')} ${String(val(pRec, 'LastName') ?? '')}`.trim()
+      : 'Recruit',
+    position: pRec ? String(val(pRec, 'Position') ?? '') : '',
+    stars: pRec ? (STAR_MAP[String(val(pRec, 'ProspectStarRating'))] ?? 0) : 0,
+    hours: Number(val(target, 'ProspectHoursSpentCurrent') ?? 0),
+    hoursCap: fieldMax(target, 'ProspectHoursSpentCurrent', 127),
+    poolTotal: Number(val(h.board, 'RecruitingHoursTotal') ?? 0),
+    poolAssigned: Number(val(h.board, 'RecruitingHoursAssigned') ?? 0),
+    actions: {
+      contactFamily: val(target, 'ContactFriendsAndFamily') === true,
+      contactCoaches: val(target, 'ContactHighSchoolCoaches') === true,
+      socialMedia: val(target, 'SearchSocialMedia') === true,
+      sendHouse: val(target, 'SendTheHouse') === true,
+      visitSchool: val(target, 'VisitRecruitsSchool') === true
+    },
+    scholarship: SCHOLARSHIP_ALIAS[rawStatus] ?? rawStatus,
+    nilOffer: Number(val(target, 'CurrentNILOffer') ?? 0),
+    nilCap: fieldMax(target, 'CurrentNILOffer', 1023),
+    nilExpectation: Number(val(target, 'NILExpectation') ?? 0),
+    swayPitch: sway,
+    swayOptions: swayMembers.map((m) => ({
+      id: m.name,
+      name: PITCHES[m.name]?.name ?? m.name
+    })),
+    intel: Number(val(target, 'UnlockedIntelBitfield') ?? 0),
+    intelMax: fieldMax(target, 'UnlockedIntelBitfield', 16383),
+    targetFileName: basename(targetPath),
+    targetExists: existsSync(targetPath)
+  };
+}
+
+/**
+ * Apply one target's weekly plan — hours, contact/visit actions, scholarship,
+ * NIL offer, sway pitch, full scout — and write the _RJsEdited sibling. Hour
+ * assignments move the board's assigned total with them and must fit the
+ * weekly pool.
+ */
+export async function applyTargetActions(
+  franchise: any,
+  savePath: string,
+  req: { teamRow: number } & TargetActionChanges,
+  backupDir: string
+): Promise<{ editedPath: string }> {
+  const { h, target } = await targetRecordFor(franchise, req.teamRow, req.recruitRow);
+  const rRec = h.recruitTable.records[req.recruitRow];
+  if (String(val(rRec, 'RecruitStage') ?? '').includes('Committed')) {
+    throw new Error('Committed recruits are managed by the game.');
+  }
+
+  const oldHours = Number(val(target, 'ProspectHoursSpentCurrent') ?? 0);
+  const poolTotal = Number(val(h.board, 'RecruitingHoursTotal') ?? 0);
+  const poolAssigned = Number(val(h.board, 'RecruitingHoursAssigned') ?? 0);
+
+  // ---- validate everything first ----
+  if (req.hours !== undefined) {
+    const cap = fieldMax(target, 'ProspectHoursSpentCurrent', 127);
+    if (!Number.isInteger(req.hours) || req.hours < 0 || req.hours > cap) {
+      throw new Error(`Hours must be 0–${cap}.`);
+    }
+    if (poolAssigned - oldHours + req.hours > poolTotal) {
+      throw new Error(
+        `That leaves the weekly pool over-assigned (${poolAssigned - oldHours + req.hours} of ${poolTotal}).`
+      );
+    }
+  }
+  if (req.nilOffer !== undefined) {
+    const cap = fieldMax(target, 'CurrentNILOffer', 1023);
+    if (!Number.isInteger(req.nilOffer) || req.nilOffer < 0 || req.nilOffer > cap) {
+      throw new Error(`The NIL offer must be 0–${cap}.`);
+    }
+  }
+  if (req.scholarship !== undefined && !['Offered', 'Revoked', 'None'].includes(req.scholarship)) {
+    throw new Error('Unknown scholarship state.');
+  }
+  if (req.swayPitch !== undefined && req.swayPitch !== 'Invalid') {
+    const names = new Set(enumMembers(target, 'SwayPitch').map((m) => m.name));
+    if (!names.has(req.swayPitch)) throw new Error(`Unknown pitch: ${req.swayPitch}`);
+  }
+
+  // ---- apply ----
+  if (req.hours !== undefined && req.hours !== oldHours) {
+    target.ProspectHoursSpentCurrent = req.hours;
+    h.board.RecruitingHoursAssigned = Math.max(0, poolAssigned - oldHours + req.hours);
+  }
+  for (const [key, field] of Object.entries(ACTION_FIELDS)) {
+    const want = req.actions?.[key as keyof TargetActionFlags];
+    if (want !== undefined) target[field] = want === true;
+  }
+  if (req.scholarship !== undefined) target.ScholarshipStatus = req.scholarship;
+  if (req.nilOffer !== undefined) target.CurrentNILOffer = req.nilOffer;
+  if (req.swayPitch !== undefined) target.SwayPitch = req.swayPitch;
+  if (req.scoutFull) target.UnlockedIntelBitfield = fieldMax(target, 'UnlockedIntelBitfield', 16383);
+
+  return writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const { target: written, h: h2 } = await targetRecordFor(check, req.teamRow, req.recruitRow);
+    if (req.hours !== undefined && Number(val(written, 'ProspectHoursSpentCurrent')) !== req.hours) {
+      throw new Error('The written save did not read back with the new hours.');
+    }
+    if (req.nilOffer !== undefined && Number(val(written, 'CurrentNILOffer')) !== req.nilOffer) {
+      throw new Error('The written save did not read back with the new NIL offer.');
+    }
+    if (req.scoutFull && Number(val(written, 'UnlockedIntelBitfield')) !== fieldMax(written, 'UnlockedIntelBitfield', 16383)) {
+      throw new Error('The written save did not read back fully scouted.');
+    }
+    if (req.hours !== undefined) {
+      const assigned = Number(val(h2.board, 'RecruitingHoursAssigned') ?? 0);
+      if (assigned !== Math.max(0, poolAssigned - oldHours + req.hours)) {
+        throw new Error('The board pool did not read back with the new assignment.');
+      }
+    }
+  });
 }
 
 // --- Fire Coach -------------------------------------------------------------

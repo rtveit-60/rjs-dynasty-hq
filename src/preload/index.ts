@@ -19,6 +19,8 @@ import type {
   ResourceForm,
   Settings,
   Snapshot,
+  TargetActionChanges,
+  TargetActionForm,
   ThemeMode,
   WatchStatus
 } from '../shared/types.ts';
@@ -58,6 +60,8 @@ export interface HQBridge {
   browseHQ: (teamRow: number) => Promise<Snapshot['school'] | null>;
   fireCoach: (req: CoachFireRequest) => Promise<PlayerEditResult>;
   editBoard: (req: BoardEditRequest) => Promise<PlayerEditResult>;
+  getTargetForm: (recruitRow: number) => Promise<TargetActionForm | null>;
+  editTarget: (req: TargetActionChanges) => Promise<PlayerEditResult>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
   getPlaybook: (
@@ -98,6 +102,8 @@ const bridge: HQBridge = {
   browseHQ: (teamRow) => ipcRenderer.invoke('hq:browse', teamRow),
   fireCoach: (req) => ipcRenderer.invoke('coach:fire', req),
   editBoard: (req) => ipcRenderer.invoke('board:edit', req),
+  getTargetForm: (recruitRow) => ipcRenderer.invoke('target:form', recruitRow),
+  editTarget: (req) => ipcRenderer.invoke('target:edit', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   getPlaybook: (side, coachRow, schemeEnum) =>

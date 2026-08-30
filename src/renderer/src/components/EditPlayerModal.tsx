@@ -7,7 +7,7 @@ import InfoDot from './InfoDot.tsx';
  * the browser's native spinners. Typing still works (digits only), arrow keys
  * step, and holding a stepper button repeats.
  */
-function Stepper({
+export function Stepper({
   value,
   min,
   max,

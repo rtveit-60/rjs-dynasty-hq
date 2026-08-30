@@ -7,6 +7,7 @@ import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
 import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
 import ResourceModal from './ResourceModal.tsx';
+import TargetActionsModal from './TargetActionsModal.tsx';
 import TeamNeedsStrip from './TeamNeedsStrip.tsx';
 
 type School = NonNullable<Snapshot['school']>;
@@ -97,6 +98,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
   const [asc, setAsc] = useState(false);
   const [openRow, setOpenRow] = useState<number | null>(null);
   const [hiring, setHiring] = useState(false);
+  const [planRow, setPlanRow] = useState<number | null>(null);
 
   const conflicts = useMemo(
     () => playingTimeConflicts(board?.targets ?? []),
@@ -248,6 +250,9 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
       </div>
 
       {!browsing && <BoardSaveBar />}
+      {planRow !== null && !browsing && (
+        <TargetActionsModal recruitRow={planRow} onClose={() => setPlanRow(null)} />
+      )}
       <div className="tbl-wrap">
         <table className="tbl">
           <thead>
@@ -278,7 +283,20 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
                   <NameLink req={{ kind: 'player', row: t.playerRow }}>{t.name}</NameLink>
                   <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}> · {spaceOut(t.homeState)}</span>
                   {!browsing && !t.stage.includes('Committed') && (
-                    <BoardToggle recruitRow={t.recruitRow} onBoard={true} />
+                    <>
+                      <button
+                        type="button"
+                        className="bd-btn plan"
+                        title="Weekly plan — hours, actions, offers, scouting"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPlanRow(t.recruitRow);
+                        }}
+                      >
+                        »
+                      </button>
+                      <BoardToggle recruitRow={t.recruitRow} onBoard={true} />
+                    </>
                   )}
                 </td>
                 <td>
