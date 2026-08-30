@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ClassRecruit } from '../../../shared/types.ts';
+import { SCHEME_FITS, schemeFitImportance } from '../../../shared/scheme-fits.ts';
 import {
   RECRUIT_POS_OPTIONS,
   STAGE_LABELS,
+  archetypeLabel,
   devClass,
   devLabel,
   fmt,
@@ -11,6 +13,7 @@ import {
   recruitPos,
   recruitPosPool,
   recruitPositionsFor,
+  schemeLabel,
   spaceOut,
   stars
 } from '../lib/format.ts';
@@ -28,6 +31,7 @@ type SortKey =
   | 'rating'
   | 'name'
   | 'pos'
+  | 'fit'
   | 'ht'
   | 'wt'
   | 'dev'
@@ -55,7 +59,13 @@ const STAGE_ORDER: Record<string, number> = {
 };
 const BIG = Number.MAX_SAFE_INTEGER;
 const PAGE_SIZE = 200;
-const COLS = 13;
+const COLS = 14;
+
+// Which side a position's scheme fit reads from — straight from the fit data.
+const OFF_POSITIONS = new Set(Object.keys(SCHEME_FITS['OFF_AIR_RAID'] ?? {}));
+const DEF_POSITIONS = new Set(Object.keys(SCHEME_FITS['DEF_BASE3_4'] ?? {}));
+/** Starter-grade importance; below it the scheme only wants the archetype as depth. */
+const FIT_STRONG = 50;
 
 const STAR_FILTERS = [
   { label: 'All', min: 0 },
@@ -86,6 +96,32 @@ export default function RecruitingView() {
     () => (rc?.recruits ?? []).filter((r) => (board === 'portal' ? r.isTransfer : !r.isTransfer)),
     [rc, board]
   );
+
+  // Scheme fit vs YOUR current schemes, from the game's own per-scheme
+  // archetype preferences (shared/scheme-fits).
+  const offScheme = school?.team.offScheme ?? '';
+  const defScheme = school?.team.defScheme ?? '';
+  const schemeFor = (position: string): string =>
+    OFF_POSITIONS.has(position) ? offScheme : DEF_POSITIONS.has(position) ? defScheme : '';
+  const fitOf = (r: ClassRecruit): number => {
+    const scheme = schemeFor(r.position);
+    return scheme ? schemeFitImportance(scheme, r.position, r.archetype) : 0;
+  };
+  const fitTitle = (r: ClassRecruit): string => {
+    const scheme = schemeFor(r.position);
+    if (!scheme) return 'Special teams — schemes carry no archetype preference.';
+    const slots = SCHEME_FITS[scheme]?.[r.position];
+    if (!slots) return `${schemeLabel(scheme)} carries no fit data for ${recruitPos(r.position)}.`;
+    const imp = schemeFitImportance(scheme, r.position, r.archetype);
+    if (imp >= FIT_STRONG) {
+      return `${schemeLabel(scheme)} starts ${archetypeLabel(r.archetype)} at ${recruitPos(r.position)} (importance ${imp}).`;
+    }
+    if (imp > 0) {
+      return `${schemeLabel(scheme)} wants ${archetypeLabel(r.archetype)} as ${recruitPos(r.position)} depth (importance ${imp}).`;
+    }
+    const wanted = [...new Set(slots.map((s) => archetypeLabel(s.archetype)))];
+    return `${schemeLabel(scheme)} looks for ${wanted.join(', ')} at ${recruitPos(r.position)} — not ${archetypeLabel(r.archetype)}.`;
+  };
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -122,6 +158,8 @@ export default function RecruitingView() {
             (recruitPosPool(a.position).localeCompare(recruitPosPool(b.position)) ||
               recruitPos(a.position).localeCompare(recruitPos(b.position))) * dir || byName(a, b)
           );
+        case 'fit':
+          return (fitOf(a) - fitOf(b)) * dir || byName(a, b);
         case 'ht':
           return (a.heightIn - b.heightIn) * dir || byName(a, b);
         case 'wt':
@@ -232,6 +270,12 @@ export default function RecruitingView() {
             The save's own quality flag. Gems outplay their stars; busts fall short of them.
           </InfoRow>
           <InfoRow term="Ovr">True overall. The game hides it until you scout.</InfoRow>
+          <InfoRow term="Fit">
+            The recruit's archetype held against your current scheme, using the game's own
+            per-scheme preferences: a filled dot means your scheme starts that archetype at
+            the position, a quarter dot means it wants it as depth, a hyphen means it
+            doesn't ask for it. Hover for what the scheme looks for there.
+          </InfoRow>
           <InfoRow term="Edge">
             Your program scored against the strongest school pursuing the recruit — race
             standing, pipeline, pro potential, and home state combined. A green arrow is a
@@ -337,6 +381,7 @@ export default function RecruitingView() {
                   {th('Ht', 'ht', { num: true })}
                   {th('Wt', 'wt', { num: true })}
                   {th('Pos', 'pos', { defaultAsc: true })}
+                  {th('Fit', 'fit')}
                   {th('Stars', 'rating')}
                   {th('Ovr', 'ovr')}
                   {th('Dev', 'dev')}
@@ -373,6 +418,16 @@ export default function RecruitingView() {
                       <td className="num">{r.weightLb}</td>
                       <td>
                         <span className="pos-tag">{recruitPos(r.position)}</span>
+                      </td>
+                      {/* Scheme fit vs your current scheme; hover explains, incl. what the scheme wants instead. */}
+                      <td className="fit-cell" title={fitTitle(r)}>
+                        {fitOf(r) >= FIT_STRONG ? (
+                          <span className="fit-hi">●</span>
+                        ) : fitOf(r) > 0 ? (
+                          <span className="fit-md">◔</span>
+                        ) : (
+                          <span className="fit-none">—</span>
+                        )}
                       </td>
                       <td>
                         <span className="stars-cell" title={`${r.stars} stars`}>

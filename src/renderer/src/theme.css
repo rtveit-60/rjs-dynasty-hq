@@ -4354,3 +4354,23 @@ table.tbl.tbl-wide {
 .edge-ev {
   color: var(--ink-3);
 }
+
+/* --- Recruiting board Scheme Fit (archetype vs your current scheme) ------ */
+
+.fit-cell {
+  text-align: center;
+  width: 40px;
+  font-size: 12px;
+}
+
+.fit-hi {
+  color: var(--good);
+}
+
+.fit-md {
+  color: var(--ink-2);
+}
+
+.fit-none {
+  color: var(--ink-3);
+}
