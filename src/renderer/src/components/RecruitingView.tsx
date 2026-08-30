@@ -6,6 +6,7 @@ import {
   devClass,
   devLabel,
   fmt,
+  heightFt,
   ovrTier,
   recruitPos,
   recruitPosPool,
@@ -27,6 +28,8 @@ type SortKey =
   | 'rating'
   | 'name'
   | 'pos'
+  | 'ht'
+  | 'wt'
   | 'dev'
   | 'pipeline'
   | 'status'
@@ -52,7 +55,7 @@ const STAGE_ORDER: Record<string, number> = {
 };
 const BIG = Number.MAX_SAFE_INTEGER;
 const PAGE_SIZE = 200;
-const COLS = 11;
+const COLS = 13;
 
 const STAR_FILTERS = [
   { label: 'All', min: 0 },
@@ -90,7 +93,7 @@ export default function RecruitingView() {
     return pool.filter((r) => {
       if (minStars && r.stars < minStars) return false;
       if (allowed.length && !allowed.includes(r.position)) return false;
-      if (edgeOnly && !r.edges.length) return false;
+      if (edgeOnly && r.edgeCall !== 'up') return false;
       if (openOnly && r.committedTo) return false;
       if (boardOnly && !r.onBoard) return false;
       if (needle) {
@@ -119,6 +122,10 @@ export default function RecruitingView() {
             (recruitPosPool(a.position).localeCompare(recruitPosPool(b.position)) ||
               recruitPos(a.position).localeCompare(recruitPos(b.position))) * dir || byName(a, b)
           );
+        case 'ht':
+          return (a.heightIn - b.heightIn) * dir || byName(a, b);
+        case 'wt':
+          return (a.weightLb - b.weightLb) * dir || byName(a, b);
         case 'dev':
           return ((DEV_ORDER[a.devTrait] ?? 0) - (DEV_ORDER[b.devTrait] ?? 0)) * dir || byName(a, b);
         case 'pipeline':
@@ -135,7 +142,7 @@ export default function RecruitingView() {
         case 'natlrk':
           return (rank(a.nationalRank) - rank(b.nationalRank)) * dir;
         case 'edge':
-          return (a.edges.length - b.edges.length) * dir || byName(a, b);
+          return (a.edgeScore - b.edgeScore) * dir || byName(a, b);
         case 'offers':
           return (a.offers - b.offers) * dir || byName(a, b);
         default:
@@ -226,8 +233,11 @@ export default function RecruitingView() {
           </InfoRow>
           <InfoRow term="Ovr">True overall. The game hides it until you scout.</InfoRow>
           <InfoRow term="Edge">
-            Where your program holds a clear advantage over the schools actually pursuing the
-            recruit: pipeline, pro potential, home state, or leading the race.
+            Your program scored against the strongest school pursuing the recruit — race
+            standing, pipeline, pro potential, and home state combined. A green arrow is a
+            significant advantage, a red arrow a significant disadvantage, a hyphen neutral
+            (committed recruits read neutral: that race is over). Hover the arrow for the
+            component math.
           </InfoRow>
           <InfoRow term="Crosshair">
             The mark beside a name: that recruit is already on your recruiting board.
@@ -324,6 +334,8 @@ export default function RecruitingView() {
                 <tr>
                   {th('Rk', 'natlrk', { defaultAsc: true })}
                   {th('Recruit & School', 'name', { defaultAsc: true, cls: 'col-name' })}
+                  {th('Ht', 'ht', { num: true })}
+                  {th('Wt', 'wt', { num: true })}
                   {th('Pos', 'pos', { defaultAsc: true })}
                   {th('Stars', 'rating')}
                   {th('Ovr', 'ovr')}
@@ -357,6 +369,8 @@ export default function RecruitingView() {
                         {r.quality === 'GEM' && <span className="btag gem">Gem</span>}
                         {r.quality === 'BUST' && <span className="btag bust">Bust</span>}
                       </td>
+                      <td className="num">{heightFt(r.heightIn)}</td>
+                      <td className="num">{r.weightLb}</td>
                       <td>
                         <span className="pos-tag">{recruitPos(r.position)}</span>
                       </td>
@@ -379,16 +393,11 @@ export default function RecruitingView() {
                         {statusCell(r)}
                       </td>
                       <td className="num">{r.positionRank || '—'}</td>
-                      {/* One chip keeps the column narrow; hover lists every edge. */}
-                      <td className="cell-clip" title={r.edges.join(', ')}>
-                        {r.edges.length ? (
-                          <>
-                            <span className="btag">{r.edges[0]}</span>
-                            {r.edges.length > 1 && <span className="btag">+{r.edges.length - 1}</span>}
-                          </>
-                        ) : (
-                          <span style={{ color: 'var(--ink-3)' }}>—</span>
-                        )}
+                      {/* Tri-state verdict vs the top rival; hover carries the math. */}
+                      <td className="edge-cell" title={r.edgeWhy}>
+                        {r.edgeCall === 'up' && <span className="edge-up">▲</span>}
+                        {r.edgeCall === 'down' && <span className="edge-dn">▼</span>}
+                        {r.edgeCall === 'even' && <span className="edge-ev">—</span>}
                       </td>
                       <td className="num">{r.offers}</td>
                     </tr>

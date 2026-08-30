@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CarouselEntry } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
@@ -106,13 +106,14 @@ function Flame({ size = 14 }: { size?: number }) {
 }
 
 const ROLE_ORDER: Record<string, number> = { HC: 0, OC: 1, DC: 2 };
-const BOARD_CAP = 60;
+const PAGE_SIZE = 60;
 
 export default function CarouselView() {
   const snapshot = useHQ((s) => s.snapshot);
   const [role, setRole] = useState<RoleFilter>('HC');
   const [sortKey, setSortKey] = useState<SortKey>('security');
   const [asc, setAsc] = useState(true);
+  const [page, setPage] = useState(0);
   const carousel = snapshot?.carousel ?? [];
   const teams = useMemo(() => new Map((snapshot?.teams ?? []).map((t) => [t.row, t])), [snapshot]);
 
@@ -177,6 +178,15 @@ export default function CarouselView() {
     });
     return list;
   }, [carousel, teams, records, role, sortKey, asc]);
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = rows.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  // A new role or sort order puts you back on page one.
+  useEffect(() => {
+    setPage(0);
+  }, [role, sortKey, asc]);
 
   if (!carousel.length) {
     return (
@@ -326,7 +336,7 @@ export default function CarouselView() {
             </tr>
           </thead>
           <tbody>
-            {rows.slice(0, BOARD_CAP).map(({ c, team, rec, reasons }) => (
+            {pageRows.map(({ c, team, rec, reasons }) => (
               <tr
                 key={`${c.teamRow}-${c.role}`}
                 style={c.isUser ? { background: 'color-mix(in srgb, var(--team) 7%, transparent)' } : undefined}
@@ -369,12 +379,29 @@ export default function CarouselView() {
           </tbody>
         </table>
       </div>
-      {rows.length > BOARD_CAP && (
-        <p className="foot-note">
-          Showing {BOARD_CAP} of {rows.length} {role === 'ALL' ? 'coaches' : `${role}s`} under the current
-          sort.
-        </p>
-      )}
+      <div className="pager">
+        <button className="btn" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
+          ← Prev
+        </button>
+        <span className="pager-info">
+          {rows.length
+            ? `${safePage * PAGE_SIZE + 1}–${Math.min(rows.length, (safePage + 1) * PAGE_SIZE)} of ${rows.length} ${role === 'ALL' ? 'coaches' : `${role}s`}`
+            : 'No coaches under this filter'}
+          {pageCount > 1 && (
+            <span style={{ color: 'var(--ink-3)' }}>
+              {' '}
+              · page {safePage + 1} of {pageCount}
+            </span>
+          )}
+        </span>
+        <button
+          className="btn"
+          disabled={safePage >= pageCount - 1}
+          onClick={() => setPage(safePage + 1)}
+        >
+          Next →
+        </button>
+      </div>
     </div>
   );
 }

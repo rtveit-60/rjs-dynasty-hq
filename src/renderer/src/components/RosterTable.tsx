@@ -14,8 +14,7 @@ import {
 
 type SortKey =
   | 'overall'
-  | 'first'
-  | 'last'
+  | 'name'
   | 'position'
   | 'year'
   | 'jersey'
@@ -73,9 +72,8 @@ export default function RosterTable({
     const dir = asc ? 1 : -1;
     list.sort((a, b) => {
       switch (sortKey) {
-        case 'first':
-          return dir * a.firstName.localeCompare(b.firstName) || a.lastName.localeCompare(b.lastName);
-        case 'last':
+        case 'name':
+          // Sports-roster convention: surname first, given name breaks ties.
           return dir * a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
         case 'position':
           return dir * a.position.localeCompare(b.position) || b.overall - a.overall;
@@ -228,8 +226,7 @@ export default function RosterTable({
           <thead>
             <tr>
               {th('#', 'jersey', { defaultAsc: true })}
-              {th('First', 'first', { defaultAsc: true })}
-              {th('Last', 'last', { defaultAsc: true })}
+              {th('Name', 'name', { defaultAsc: true })}
               {th('Pos', 'position', { defaultAsc: true })}
               {th('Yr', 'year', { defaultAsc: true })}
               {th('OVR', 'overall')}
@@ -244,11 +241,10 @@ export default function RosterTable({
             {filtered.map((p) => (
               <tr key={p.row}>
                 <td className="jersey">{p.jersey}</td>
-                <td>
-                  <NameLink req={{ kind: 'player', row: p.row }}>{p.firstName}</NameLink>
-                </td>
                 <td className="pname">
-                  <NameLink req={{ kind: 'player', row: p.row }}>{p.lastName}</NameLink>
+                  <NameLink req={{ kind: 'player', row: p.row }}>
+                    {p.firstName} {p.lastName}
+                  </NameLink>
                 </td>
                 <td>
                   <span className="pos-tag">{p.position}</span>
