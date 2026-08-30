@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { GameInfo, LeagueLeaders, TeamInfo } from '../../../shared/types.ts';
 import { AWARD_SHORT } from '../../../shared/awards.ts';
 import { NameLink } from './ProfileModal.tsx';
+import TeamLogo from './TeamLogo.tsx';
 
 type Mode = 'top25' | 'leaders' | 'awards';
 
@@ -75,19 +76,27 @@ export default function Ticker({
   const items = useMemo(() => {
     if (mode === 'top25') {
       return top25.map((t) => {
-        const rec = records.get(t.row);
+        const rec = records.get(t.row) ?? { w: 0, l: 0 };
         const delta = t.lastWeekRank > 0 ? t.lastWeekRank - t.rank : 0;
         return (
           <span key={`t${t.row}`} className="tk-item">
             <span className="rk">{t.rank}</span>
+            <TeamLogo
+              row={t.row}
+              size={13}
+              fallback={
+                <span
+                  className="swatch"
+                  style={{ background: t.colors.primary, width: 13, height: 13 }}
+                />
+              }
+            />
             <NameLink req={{ kind: 'school', row: t.row }} className="tk-team">
               {shortTeam(t)}
             </NameLink>
-            {rec && (
-              <span className="rec">
-                {rec.w}–{rec.l}
-              </span>
-            )}
+            <span className="rec">
+              {rec.w}–{rec.l}
+            </span>
             {delta > 0 && <span className="up">▲{delta}</span>}
             {delta < 0 && <span className="dn">▼{-delta}</span>}
           </span>
