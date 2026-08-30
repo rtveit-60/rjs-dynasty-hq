@@ -4332,3 +4332,25 @@ table.tbl.tbl-wide {
 .rs-clamp {
   color: var(--ink-3);
 }
+
+/* --- Recruiting board Edge verdict (tri-state arrow vs the top rival) ----- */
+
+.edge-cell {
+  text-align: center;
+  width: 44px;
+  font-size: 12px;
+}
+
+.edge-up {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.edge-dn {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.edge-ev {
+  color: var(--ink-3);
+}

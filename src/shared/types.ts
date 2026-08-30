@@ -424,6 +424,12 @@ export interface ClassRecruit {
   onBoard: boolean;
   committedTo: string | null;
   edges: string[];
+  /** Net comparative score vs the strongest school in the race (see extract.ts EDGE_SIGNIFICANT). */
+  edgeScore: number;
+  /** Board arrow: up = significant advantage, down = disadvantage, even = neutral/committed. */
+  edgeCall: 'up' | 'even' | 'down';
+  /** Hover text explaining the verdict's components. */
+  edgeWhy: string;
 }
 
 export interface AbilitySlot {
