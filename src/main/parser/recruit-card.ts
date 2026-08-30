@@ -213,6 +213,7 @@ export const CARD_FIELDS = [
   'Position',
   'PlayerType',
   'IdealRecruitingPitch',
+  'JerseyNum',
   'Height',
   'Weight',
   'OverallRating',
@@ -300,6 +301,7 @@ export async function extractRecruitCard(franchise: any, playerRow: number): Pro
       weightLb: num('Weight') + 160,
       overall: num('OverallRating'),
       devTrait: String(val(rec, 'TraitDevelopment') ?? ''),
+      jersey: Number.isFinite(Number(val(rec, 'JerseyNum'))) ? Number(val(rec, 'JerseyNum')) : -1,
       homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? ''),
       homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
       idealPitch: (() => {
