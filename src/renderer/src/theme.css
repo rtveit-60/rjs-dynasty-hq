@@ -4251,6 +4251,11 @@ table.tbl.tbl-wide {
   white-space: nowrap;
 }
 
+.ed-save:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .ed-saved {
   padding: 26px 4px 18px;
   font: 500 13px/1.5 var(--font-ui);

@@ -56,6 +56,7 @@ function Stepper({
         onPointerDown={(e) => e.button === 0 && startRepeat(-1)}
         onPointerUp={stopRepeat}
         onPointerLeave={stopRepeat}
+        onClick={(e) => e.detail === 0 && step(-1)}
       >
         −
       </button>
@@ -86,6 +87,7 @@ function Stepper({
         onPointerDown={(e) => e.button === 0 && startRepeat(1)}
         onPointerUp={stopRepeat}
         onPointerLeave={stopRepeat}
+        onClick={(e) => e.detail === 0 && step(1)}
       >
         +
       </button>
