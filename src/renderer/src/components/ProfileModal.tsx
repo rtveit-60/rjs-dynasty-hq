@@ -257,6 +257,23 @@ function StatHistory({ p }: { p: PlayerProfile }) {
   );
 }
 
+/** A profile headshot (portrait:// pack or extracted set); absent quietly.
+ *  Players pass their bare portrait id, coaches "c<id>". */
+function ProfilePortrait({ id }: { id: string | null }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [id]);
+  if (id === null || failed) return null;
+  return (
+    <img
+      className="pf-portrait"
+      src={`portrait://${id}`}
+      alt=""
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 /**
  * The most recent played game as a broadcast score bug — away team on the
  * left, home on the right, loser dimmed — with the player's line from that
@@ -408,6 +425,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
   return (
     <div className="pf-body">
       <div className="pf-head">
+        <ProfilePortrait id={p.portrait !== null ? String(p.portrait) : null} />
         {p.teamRow !== null && <TeamLogo row={p.teamRow} size={56} fallback={null} />}
         <div className="pf-id">
           <div className="pf-name">
@@ -578,6 +596,7 @@ function CoachBody({ c }: { c: CoachProfile }) {
   return (
     <div className="pf-body">
       <div className="pf-head">
+        <ProfilePortrait id={c.portrait !== null ? `c${c.portrait}` : null} />
         {c.teamRow !== null && <TeamLogo row={c.teamRow} size={56} fallback={null} />}
         <div className="pf-id">
           <div className="pf-name">{c.name}</div>

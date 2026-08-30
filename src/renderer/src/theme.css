@@ -2548,6 +2548,17 @@ table.tbl.tbl-wide {
   font-size: 12.5px;
 }
 
+/* The profile's own headshot, when a portrait resolves. */
+.pf-portrait {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #e9e9e9;
+  flex: none;
+}
+
 /* Previous Game: score bug + the player's line from that game. */
 .pf-prev {
   border: 1px solid var(--line);
