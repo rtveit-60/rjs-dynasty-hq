@@ -25,7 +25,7 @@ import type {
   TargetActionFlags,
   TargetActionForm
 } from '../shared/types.ts';
-import { GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
+import { DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
@@ -724,6 +724,7 @@ export async function applyCreateRecruit(
   if ((req.skinTone && req.skinTone >= 1) || (req.gear && Object.keys(req.gear).length)) {
     const { gearSlots, helmetMasks } = await gearCatalog(franchise);
     for (const [slot, item] of Object.entries(req.gear ?? {})) {
+      if (item === '') continue; // explicit removal of the slot
       const def = gearSlots.find((g) => g.slot === slot);
       if (!def || !def.options.includes(item)) throw new Error(`Unknown gear choice for ${slot}.`);
     }
@@ -743,15 +744,17 @@ export async function applyCreateRecruit(
           if (owner) req.gear = { ...req.gear, HeadWear: owner };
         }
       }
-    } else if (req.gear?.HeadWear) {
+    } else if (req.gear?.HeadWear && req.gear.FaceMask === undefined) {
       // A helmet alone must not keep an incompatible base mask: swap it to
-      // one this helmet really wears, or drop it for helmets the data only
-      // shows maskless ('' removes the slot in the written blob).
+      // the helmet's own default mask (else its first), or drop it for
+      // helmets the data only shows maskless ('' removes the slot in the
+      // blob). An explicit FaceMask '' is respected as removal.
       const allowed = helmetMasks[req.gear.HeadWear] ?? [];
       const base = await pickBaseVisuals(franchise, req.position);
       const baseMask = base ? baseLookSummary(base).items['FaceMask'] : undefined;
       if (baseMask && !allowed.includes(baseMask)) {
-        req.gear = { ...req.gear, FaceMask: allowed[0] ?? '' };
+        const def = DEFAULT_MASKS[req.gear.HeadWear];
+        req.gear = { ...req.gear, FaceMask: (def && allowed.includes(def) ? def : allowed[0]) ?? '' };
       }
     }
     visualsJson = await buildVisualsJson(franchise, req.position, req.skinTone, req.gear);

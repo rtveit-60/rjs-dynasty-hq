@@ -696,3 +696,12 @@ export const HELMET_MASKS: Record<string, string[]> = {
     "GearFaceMask_Xenith2Bar"
   ]
 };
+
+/** helmet → the facemask the game's own generated players wear by default
+ * (mode across Team Builder payloads; only decisive modes ship). */
+export const DEFAULT_MASKS: Record<string, string> = {
+  "GearHelmet_AirXP": "GearFaceMask_Kicker",
+  "GearHelmet_Axiom": "GearFaceMask_Axiom3BarLBJagged",
+  "GearHelmet_Speed_Flex": "GearFaceMask_Speedflex2Bar",
+  "GearHelmet_VicisZero2Trench": "GearFaceMask_VicisZero2Robot"
+};

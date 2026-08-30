@@ -60,6 +60,48 @@ const helmetMasks = new Map<string, Set<string>>();
 const dropped = new Set<string>();
 let loadoutChunks = 0;
 
+// Team Builder payloads carry the game's own default-dressed generated
+// players (frostbiteData.characterVisuals, numeric slotTypes: 106=HeadWear,
+// 0=FaceMask). Per-helmet mask counts from them derive DEFAULT_MASKS — what
+// the game itself puts on a fresh player, as opposed to what named players
+// happen to wear. Anchor verified in-game (2026-08-30): a maskless Speed
+// Flex wearer shows the Speedflex 2Bar.
+const tbMaskCounts = new Map<string, Map<string, number>>();
+let tbPlayers = 0;
+
+function harvestTeamBuilder(s: string): void {
+  let doc: any;
+  try {
+    doc = JSON.parse(s);
+  } catch {
+    return;
+  }
+  const cv = doc?.teamData?.frostbiteData?.characterVisuals;
+  if (!cv || typeof cv !== 'object') return;
+  for (const key of Object.keys(cv)) {
+    let v = cv[key];
+    if (typeof v === 'string') {
+      try {
+        v = JSON.parse(v);
+      } catch {
+        continue;
+      }
+    }
+    let helmet: string | null = null;
+    let mask: string | null = null;
+    for (const lo of v?.loadouts ?? []) {
+      for (const el of lo?.loadoutElements ?? []) {
+        if (el?.slotType === 106) helmet = el.itemAssetName ?? null;
+        if (el?.slotType === 0) mask = el.itemAssetName ?? null;
+      }
+    }
+    if (!helmet || !mask) continue;
+    tbPlayers++;
+    if (!tbMaskCounts.has(helmet)) tbMaskCounts.set(helmet, new Map());
+    tbMaskCounts.get(helmet)!.set(mask, (tbMaskCounts.get(helmet)!.get(mask) ?? 0) + 1);
+  }
+}
+
 // Formatted documents: "slotType": "HeadWear", … "itemAssetName": "GearHelmet_X"
 const RX_FMT = /"slotType":\s*"([A-Za-z]+)",\s*"itemAssetName":\s*"([^"]{1,64})"/g;
 
@@ -110,11 +152,19 @@ for (const sb of layout.superBundles) {
     } catch {
       continue;
     }
-    if (data.includes('itemAssetName')) harvest(data.toString('latin1'));
+    if (data.includes('itemAssetName')) {
+      const text = data.toString('latin1');
+      harvest(text);
+      if (data[0] === 0x7b && data.includes('"teamData"')) harvestTeamBuilder(text);
+    }
     if (data.length >= 4 && data[0] === 0x78) {
       try {
         const image = zlib.inflateSync(data);
-        if (image.includes('itemAssetName')) harvest(image.toString('latin1'));
+        if (image.includes('itemAssetName')) {
+          const text = image.toString('latin1');
+          harvest(text);
+          if (image[0] === 0x7b && image.includes('"teamData"')) harvestTeamBuilder(text);
+        }
       } catch {
         // not a zlib image after all
       }
@@ -132,6 +182,18 @@ if (masks.size < 100) throw new Error(`anchor failed: only ${masks.size} facemas
 if ((helmetMasks.get('GearHelmet_Speed_Flex')?.size ?? 0) < 20) {
   throw new Error('anchor failed: Speed_Flex mask list too small');
 }
+// Default-mask anchor: the game's generated players put the 2Bar on a Speed
+// Flex (verified in-game). A tie or a flipped mode means the source moved.
+const defaultMasks: Record<string, string> = {};
+for (const [h, counts] of [...tbMaskCounts.entries()].sort()) {
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  if (ranked.length && (ranked.length === 1 || ranked[0][1] > ranked[1][1])) {
+    if ((helmetMasks.get(h) ?? new Set()).has(ranked[0][0])) defaultMasks[h] = ranked[0][0];
+  }
+}
+if (defaultMasks['GearHelmet_Speed_Flex'] !== 'GearFaceMask_Speedflex2Bar') {
+  throw new Error(`anchor failed: Speed_Flex default mask = ${defaultMasks['GearHelmet_Speed_Flex']}`);
+}
 
 const items: Record<string, string[]> = {};
 for (const [slot, set] of bySlot) items[slot] = [...set].sort();
@@ -141,6 +203,7 @@ for (const [h, set] of [...helmetMasks.entries()].sort()) compat[h] = [...set].s
 console.log(`loadout-bearing chunks: ${loadoutChunks}`);
 for (const [slot, list] of Object.entries(items)) console.log(`${slot}: ${list.length}`);
 console.log(`helmets with mask pairs: ${Object.keys(compat).length}`);
+console.log(`team-builder players: ${tbPlayers}; default masks: ${JSON.stringify(defaultMasks)}`);
 console.log(`coach-wardrobe items dropped: ${[...dropped].sort().join(', ')}`);
 
 const banner = `/**
@@ -159,7 +222,10 @@ const body =
   `\n/** slot (canonical left side) → every item the game's loadouts wear there. */` +
   `\nexport const GEAR_ITEMS: Record<string, string[]> = ${JSON.stringify(items, null, 2)};\n` +
   `\n/** helmet → the facemasks the game's loadouts pair with it. */` +
-  `\nexport const HELMET_MASKS: Record<string, string[]> = ${JSON.stringify(compat, null, 2)};\n`;
+  `\nexport const HELMET_MASKS: Record<string, string[]> = ${JSON.stringify(compat, null, 2)};\n` +
+  `\n/** helmet → the facemask the game's own generated players wear by default` +
+  `\n * (mode across Team Builder payloads; only decisive modes ship). */` +
+  `\nexport const DEFAULT_MASKS: Record<string, string> = ${JSON.stringify(defaultMasks, null, 2)};\n`;
 
 if (printOnly) {
   console.log(body);

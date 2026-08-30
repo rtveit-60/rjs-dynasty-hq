@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { DEFAULT_MASKS } from '../../../shared/gear.ts';
 import type { CreateRecruitForm, FaceOption } from '../../../shared/types.ts';
 import { archetypeLabel, devLabel, heightFt, recruitPos, spaceOut } from '../lib/format.ts';
 import { Stepper } from './EditPlayerModal.tsx';
@@ -11,6 +12,14 @@ import InfoDot from './InfoDot.tsx';
  * here; ratings start from that template and are refined afterwards through
  * the profile's EDIT, like any other recruit.
  */
+/** What the player at this position wears with nothing changed: the base
+ *  look, plus the game's own default mask when the base look is maskless. */
+function effectiveBase(form: CreateRecruitForm, position: string): Record<string, string> {
+  const b = { ...(form.baseLook[position] ?? {}) };
+  if (!b.FaceMask && b.HeadWear && DEFAULT_MASKS[b.HeadWear]) b.FaceMask = DEFAULT_MASKS[b.HeadWear];
+  return b;
+}
+
 export default function CreateRecruitModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<CreateRecruitForm | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'writing' | 'saved'>('loading');
@@ -50,6 +59,8 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         setArchetype(f.archetypesByPosition[firstPos][0]);
         setHomeState(f.states[0] ?? '');
         setDevTrait(f.devTraits[0] ?? 'Normal');
+        setGear(effectiveBase(f, firstPos));
+        setSkinTone(f.baseTones[firstPos] ?? 0);
         setState('ready');
       })
       .catch(() => alive && setState('missing'));
@@ -91,6 +102,15 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
     setState('writing');
     setError(null);
     try {
+      // Only differences from the position's shown base are written — an
+      // untouched Look & Gear section writes nothing, and '' drops a slot.
+      const base = effectiveBase(form, position);
+      const gearOut: Record<string, string> = {};
+      for (const g of form.gearSlots) {
+        const shown = gear[g.slot] ?? '';
+        if (shown !== (base[g.slot] ?? '')) gearOut[g.slot] = shown;
+      }
+      const baseTone = form.baseTones[position] ?? 0;
       const res = await window.hq.createRecruit({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -102,8 +122,8 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         weightLb,
         homeState,
         homeTown: homeTown.trim(),
-        skinTone: skinTone || undefined,
-        gear: Object.keys(gear).length ? gear : undefined,
+        skinTone: skinTone !== baseTone ? skinTone || undefined : undefined,
+        gear: Object.keys(gearOut).length ? gearOut : undefined,
         face: face ?? undefined
       });
       if (res.ok) {
@@ -187,6 +207,9 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
                     const pos = e.target.value;
                     setPosition(pos);
                     setArchetype(form.archetypesByPosition[pos][0]);
+                    // A new position wears its own base look.
+                    setGear(effectiveBase(form, pos));
+                    setSkinTone(face ? face.tone : (form.baseTones[pos] ?? 0));
                   }}
                 >
                   {positions.map((p) => (
@@ -267,8 +290,9 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
 
             <div className="ed-sec">Look &amp; gear</div>
             <p className="cr-note">
-              Optional — unset choices keep a position-matched base look. Item names are the
-              game's own asset identifiers.
+              Shown values are the position's base look — change whatever you like; the
+              facemask list follows the helmet. Item names are the game's own asset
+              identifiers, and only your changes are written.
             </p>
             <div className="cr-grid">
               <label className="ta-field">
@@ -292,9 +316,7 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
               <label className="ta-field">
                 <span>Skin tone</span>
                 <select value={skinTone} onChange={(e) => setSkinTone(Number(e.target.value))}>
-                  <option value={0}>
-                    {form.baseTones[position] ? `Tone ${form.baseTones[position]} · base` : 'Base look'}
-                  </option>
+                  {!skinTone && <option value={0}>None</option>}
                   {[...new Set([...form.skinTones, ...(skinTone ? [skinTone] : [])])]
                     .sort((a, b) => a - b)
                     .map((t) => (
@@ -305,62 +327,52 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
                 </select>
               </label>
               {form.gearSlots.map((g) => {
-                const base = form.baseLook[position] ?? {};
+                const base = effectiveBase(form, position);
+                const shown = gear[g.slot] ?? '';
                 // The facemask list locks to what real loadouts wear with the
-                // effective helmet (chosen, else the base look's own).
-                const effHelmet = gear.HeadWear ?? base.HeadWear;
+                // shown helmet.
                 const options =
-                  g.slot === 'FaceMask' && effHelmet
-                    ? (form.helmetMasks[effHelmet] ?? [])
+                  g.slot === 'FaceMask' && gear.HeadWear
+                    ? (form.helmetMasks[gear.HeadWear] ?? [])
                     : g.options;
                 return (
                   <label key={g.slot} className="ta-field">
                     <span>{g.label}</span>
                     <select
-                      value={gear[g.slot] ?? ''}
+                      value={shown}
                       onChange={(e) =>
                         setGear((prev) => {
                           const next = { ...prev };
-                          if (e.target.value) next[g.slot] = e.target.value;
+                          const v = e.target.value;
+                          if (v) next[g.slot] = v;
                           else delete next[g.slot];
                           if (g.slot === 'HeadWear') {
-                            // A helmet change drops a now-incompatible mask,
-                            // and swaps out an incompatible base mask so the
-                            // written pair is one real loadouts wear.
-                            const helm = e.target.value || base.HeadWear;
-                            const allowed = helm ? (form.helmetMasks[helm] ?? []) : null;
-                            if (next.FaceMask && allowed && !allowed.includes(next.FaceMask)) {
-                              delete next.FaceMask;
-                            }
-                            if (
-                              !next.FaceMask &&
-                              allowed?.length &&
-                              base.FaceMask &&
-                              !allowed.includes(base.FaceMask)
-                            ) {
-                              next.FaceMask = allowed[0];
+                            // The mask follows the helmet: kept when it fits,
+                            // else the helmet's own default, else its first,
+                            // else none (some helmets are only worn maskless).
+                            const allowed = v ? (form.helmetMasks[v] ?? []) : [];
+                            if (!next.FaceMask || !allowed.includes(next.FaceMask)) {
+                              const def = DEFAULT_MASKS[v];
+                              const pick = def && allowed.includes(def) ? def : allowed[0];
+                              if (pick) next.FaceMask = pick;
+                              else delete next.FaceMask;
                             }
                           }
-                          if (g.slot === 'FaceMask' && e.target.value && !next.HeadWear) {
-                            // Keep the base helmet when the mask fits it; else
-                            // the mask brings a matching helmet along.
-                            const fitsBase =
-                              base.HeadWear &&
-                              (form.helmetMasks[base.HeadWear] ?? []).includes(e.target.value);
-                            if (!fitsBase) {
-                              const owner = Object.keys(form.helmetMasks).find((h) =>
-                                form.helmetMasks[h].includes(e.target.value)
-                              );
-                              if (owner) next.HeadWear = owner;
-                            }
+                          if (g.slot === 'FaceMask' && v && !next.HeadWear) {
+                            // No helmet shown at all: the mask brings one.
+                            const owner = Object.keys(form.helmetMasks).find((h) =>
+                              form.helmetMasks[h].includes(v)
+                            );
+                            if (owner) next.HeadWear = owner;
                           }
                           return next;
                         })
                       }
                     >
-                      <option value="">
-                        {base[g.slot] ? `${gearLabel(base[g.slot])} · base` : 'None · base'}
-                      </option>
+                      {(!base[g.slot] || !shown) && <option value="">None</option>}
+                      {shown && !options.includes(shown) && (
+                        <option value={shown}>{gearLabel(shown)}</option>
+                      )}
                       {options.map((o) => (
                         <option key={o} value={o}>
                           {gearLabel(o)}
@@ -405,7 +417,8 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
 function gearLabel(asset: string): string {
   return asset
     .replace(/^Gear_?[A-Za-z]*?_/, '')
-    .replace(/^(Towel|FaceMarks|Backplate|Flakjacket)_/, '')
+    .replace(/^(Towel|FaceMarks|Backplate|Flakjacket|ArmSleeve)_/, '')
+    .replace(/^shoe_(low|mid|high)_/, '')
     .replace(/_/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/([A-Za-z])(\d)/g, '$1 $2');
