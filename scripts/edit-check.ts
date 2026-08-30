@@ -15,6 +15,7 @@ import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync } from
 import os from 'node:os';
 import path from 'node:path';
 import {
+  applyCoachFire,
   applyDepthChartEdit,
   applyPlayerEdit,
   applyResourceEdit,
@@ -22,6 +23,7 @@ import {
   buildResourceForm,
   editedPathFor
 } from '../src/main/editor.ts';
+import { ensureCoachSchema } from '../src/main/parser/coach-schema.ts';
 import { loadFranchise, mainTable, refFromRecord, val } from '../src/main/parser/franchise.ts';
 
 const savePath = process.argv[2] ?? 'samples/DYNASTY-VIRGINIA-MIDSEASON';
@@ -274,6 +276,51 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   await rejects('depth reject: player from another roster', () =>
     applyDepthChartEdit(fr2, editedPath, { teamRow, changes: [{ position: 'QB', playerRows: [foreign, ...swapped.slice(1)] }] }, dir));
   check('source still untouched after depth edits', sha(work) === sourceHash);
+}
+
+// --- 7. fire coach: PendingFire round-trip + rejections ---
+{
+  const fr = await loadFranchise(editedPath);
+  const coach = mainTable(fr, 'Coach');
+  await ensureCoachSchema(fr, coach);
+  await coach.readRecords(['FirstName', 'Position', 'IsUserControlled', 'ContractStatus', 'TeamIndex']);
+  let cpuHC = -1;
+  let userCoach = -1;
+  coach.records.forEach((r: any, i: number) => {
+    const ti = Number(val(r, 'TeamIndex'));
+    if (r.isEmpty || !val(r, 'FirstName') || !Number.isInteger(ti) || ti < 0 || ti >= 250) return;
+    const status = String(val(r, 'ContractStatus'));
+    if (cpuHC < 0 && val(r, 'IsUserControlled') !== true && String(val(r, 'Position')) === 'HeadCoach' && (status === 'First_Active' || status === 'Signed')) cpuHC = i;
+    if (userCoach < 0 && val(r, 'IsUserControlled') === true) userCoach = i;
+  });
+  check('fire: found a CPU head coach', cpuHC >= 0, `row ${cpuHC}`);
+
+  const fired = await applyCoachFire(fr, editedPath, { coachRow: cpuHC, undo: false }, dir);
+  check('fire: PendingFire written', fired.editedPath === editedPath, fired.coachName);
+  const fr2 = await loadFranchise(editedPath);
+  const c2 = mainTable(fr2, 'Coach');
+  await ensureCoachSchema(fr2, c2);
+  await c2.readRecords(['ContractStatus']);
+  const readBackStatus = String(val(c2.records[cpuHC], 'ContractStatus'));
+  check('fire: persisted through cold reload (alias-tolerant)',
+    readBackStatus === 'PendingFire' || readBackStatus === 'First_Pending', readBackStatus);
+
+  await rejects('fire reject: already marked', () =>
+    applyCoachFire(fr2, editedPath, { coachRow: cpuHC, undo: false }, dir));
+  if (userCoach >= 0) {
+    await rejects('fire reject: user-controlled coach', () =>
+      applyCoachFire(fr2, editedPath, { coachRow: userCoach, undo: false }, dir));
+  }
+
+  const undone = await applyCoachFire(fr2, editedPath, { coachRow: cpuHC, undo: true }, dir);
+  check('fire: undo restores Signed', undone.coachName === fired.coachName);
+  const fr3 = await loadFranchise(editedPath);
+  const c3 = mainTable(fr3, 'Coach');
+  await ensureCoachSchema(fr3, c3);
+  await c3.readRecords(['ContractStatus']);
+  const restored = String(val(c3.records[cpuHC], 'ContractStatus'));
+  check('fire: undo persisted', restored === 'Signed' || restored === 'First_Active', restored);
+  check('source still untouched after fire edits', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

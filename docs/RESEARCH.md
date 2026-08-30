@@ -189,6 +189,14 @@ The save's `MentalAbilities` enum identifiers have drifted like the archetypes: 
 - `scripts/extract-mental-abilities.ts` regenerates `src/shared/mental-abilities.ts` (anchors: RoadFanFavorite→"Road Dog", DBRally→"Legion"); run after title updates, never hand-edit. `recruit-card.ts` displays through it everywhere (profiles previously showed raw identifiers).
 - Localization corroboration was a dead end on purpose: `fb-scan-chunks` sees the FrTk stores only in compressed form, and `Win32/loc/en` keeps strings in non-chunk resources.
 
+### Firing CPU coaches — MECHANISM FOUND (2026-08-30), season-end behavior pending in-game check
+
+`Coach.ContractStatus` (decodable index range, inside the drift-safe window) is an enum whose members are the carousel's own state machine: `Signed=0, Expiring=1, PendingFire=2, PendingNFL=3, PendingRenewal=4, PendingRetire=5, PendingHire=6, FreeAgent=7, Retired=8, Deleted=9, None=10` — with range-marker aliases sharing values (`First_Active=0`, `First_Pending=2`, `Last_Active=5`, `Last_Pending=6`), so **reads must normalize by value** (the lib returns whichever name comes first: a PendingFire coach reads back `First_Pending`). Mid-season distribution in the sample: 429 active, 68 FreeAgent (the hiring pool), 1 Deleted, zero Pending states — consistent with the carousel setting them at season's end. `JobOpening.reason` includes `Fired`, the downstream state.
+
+- **Write proven**: `rec.ContractStatus = 'PendingFire'` round-trips (value 2 persists; the read-back name is the alias). Undo = `'Signed'`.
+- **The honest unknown**: whether the game's weekly AD evaluation can clear an externally set PendingFire before season's end. The app's carousel row now shows the live contract state, so one played week answers it. Season-end processing (the actual firing + JobOpening row) is the game's own carousel code — the state we set is the one it consumes, but that consumption is verified only by reaching an offseason with the mark intact.
+- Never fire user-controlled coaches (guarded in `applyCoachFire`), and never write Coach fields past the drift-safe index window (~126) — the padded schema misdecodes there and a write would corrupt (see the Coach drift section).
+
 ### Scheme→archetype fits — FOUND (2026-08-30): Scheme → DepthChart*Philosophy → DepthChartPositionPhilosophy
 
 The game's scheme-fit data (what its depth-chart auto-fill and fit displays run on) lives in the franchise-common tuning store:

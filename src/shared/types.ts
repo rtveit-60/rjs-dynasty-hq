@@ -85,6 +85,8 @@ export interface CarouselEntry {
   securityRank: number;
   yearsRemaining: number;
   contractLength: number;
+  /** Normalized ContractStatus: Signed | Expiring | PendingFire | PendingNFL | PendingRenewal | PendingRetire | PendingHire | FreeAgent. */
+  contractStatus: string;
   isUser: boolean;
 }
 
@@ -740,6 +742,13 @@ export interface ResourceEditRequest {
   kind: 'nil' | 'hours';
   /** Whole points/hours to add; clamped to the form's headroom. */
   amount: number;
+}
+
+/** Fire (or un-fire) a CPU coach: flips the game's own PendingFire contract state. */
+export interface CoachFireRequest {
+  coachRow: number;
+  /** true restores the Signed state instead. */
+  undo: boolean;
 }
 
 /**

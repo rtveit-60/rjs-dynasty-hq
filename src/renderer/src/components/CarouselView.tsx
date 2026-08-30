@@ -114,6 +114,7 @@ export default function CarouselView() {
   const [sortKey, setSortKey] = useState<SortKey>('security');
   const [asc, setAsc] = useState(true);
   const [page, setPage] = useState(0);
+  const [fireTarget, setFireTarget] = useState<CarouselEntry | null>(null);
   const carousel = snapshot?.carousel ?? [];
   const teams = useMemo(() => new Map((snapshot?.teams ?? []).map((t) => [t.row, t])), [snapshot]);
 
@@ -333,6 +334,7 @@ export default function CarouselView() {
               {th('Contract', 'contract')}
               {th('AD', 'ad')}
               {th('Outlook', 'outlook', { defaultAsc: false })}
+              <th title="Mark a CPU coach to be fired at season's end">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -374,11 +376,50 @@ export default function CarouselView() {
                     ))}
                   </span>
                 </td>
+                <td>
+                  {c.isUser ? (
+                    <span style={{ color: 'var(--ink-3)' }}>—</span>
+                  ) : c.contractStatus === 'PendingFire' ? (
+                    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                      <span className="tag" style={{ color: 'var(--bad)', borderColor: 'var(--bad)' }}>
+                        FIRING
+                      </span>
+                      <button
+                        type="button"
+                        className="pf-btn"
+                        onClick={() => setFireTarget(c)}
+                        title="Take this coach off the chopping block"
+                      >
+                        UNDO
+                      </button>
+                    </span>
+                  ) : c.contractStatus === 'Signed' || c.contractStatus === 'Expiring' ? (
+                    <button
+                      type="button"
+                      className="pf-btn"
+                      onClick={() => setFireTarget(c)}
+                      title="Mark this coach to be fired at season's end"
+                    >
+                      FIRE
+                    </button>
+                  ) : (
+                    <span style={{ color: 'var(--ink-3)' }} title={c.contractStatus}>
+                      —
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {fireTarget && (
+        <FireDialog
+          entry={fireTarget}
+          teamName={teams.get(fireTarget.teamRow)?.longName ?? 'their program'}
+          onClose={() => setFireTarget(null)}
+        />
+      )}
       <div className="pager">
         <button className="btn" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>
           ← Prev
@@ -401,6 +442,100 @@ export default function CarouselView() {
         >
           Next →
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Confirm firing (or unfiring) a CPU coach. Flips the game's own PendingFire
+ * contract state through the guarded _RJsEdited write path — the offseason
+ * carousel is what actually processes the firing.
+ */
+function FireDialog({
+  entry,
+  teamName,
+  onClose
+}: {
+  entry: CarouselEntry;
+  teamName: string;
+  onClose: () => void;
+}) {
+  const undo = entry.contractStatus === 'PendingFire';
+  const [state, setState] = useState<'idle' | 'writing' | 'saved'>('idle');
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const apply = async (): Promise<void> => {
+    setState('writing');
+    setError(null);
+    try {
+      const res = await window.hq.fireCoach({ coachRow: entry.coachRow, undo });
+      if (res.ok) {
+        setMessage(res.message);
+        setState('saved');
+        setTimeout(onClose, 2200);
+      } else {
+        setError(res.message);
+        setState('idle');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setState('idle');
+    }
+  };
+
+  return (
+    <div className="ed-overlay" onMouseDown={onClose}>
+      <div className="ed-panel rs-panel" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="ed-head">
+          <span className="ed-title">{undo ? 'Cancel Firing' : 'Fire Coach'}</span>
+          <span className="ed-who">
+            {entry.name} · {entry.role} · {teamName}
+          </span>
+          <button type="button" className="pf-btn ed-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        {state === 'saved' ? (
+          <div className="ed-saved">{message}</div>
+        ) : (
+          <>
+            <p className="fire-copy">
+              {undo ? (
+                <>
+                  Restores <strong>{entry.name}</strong> to a normal signed contract, taking them
+                  off the offseason chopping block.
+                </>
+              ) : (
+                <>
+                  Sets the game's own <strong>PendingFire</strong> contract state on{' '}
+                  <strong>{entry.name}</strong> — the state the offseason coaching carousel
+                  processes as a firing, opening the {teamName} {entry.role} job. If the game's
+                  own mid-season AD evaluation clears the mark, the row here will show it, so
+                  check back after your next played week.
+                </>
+              )}
+            </p>
+            {error && <div className="ed-error">{error}</div>}
+            <div className="ed-foot">
+              <span className="ed-target">
+                Writes a <strong>_RJsEdited</strong> copy — the original save is never touched.
+              </span>
+              <button type="button" className="pf-btn" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary ed-save"
+                disabled={state === 'writing'}
+                onClick={() => void apply()}
+              >
+                {state === 'writing' ? 'WRITING…' : undo ? 'CANCEL FIRING' : 'FIRE COACH'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

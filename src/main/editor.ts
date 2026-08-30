@@ -333,6 +333,71 @@ export async function applyPlayerEdit(
   });
 }
 
+// --- Fire Coach -------------------------------------------------------------
+
+/** Names the library may hand back for the two contract states we flip. */
+const PENDING_FIRE_NAMES = new Set(['PendingFire', 'First_Pending']);
+const SIGNED_NAMES = new Set(['Signed', 'First_Active']);
+
+/**
+ * Flip a CPU coach's ContractStatus to the game's own PendingFire state (or
+ * back to Signed), and write the _RJsEdited sibling. The offseason carousel
+ * is what processes PendingFire — this sets the flag the game itself uses;
+ * whether a mid-season AD re-evaluation can clear it is verified in-game.
+ */
+export async function applyCoachFire(
+  franchise: any,
+  savePath: string,
+  req: { coachRow: number; undo: boolean },
+  backupDir: string
+): Promise<{ editedPath: string; coachName: string }> {
+  const { ensureCoachSchema } = await import('./parser/coach-schema.ts');
+  const table = mainTable(franchise, 'Coach');
+  if (!(await ensureCoachSchema(franchise, table))) {
+    throw new Error('The Coach table is unreadable in this save.');
+  }
+  await table.readRecords([
+    'FirstName',
+    'LastName',
+    'Position',
+    'IsUserControlled',
+    'ContractStatus'
+  ]);
+  const rec = table.records?.[req.coachRow];
+  if (!rec || rec.isEmpty) throw new Error('No coach at that row in the save.');
+  const role = String(val(rec, 'Position') ?? '');
+  if (!['HeadCoach', 'OffensiveCoordinator', 'DefensiveCoordinator'].includes(role)) {
+    throw new Error('Only head coaches and coordinators can be marked.');
+  }
+  if (val(rec, 'IsUserControlled') === true) {
+    throw new Error('That is your own coach — the AD does not take requests about you.');
+  }
+  const coachName = `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
+  const current = String(val(rec, 'ContractStatus') ?? '');
+  if (req.undo) {
+    if (!PENDING_FIRE_NAMES.has(current)) throw new Error(`${coachName} is not marked to be fired.`);
+    rec.ContractStatus = 'Signed';
+  } else {
+    if (PENDING_FIRE_NAMES.has(current)) throw new Error(`${coachName} is already marked to be fired.`);
+    if (!SIGNED_NAMES.has(current) && current !== 'Expiring') {
+      throw new Error(`${coachName} is in the ${current} state — only active coaches can be marked.`);
+    }
+    rec.ContractStatus = 'PendingFire';
+  }
+
+  const want = req.undo ? SIGNED_NAMES : PENDING_FIRE_NAMES;
+  const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const t = mainTable(check, 'Coach');
+    if (!(await ensureCoachSchema(check, t))) throw new Error('Verify reload failed.');
+    await t.readRecords(['ContractStatus']);
+    const written = String(val(t.records?.[req.coachRow], 'ContractStatus') ?? '');
+    if (!want.has(written)) {
+      throw new Error('The written save did not read back with the new contract state.');
+    }
+  });
+  return { editedPath, coachName };
+}
+
 // --- Program resources (Fundraising / Hire Additional Recruiters) ----------
 
 const BUDGET_FIELDS = [

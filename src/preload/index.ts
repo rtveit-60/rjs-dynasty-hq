@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webFrame } from 'electron';
 import type {
   AppState,
   BrandPack,
+  CoachFireRequest,
   DepthChartEditRequest,
   DetectedSave,
   LeagueLeaders,
@@ -54,6 +55,7 @@ export interface HQBridge {
   editResource: (req: ResourceEditRequest) => Promise<PlayerEditResult>;
   editDepthChart: (req: DepthChartEditRequest) => Promise<PlayerEditResult>;
   browseHQ: (teamRow: number) => Promise<Snapshot['school'] | null>;
+  fireCoach: (req: CoachFireRequest) => Promise<PlayerEditResult>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
   getPlaybook: (
@@ -92,6 +94,7 @@ const bridge: HQBridge = {
   editResource: (req) => ipcRenderer.invoke('resource:edit', req),
   editDepthChart: (req) => ipcRenderer.invoke('depth:edit', req),
   browseHQ: (teamRow) => ipcRenderer.invoke('hq:browse', teamRow),
+  fireCoach: (req) => ipcRenderer.invoke('coach:fire', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   getPlaybook: (side, coachRow, schemeEnum) =>

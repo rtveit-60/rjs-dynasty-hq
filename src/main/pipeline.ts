@@ -9,6 +9,7 @@ import type {
   PlayerEditForm,
   PlayerEditResult,
   Profile,
+  CoachFireRequest,
   DepthChartEditRequest,
   ResourceEditRequest,
   ResourceForm,
@@ -19,6 +20,7 @@ import type {
 } from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
 import {
+  applyCoachFire,
   applyDepthChartEdit,
   applyPlayerEdit,
   applyResourceEdit,
@@ -280,6 +282,24 @@ export class Pipeline {
       return {
         editedPath,
         message: `Depth chart updated (${windows} window${windows === 1 ? '' : 's'}) — saved to ${basename(editedPath)}.`
+      };
+    });
+  }
+
+  /** Mark a CPU coach PendingFire (or restore Signed), via the guarded shell. */
+  async fireCoach(req: CoachFireRequest, savePath: string): Promise<PlayerEditResult> {
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, coachName } = await applyCoachFire(
+        this.franchise,
+        savePath,
+        { coachRow: req.coachRow, undo: req.undo },
+        app.getPath('userData')
+      );
+      return {
+        editedPath,
+        message: req.undo
+          ? `${coachName} is off the chopping block — saved to ${basename(editedPath)}.`
+          : `${coachName} marked to be fired at season's end — saved to ${basename(editedPath)}.`
       };
     });
   }

@@ -4470,3 +4470,15 @@ table.tbl.tbl-wide {
   padding: 6px 26px 6px 10px;
   max-width: 220px;
 }
+
+/* --- Fire Coach dialog copy ---------------------------------------------- */
+
+.fire-copy {
+  margin-top: 16px;
+  font: 500 13px/1.55 var(--font-ui);
+  color: var(--ink-2);
+}
+
+.fire-copy strong {
+  color: var(--ink);
+}

@@ -285,6 +285,24 @@ function registerIpc(): void {
     return result;
   });
 
+  // Mark a CPU coach to be fired at season's end (the game's own PendingFire state).
+  ipcMain.handle('coach:fire', async (_e, req: unknown) => {
+    const r = req as { coachRow?: unknown; undo?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !Number.isInteger(r?.coachRow) || (r.coachRow as number) < 0) {
+      return { ok: false, message: 'Nothing to apply.' };
+    }
+    const result = await pipeline.fireCoach(
+      { coachRow: r.coachRow as number, undo: r.undo === true },
+      savePath
+    );
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // View-only browse of another school's full Team HQ, from the cached parse.
   ipcMain.handle('hq:browse', (_e, teamRow: number) => {
     const { savePath } = getSettings();
