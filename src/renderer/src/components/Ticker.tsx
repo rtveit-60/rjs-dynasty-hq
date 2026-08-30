@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { GameInfo, LeagueLeaders, TeamInfo } from '../../../shared/types.ts';
 import { AWARD_SHORT } from '../../../shared/awards.ts';
 import { NameLink } from './ProfileModal.tsx';
+import TeamLogo from './TeamLogo.tsx';
 
 type Mode = 'top25' | 'leaders' | 'awards';
 
@@ -75,19 +76,27 @@ export default function Ticker({
   const items = useMemo(() => {
     if (mode === 'top25') {
       return top25.map((t) => {
-        const rec = records.get(t.row);
+        const rec = records.get(t.row) ?? { w: 0, l: 0 };
         const delta = t.lastWeekRank > 0 ? t.lastWeekRank - t.rank : 0;
         return (
           <span key={`t${t.row}`} className="tk-item">
             <span className="rk">{t.rank}</span>
+            <TeamLogo
+              row={t.row}
+              size={13}
+              fallback={
+                <span
+                  className="swatch"
+                  style={{ background: t.colors.primary, width: 13, height: 13 }}
+                />
+              }
+            />
             <NameLink req={{ kind: 'school', row: t.row }} className="tk-team">
               {shortTeam(t)}
             </NameLink>
-            {rec && (
-              <span className="rec">
-                {rec.w}–{rec.l}
-              </span>
-            )}
+            <span className="rec">
+              {rec.w}–{rec.l}
+            </span>
             {delta > 0 && <span className="up">▲{delta}</span>}
             {delta < 0 && <span className="dn">▼{-delta}</span>}
           </span>
@@ -101,11 +110,20 @@ export default function Ticker({
         </span>
       ];
     }
+    // Data honesty for a season with no stats yet: an empty strip reads as a
+    // bug, so say why it is empty instead.
+    const empty = [
+      <span key="empty" className="tk-item">
+        <span className="rec">Season stats fill in after the first games.</span>
+      </span>
+    ];
     if (mode === 'leaders') {
-      return leaders.categories.flatMap((c) =>
-        c.rows.slice(0, 2).map((r, i) => (
+      const rows = leaders.categories.flatMap((c) =>
+        c.rows.slice(0, 3).map((r, i) => (
           <span key={`${c.key}${i}`} className="tk-item">
-            <span className="rk">{c.short}</span>
+            <span className="rk">
+              #{i + 1} {c.short}
+            </span>
             <NameLink req={{ kind: 'player', row: r.playerRow }} className="tk-team">
               {r.name}
             </NameLink>
@@ -114,8 +132,9 @@ export default function Ticker({
           </span>
         ))
       );
+      return rows.length ? rows : empty;
     }
-    return AWARD_WATCH.flatMap((a) => {
+    const races = AWARD_WATCH.flatMap((a) => {
       const cat = leaders.categories.find((c) => c.key === a.cat);
       const r = cat?.rows[0];
       if (!r) return [];
@@ -131,6 +150,7 @@ export default function Ticker({
         </span>
       ];
     });
+    return races.length ? races : empty;
   }, [mode, top25, records, leaders]);
 
   // Marquee only when there is something to scroll; content doubles for a

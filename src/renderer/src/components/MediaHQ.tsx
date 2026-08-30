@@ -5,6 +5,7 @@ import { useHQ } from '../store.ts';
 import InfoDot from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import Story from './Story.tsx';
+import TeamLogo from './TeamLogo.tsx';
 import Ticker from './Ticker.tsx';
 
 const fmtVal = (key: string, v: number): string =>
@@ -268,19 +269,26 @@ export default function MediaHQ({
           </div>
           <div className="hqm-body hq-top25">
             {top25.map((t) => {
-              const rec = records.get(t.row);
+              const rec = records.get(t.row) ?? { w: 0, l: 0 };
               const delta = t.lastWeekRank > 0 ? t.lastWeekRank - t.rank : 0;
               return (
                 <div key={t.row} className="hqm-row">
                   <span className="i">{t.rank}</span>
+                  <TeamLogo
+                    row={t.row}
+                    size={15}
+                    fallback={
+                      <span
+                        className="swatch"
+                        style={{ background: t.colors.primary, width: 15, height: 15 }}
+                      />
+                    }
+                  />
                   <span className="n">
                     <NameLink req={{ kind: 'school', row: t.row }}>{t.displayName}</NameLink>
-                    {rec && (
-                      <span className="t">
-                        {' '}
-                        {rec.w}–{rec.l}
-                      </span>
-                    )}
+                    <span className="t">
+                      {rec.w}–{rec.l}
+                    </span>
                   </span>
                   <span className="v">
                     {t.lastWeekRank === 0 ? (

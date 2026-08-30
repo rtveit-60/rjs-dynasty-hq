@@ -3136,7 +3136,8 @@ table.tbl.tbl-wide {
   margin-top: 14px;
   border: 1px solid var(--line);
   background: var(--paper);
-  overflow: hidden;
+  /* No overflow clip here: the mode menu hangs below the bar. The marquee is
+     already clipped by .tk-strip. */
 }
 
 .tk-cap {
@@ -3275,6 +3276,14 @@ table.tbl.tbl-wide {
   padding: 1px 5px 0;
 }
 
+/* Logos ride centered in baseline-aligned ticker items and module rows. */
+.tk-item .team-logo,
+.tk-item .swatch,
+.hqm-row .team-logo,
+.hqm-row .swatch {
+  align-self: center;
+}
+
 .up {
   color: var(--good);
   font-weight: 700;
@@ -3311,6 +3320,13 @@ table.tbl.tbl-wide {
   gap: 12px;
   margin-top: 12px;
   align-items: start;
+}
+
+/* Room for logos + records in the two-column AP list; leaders need less. */
+@media (min-width: 1050px) {
+  .hq-mods {
+    grid-template-columns: 1.45fr 1fr 1fr;
+  }
 }
 
 .hqm {
@@ -3517,6 +3533,26 @@ table.tbl.tbl-wide {
 
 .hq-top25 .hqm-row {
   break-inside: avoid;
+  gap: 6px;
+}
+
+/* Name and record share the middle cell; a long school name gives way with an
+   ellipsis while the record and movement always stay visible. */
+.hq-top25 .hqm-row .n {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.hq-top25 .hqm-row .n .name-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.hq-top25 .hqm-row .n .t {
+  flex: none;
 }
 
 .hq-award-cols {

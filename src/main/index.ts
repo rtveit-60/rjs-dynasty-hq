@@ -478,7 +478,7 @@ function createWindow(): void {
             for (const label of (process.env['HQ_CAPTURE_CLICK'] ?? '').split(',').filter(Boolean)) {
               // Prefix match tolerates count badges inside the control ("THE WIRE 133").
               await win!.webContents.executeJavaScript(
-                `[...document.querySelectorAll('.filter,.tab,.btn')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
+                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
               );
               await new Promise((r) => setTimeout(r, 700));
             }
