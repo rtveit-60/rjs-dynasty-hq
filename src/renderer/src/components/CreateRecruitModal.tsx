@@ -94,15 +94,6 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
     setState('writing');
     setError(null);
     try {
-      // Only differences from the position's shown base are written — an
-      // untouched Look & Gear section writes nothing, and '' drops a slot.
-      const base = effectiveLook(form.baseLook[position] ?? {});
-      const gearOut: Record<string, string> = {};
-      for (const g of form.gearSlots) {
-        const shown = gear[g.slot] ?? '';
-        if (shown !== (base[g.slot] ?? '')) gearOut[g.slot] = shown;
-      }
-      const baseTone = form.baseTones[position] ?? 0;
       const res = await window.hq.createRecruit({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -114,9 +105,6 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         weightLb,
         homeState,
         homeTown: homeTown.trim(),
-        skinTone: skinTone !== baseTone ? skinTone || undefined : undefined,
-        bodyType: bodyType !== (form.baseBodies[position] ?? 0) ? bodyType : undefined,
-        gear: Object.keys(gearOut).length ? gearOut : undefined,
         face: face ?? undefined
       });
       if (res.ok) {
@@ -270,11 +258,11 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
               </label>
             </div>
 
-            <div className="ed-sec">Look &amp; gear</div>
+            <div className="ed-sec">Face</div>
             <p className="cr-note">
-              Shown values are the position's base look — change whatever you like; the
-              facemask list follows the helmet. Item names are the game's own asset
-              identifiers, and only your changes are written.
+              The head and portrait carry onto the recruit. The game dresses recruits
+              itself at enrollment — gear, body type and skin tone become editable from
+              the profile once they're on a roster.
             </p>
             <LookSection
               gearSlots={form.gearSlots}
@@ -290,6 +278,7 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
               setFace={setFace}
               bodyType={bodyType}
               setBodyType={setBodyType}
+              faceOnly
             />
 
             {(error || (nameProblem && (firstName || lastName))) && (

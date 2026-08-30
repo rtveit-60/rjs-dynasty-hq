@@ -170,7 +170,7 @@ check('form: on an edited save the target is itself',
 const second = await applyPlayerEdit(
   readBack,
   editedPath,
-  { playerRow: recruitRow, firstName: 'Second', lastName: 'Pass', gear: { Towel: 'Towel_West' } },
+  { playerRow: recruitRow, firstName: 'Second', lastName: 'Pass' },
   dir
 );
 check('in-place: same file', second.editedPath === editedPath);
@@ -180,17 +180,8 @@ const readBack2 = await loadFranchise(editedPath);
 const p3 = mainTable(readBack2, 'Player');
 await p3.readRecords();
 check('in-place: second edit persisted', String(val(p3.records[recruitRow], 'FirstName')) === 'Second');
-{
-  const ref3 = refFromRecord(p3.records[recruitRow], 'CharacterVisuals');
-  const vT3 = ref3 && ref3.tableId !== 0 ? readBack2.getTableById(ref3.tableId) : null;
-  if (vT3 && !vT3.recordsRead) await vT3.readRecords();
-  const blob = vT3 ? JSON.parse(String(vT3.records[ref3!.row]._fields.RawData.value)) : null;
-  const towel = (blob?.loadouts ?? []).flatMap((l: any) => l.loadoutElements ?? [])
-    .find((e: any) => e.slotType === 'Towel')?.itemAssetName;
-  check('in-place: undressed recruit gained a visuals row',
-    !!ref3 && ref3.tableId !== 0 && towel === 'Towel_West',
-    `ref ${JSON.stringify(ref3)}, towel ${towel}`);
-}
+check('in-place: recruit stays undressed (no visuals ref)',
+  (() => { const r = refFromRecord(p3.records[recruitRow], 'CharacterVisuals'); return !r || r.tableId === 0; })());
 check('in-place: first edit survives', String(val(p3.records[rosterRow], 'FirstName')) === 'Harness');
 check('source still untouched after everything', sha(work) === sourceHash);
 
@@ -215,6 +206,8 @@ await rejects('reject: face outside the catalog', () =>
   }, dir));
 await rejects('reject: unknown gear on an edit', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, gear: { Towel: 'Towel_Imaginary' } }, dir));
+await rejects('reject: dressing an unenrolled prospect (game blanks on it)', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: recruitRow, gear: { Towel: 'Towel_West' } }, dir));
 await rejects('reject: skin tone off the scale', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, skinTone: 9 }, dir));
 await rejects('reject: unknown body type', () =>
@@ -606,47 +599,21 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     }, dir));
   check('source still untouched after creation', sha(work) === sourceHash);
 
-  // --- 10b. creation with a chosen look: skin tone + gear overrides ---
+  // --- 10b. creations are face-only: the game dresses recruits at enrollment
+  //     (in-game verified 2026-08-30 — a pre-provisioned visuals row blanks
+  //     the dynasty UI). The gear catalogs still power the roster edit dialog.
   const cform2 = await buildCreateForm(await loadFranchise(editedPath), editedPath);
   check('create form: gear catalog from dressed players',
     cform2.gearSlots.length >= 6 && cform2.gearSlots.every((g) => g.options.length > 1),
     cform2.gearSlots.map((g) => `${g.slot}×${g.options.length}`).join(' '));
   check('create form: observed skin tones', cform2.skinTones.length >= 4, cform2.skinTones.join(','));
   const mask = cform2.gearSlots.find((g) => g.slot === 'FaceMask');
-  const frV = await loadFranchise(editedPath);
-  const resV = await applyCreateRecruit(frV, editedPath, {
-    firstName: 'Styled',
-    lastName: 'Prospect',
-    position: pos,
-    archetype,
-    stars: 4,
-    devTrait: cform2.devTraits[0],
-    heightIn: 75,
-    weightLb: 220,
-    homeState: state,
-    homeTown: '',
-    skinTone: cform2.skinTones[0],
-    bodyType: 4,
-    gear: mask ? { FaceMask: mask.options[0] } : undefined
-  }, dir);
-  const frV2 = await loadFranchise(editedPath);
-  const pTV = mainTable(frV2, 'Player');
-  await pTV.readRecords();
-  const vRef = refFromRecord(pTV.records[resV.playerRow], 'CharacterVisuals');
-  check('create: visuals row allocated and referenced', !!vRef && vRef.tableId !== 0, JSON.stringify(vRef));
-  const vT2 = frV2.getTableById(vRef!.tableId);
-  await vT2.readRecords();
-  const vj = JSON.parse(String(vT2.records[vRef!.row]._fields.RawData.value));
-  const fmEl = vj.loadouts.flatMap((l: any) => l.loadoutElements ?? []).find((e: any) => e.slotType === 'FaceMask');
-  check('create: skin tone + body + gear read back from the blob',
-    vj.skinTone === cform2.skinTones[0] && vj.bodyType === 4 &&
-    (!mask || fmEl?.itemAssetName === mask.options[0]),
-    `tone ${vj.skinTone}, body ${vj.bodyType}, mask ${fmEl?.itemAssetName}`);
-  await rejects('create reject: unknown gear item', async () =>
+  await rejects('create reject: any look request (game dresses recruits)', async () =>
     applyCreateRecruit(await loadFranchise(editedPath), editedPath, {
-      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
-      devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: '',
-      gear: { FaceMask: 'GearFaceMask_TotallyMadeUp' }
+      firstName: 'Styled', lastName: 'Prospect', position: pos, archetype, stars: 4,
+      devTrait: cform2.devTraits[0], heightIn: 75, weightLb: 220, homeState: state, homeTown: '',
+      skinTone: cform2.skinTones[0], bodyType: 4,
+      gear: mask ? { FaceMask: mask.options[0] } : undefined
     }, dir));
   // helmet↔mask compatibility: the game's loadout pairings + this save's
   const helmets = Object.keys(cform2.helmetMasks);
@@ -662,45 +629,43 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   check('create form: base look named per position',
     !!cform2.baseLook[pos]?.HeadWear && Object.keys(cform2.baseLook).length >= 5,
     `${pos}: ${cform2.baseLook[pos]?.HeadWear}, tone ${cform2.baseTones[pos]}`);
-  const h0 = 'GearHelmet_Speed_Flex';
-  const foreignMask = helmets.map((h) => cform2.helmetMasks[h]).flat()
-    .find((m) => !cform2.helmetMasks[h0].includes(m));
-  if (foreignMask) {
-    await rejects('create reject: facemask incompatible with helmet', async () =>
-      applyCreateRecruit(await loadFranchise(editedPath), editedPath, {
-        firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
-        devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: '',
-        gear: { HeadWear: h0, FaceMask: foreignMask }
-      }, dir));
-  }
-  // a mask alone keeps a fitting base helmet, else brings a matching one —
-  // written with a game-vocabulary helmet+mask this save never dressed
+  // helmet↔mask coupling now exercises through the rostered edit path: a
+  // game-vocabulary mask this save never dressed, on the rostered player.
   const soloHelmet = 'GearHelmet_RevolutionSpeed';
   const soloMask = cform2.helmetMasks[soloHelmet][0];
-  const baseHelmet = cform2.baseLook[pos]?.HeadWear;
-  const expectHelmet = baseHelmet && cform2.helmetMasks[baseHelmet]?.includes(soloMask)
-    ? baseHelmet
-    : Object.keys(cform2.helmetMasks).find((h) => cform2.helmetMasks[h].includes(soloMask));
   const frM = await loadFranchise(editedPath);
-  const resM = await applyCreateRecruit(frM, editedPath, {
-    firstName: 'Paired', lastName: 'Helmet', position: pos, archetype, stars: 2,
-    devTrait: cform2.devTraits[0], heightIn: 73, weightLb: 205, homeState: state, homeTown: '',
-    gear: { FaceMask: soloMask }
-  }, dir);
+  const pTM0 = mainTable(frM, 'Player');
+  await pTM0.readRecords();
+  const ownRef = refFromRecord(pTM0.records[rosterRow], 'CharacterVisuals')!;
+  const vTM0 = frM.getTableById(ownRef.tableId);
+  await vTM0.readRecords();
+  const ownItems: Record<string, string> = {};
+  for (const lo of JSON.parse(String(vTM0.records[ownRef.row]._fields.RawData.value)).loadouts ?? []) {
+    for (const el of lo?.loadoutElements ?? []) {
+      if (el?.slotType && el?.itemAssetName && ownItems[el.slotType] === undefined) {
+        ownItems[el.slotType] = el.itemAssetName;
+      }
+    }
+  }
+  const ownHelmet = ownItems['HeadWear'];
+  const expectHelmet = ownHelmet && cform2.helmetMasks[ownHelmet]?.includes(soloMask)
+    ? ownHelmet
+    : Object.keys(cform2.helmetMasks).find((h) => cform2.helmetMasks[h].includes(soloMask));
+  await applyPlayerEdit(frM, editedPath, { playerRow: rosterRow, gear: { FaceMask: soloMask } }, dir);
   const frM2 = await loadFranchise(editedPath);
   const pTM = mainTable(frM2, 'Player');
   await pTM.readRecords();
-  const vRefM = refFromRecord(pTM.records[resM.playerRow], 'CharacterVisuals');
-  const vTM = frM2.getTableById(vRefM!.tableId);
+  const vRefM = refFromRecord(pTM.records[rosterRow], 'CharacterVisuals')!;
+  const vTM = frM2.getTableById(vRefM.tableId);
   await vTM.readRecords();
-  const vjM = JSON.parse(String(vTM.records[vRefM!.row]._fields.RawData.value));
+  const vjM = JSON.parse(String(vTM.records[vRefM.row]._fields.RawData.value));
   const els = vjM.loadouts.flatMap((l: any) => l.loadoutElements ?? []);
   const gotHelmet = els.find((e: any) => e.slotType === 'HeadWear')?.itemAssetName;
   const gotMask = els.find((e: any) => e.slotType === 'FaceMask')?.itemAssetName;
-  check('create: game-vocab mask lands, helmet resolves per the rules',
+  check('edit: game-vocab mask lands, helmet resolves per the rules',
     gotMask === soloMask && gotHelmet === expectHelmet,
-    `${gotHelmet} :: ${gotMask} (base ${baseHelmet}, expected ${expectHelmet})`);
-  check('source still untouched after styled creation', sha(work) === sourceHash);
+    `${gotHelmet} :: ${gotMask} (own ${ownHelmet}, expected ${expectHelmet})`);
+  check('source still untouched after look edits', sha(work) === sourceHash);
 
   // --- 10c. creation with a chosen face (head + portrait + tone triple) ---
   check('create form: face catalog from real players',
@@ -713,12 +678,10 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     cform2.faces.every((f) => f.assetName.startsWith('Generic_') && Number(f.assetName.split('_')[1]) === f.portraitId),
     face.assetName);
   // frM2 already reflects the current on-disk state — reuse it for the write.
-  // skinTone rides along like the UI sends it (a picked face aligns the tone),
-  // and a helmet-only override exercises the incompatible-base-mask swap.
   const resF = await applyCreateRecruit(frM2, editedPath, {
     firstName: 'Chosen', lastName: 'Face', position: pos, archetype, stars: 3,
     devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 210, homeState: state, homeTown: '',
-    face, skinTone: face.tone, gear: { HeadWear: soloHelmet }
+    face
   }, dir);
   const frF2 = await loadFranchise(editedPath);
   const pTF = mainTable(frF2, 'Player');
@@ -730,26 +693,8 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     Number(val(npF, 'PLYR_PORTRAIT')) === face.portraitId,
     `${val(npF, 'PLYR_GENERICHEAD')} / ${val(npF, 'GenericHeadAssetName')} / ${val(npF, 'PLYR_PORTRAIT')}`);
   const vRefF = refFromRecord(npF, 'CharacterVisuals');
-  const vTF = vRefF && vRefF.tableId !== 0 ? frF2.getTableById(vRefF.tableId) : null;
-  if (vTF && !vTF.recordsRead) await vTF.readRecords();
-  const vjF = vTF ? JSON.parse(String(vTF.records[vRefF!.row]._fields.RawData.value)) : null;
-  check('create: face tone lands in the visuals blob', vjF?.skinTone === face.tone,
-    `tone ${vjF?.skinTone} vs face ${face.tone}`);
-  // helmet-only override: the incompatible base mask swapped to this helmet's own
-  const elsF = (vjF?.loadouts ?? []).flatMap((l: any) => l.loadoutElements ?? []);
-  const helmF = elsF.find((e: any) => e.slotType === 'HeadWear')?.itemAssetName;
-  const maskF = elsF.find((e: any) => e.slotType === 'FaceMask')?.itemAssetName;
-  const baseMaskQB = cform2.baseLook[pos]?.FaceMask;
-  // no base mask → none added; incompatible base mask → this helmet's first;
-  // compatible base mask → kept as is
-  const expectMaskF = !baseMaskQB
-    ? undefined
-    : cform2.helmetMasks[soloHelmet].includes(baseMaskQB)
-      ? baseMaskQB
-      : cform2.helmetMasks[soloHelmet][0];
-  check('create: helmet override never keeps an incompatible base mask',
-    helmF === soloHelmet && maskF === expectMaskF,
-    `${helmF} :: ${maskF} (base mask ${baseMaskQB})`);
+  check('create: created recruit stays undressed (game dresses at enrollment)',
+    !vRefF || vRefF.tableId === 0, JSON.stringify(vRefF));
   // Validation rejects before any mutation, so frF2 can host the refusal.
   await rejects('create reject: face not in the catalog', async () =>
     applyCreateRecruit(frF2, editedPath, {

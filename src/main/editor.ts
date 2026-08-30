@@ -362,7 +362,6 @@ export async function applyPlayerEdit(
   if (changes.face) await validateFace(franchise, changes.face);
   let lookJson: string | null = null;
   let lookRow = -1;
-  let lookNewRef = false;
   let vT: any = null;
   if (
     (changes.skinTone && changes.skinTone >= 1) ||
@@ -387,13 +386,10 @@ export async function applyPlayerEdit(
       lookJson = JSON.stringify(own);
       lookRow = ref!.row;
     } else {
-      // an undressed prospect gains a row built from a position-matched base
-      const position = String(val(rec, 'Position') ?? '');
-      lookJson = await buildVisualsJson(franchise, position, changes.skinTone, changes.gear, changes.bodyType);
-      if (!lookJson) throw new Error('No dressed player to base the look on.');
-      lookRow = firstEmptyRow(vT);
-      if (lookRow < 0) throw new Error('The save has no free appearance rows left.');
-      lookNewRef = true;
+      // In-game verified 2026-08-30: a pre-provisioned CharacterVisuals row
+      // on an unenrolled recruit blank-screens the dynasty at load — the
+      // game dresses them at enrollment. Face-only until they're rostered.
+      throw new Error('The game dresses this prospect at enrollment — only the face can be set until then.');
     }
   } else if (changes.skinTone !== undefined) {
     await resolveLook(franchise, {}, changes.skinTone, undefined); // range check only
@@ -407,7 +403,6 @@ export async function applyPlayerEdit(
   }
   if (lookJson && lookRow >= 0) {
     vT.records[lookRow].RawData = lookJson;
-    if (lookNewRef) rec.CharacterVisuals = refString(vT.header?.tableId ?? -1, lookRow);
   }
 
   return writeEditedSave(franchise, savePath, backupDir, async (check) => {
@@ -897,37 +892,22 @@ export async function applyCreateRecruit(
   if (!template) throw new Error('No template recruit exists for that archetype or position.');
 
   if (req.face) await validateFace(franchise, req.face);
-  let visualsJson: string | null = null;
+  // In-game verified 2026-08-30 (four-step bisect): a CharacterVisuals row on
+  // an unenrolled recruit blank-screens the dynasty UI at load. The game
+  // dresses recruits itself at enrollment; only the face fields ride the
+  // player row, so a look request on a create is refused outright.
   if (
-    (req.skinTone && req.skinTone >= 1) ||
+    (req.skinTone !== undefined && req.skinTone !== 0) ||
     req.bodyType !== undefined ||
     (req.gear && Object.keys(req.gear).length)
   ) {
-    const base = await pickBaseVisuals(franchise, req.position);
-    req.gear = await resolveLook(
-      franchise,
-      base ? baseLookSummary(base).items : {},
-      req.skinTone,
-      req.gear,
-      req.bodyType
-    );
-    visualsJson = await buildVisualsJson(franchise, req.position, req.skinTone, req.gear, req.bodyType);
-    if (!visualsJson) throw new Error('No dressed player to base the look on.');
-  } else if (req.skinTone !== undefined) {
-    await resolveLook(franchise, {}, req.skinTone, undefined); // range check only
+    throw new Error('The game dresses recruits at enrollment — only the face can be set here.');
   }
 
   const newPlayerRow = firstEmptyRow(playerTable);
   const newRecruitRow = firstEmptyRow(recruitTable);
   if (newPlayerRow < 0) throw new Error('The save has no free player rows left.');
   if (newRecruitRow < 0) throw new Error('The save has no free recruit rows left.');
-  const vTable = visualsTable(franchise);
-  let newVisualsRow = -1;
-  if (visualsJson) {
-    if (vTable && !vTable.recordsRead) await vTable.readRecords();
-    newVisualsRow = vTable ? firstEmptyRow(vTable) : -1;
-    if (newVisualsRow < 0) throw new Error('The save has no free appearance rows left.');
-  }
 
   // ---- clone the template player, then override identity ----
   const tp = playerTable.records[template.playerRow];
@@ -961,10 +941,6 @@ export async function applyCreateRecruit(
     if (np._fields?.PLYR_PORTRAIT) np.PLYR_PORTRAIT = req.face.portraitId;
   } else if (np._fields?.PLYR_PORTRAIT) {
     np.PLYR_PORTRAIT = 0;
-  }
-  if (visualsJson && newVisualsRow >= 0) {
-    vTable.records[newVisualsRow].RawData = visualsJson;
-    np.CharacterVisuals = refString(vTable.header?.tableId ?? -1, newVisualsRow);
   }
 
   // ---- clone the template recruit row, then re-point and reset ----
@@ -1017,14 +993,6 @@ export async function applyCreateRecruit(
       await pT2.readRecords();
       if (String(val(pT2.records?.[wpRef!.row], 'GenericHeadAssetName')) !== req.face.assetName) {
         throw new Error('The written save did not read back with the chosen face.');
-      }
-    }
-    if (visualsJson && newVisualsRow >= 0) {
-      const wvT = visualsTable(check);
-      if (wvT && !wvT.recordsRead) await wvT.readRecords();
-      const wj = wvT && parseVisuals(wvT.records[newVisualsRow]);
-      if (!wj || (req.skinTone && req.skinTone >= 1 && wj.skinTone !== req.skinTone)) {
-        throw new Error('The written save did not read back with the new look.');
       }
     }
   });

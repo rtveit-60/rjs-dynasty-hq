@@ -212,24 +212,27 @@ export default function EditPlayerModal({
       any = true;
     }
     // Appearance diffs against the shown look, so untouched dropdowns write
-    // nothing and '' drops a slot from the player's blob.
-    const baseLook = effectiveLook(form.look ?? {});
-    const changedGear: Record<string, string> = {};
-    for (const g of form.gearSlots) {
-      const shown = gear[g.slot] ?? '';
-      if (shown !== (baseLook[g.slot] ?? '')) changedGear[g.slot] = shown;
-    }
-    if (Object.keys(changedGear).length) {
-      out.gear = changedGear;
-      any = true;
-    }
-    if (skinTone !== (form.lookTone ?? 0) && skinTone !== 0) {
-      out.skinTone = skinTone;
-      any = true;
-    }
-    if (bodyType !== (form.lookBody ?? 0)) {
-      out.bodyType = bodyType;
-      any = true;
+    // nothing and '' drops a slot from the player's blob. Undressed prospects
+    // are face-only: the game dresses them at enrollment.
+    if (form.look !== null) {
+      const baseLook = effectiveLook(form.look);
+      const changedGear: Record<string, string> = {};
+      for (const g of form.gearSlots) {
+        const shown = gear[g.slot] ?? '';
+        if (shown !== (baseLook[g.slot] ?? '')) changedGear[g.slot] = shown;
+      }
+      if (Object.keys(changedGear).length) {
+        out.gear = changedGear;
+        any = true;
+      }
+      if (skinTone !== (form.lookTone ?? 0) && skinTone !== 0) {
+        out.skinTone = skinTone;
+        any = true;
+      }
+      if (bodyType !== (form.lookBody ?? 0)) {
+        out.bodyType = bodyType;
+        any = true;
+      }
     }
     return any ? out : null;
   }, [form, firstName, lastName, jersey, ratings, mental, physical, face, gear, skinTone, bodyType]);
@@ -426,8 +429,8 @@ export default function EditPlayerModal({
             <div className="ed-sec">Appearance</div>
             {form.look === null && (
               <p className="cr-note">
-                No appearance record yet — the game dresses this one at enrollment. Any
-                choice here creates the record early, from a position-matched base.
+                The game dresses this prospect at enrollment — until then only the face
+                can be set. Gear, body type and skin tone unlock once they're rostered.
               </p>
             )}
             {form.currentFace.unique && (
@@ -451,6 +454,7 @@ export default function EditPlayerModal({
               bodyType={bodyType}
               setBodyType={setBodyType}
               currentPortraitId={form.currentFace.portraitId || undefined}
+              faceOnly={form.look === null}
             />
 
             {(error || nameProblem) && <div className="ed-error">{error ?? nameProblem}</div>}

@@ -58,7 +58,8 @@ export default function LookSection({
   setFace,
   bodyType,
   setBodyType,
-  currentPortraitId
+  currentPortraitId,
+  faceOnly
 }: {
   gearSlots: GearSlotOptions[];
   helmetMasks: Record<string, string[]>;
@@ -75,6 +76,8 @@ export default function LookSection({
   setBodyType: (n: number) => void;
   /** Edit mode: the player's current headshot, shown until a face is picked. */
   currentPortraitId?: number;
+  /** Unenrolled recruits: the game dresses them at enrollment — face only. */
+  faceOnly?: boolean;
 }) {
   const [pickingFace, setPickingFace] = useState(false);
 
@@ -116,6 +119,8 @@ export default function LookSection({
             )}
           </button>
         </label>
+        {!faceOnly && (
+        <>
         <label className="ta-field">
           <span>Skin tone</span>
           <select value={skinTone} onChange={(e) => setSkinTone(Number(e.target.value))}>
@@ -139,7 +144,9 @@ export default function LookSection({
             ))}
           </select>
         </label>
-        {gearSlots.map((g) => {
+        </>
+        )}
+        {!faceOnly && gearSlots.map((g) => {
           const shown = gear[g.slot] ?? '';
           // The facemask list locks to what real loadouts wear with the
           // shown helmet.
