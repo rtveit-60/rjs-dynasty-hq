@@ -744,6 +744,11 @@ export interface ResourceEditRequest {
   amount: number;
 }
 
+/** Stage recruits onto or off the user's target board. */
+export interface BoardEditRequest {
+  changes: { recruitRow: number; action: 'add' | 'remove' }[];
+}
+
 /** Fire (or un-fire) a CPU coach: flips the game's own PendingFire contract state. */
 export interface CoachFireRequest {
   coachRow: number;

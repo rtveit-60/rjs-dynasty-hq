@@ -5,6 +5,7 @@ import { useHQ } from '../store.ts';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
+import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
 import ResourceModal from './ResourceModal.tsx';
 import TeamNeedsStrip from './TeamNeedsStrip.tsx';
 
@@ -246,6 +247,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
         </InfoDot>
       </div>
 
+      {!browsing && <BoardSaveBar />}
       <div className="tbl-wrap">
         <table className="tbl">
           <thead>
@@ -275,6 +277,9 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
                   {t.isFavorite && <span className="fav">♥ </span>}
                   <NameLink req={{ kind: 'player', row: t.playerRow }}>{t.name}</NameLink>
                   <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}> · {spaceOut(t.homeState)}</span>
+                  {!browsing && !t.stage.includes('Committed') && (
+                    <BoardToggle recruitRow={t.recruitRow} onBoard={true} />
+                  )}
                 </td>
                 <td>
                   <span className="pos-tag">{t.position}</span>

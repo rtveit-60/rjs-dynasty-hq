@@ -13,7 +13,10 @@ export async function loadFranchise(filePath: string): Promise<any> {
   if (typeof create !== 'function') {
     throw new Error('madden-franchise: create() not found — unexpected library version');
   }
-  const franchise = await create(filePath);
+  // autoUnempty: writing any field of an empty record revives it — the board
+  // editor allocates target/pitch rows this way; read paths never touch
+  // empty records, so this changes nothing for parsing.
+  const franchise = await create(filePath, { autoUnempty: true });
   const year = Number(franchise?.settings?.gameYear ?? franchise?.gameYear ?? NaN);
   if (!Number.isNaN(year) && year !== 27) {
     throw new Error(`This file is a game-year ${year} save — RJ's Dynasty HQ supports College Football 27 dynasty saves.`);
