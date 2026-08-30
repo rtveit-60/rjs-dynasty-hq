@@ -12,7 +12,7 @@ function GradeBadge({ grade }: { grade: string | null }) {
   return <span className={`grade ${grade.startsWith('A') ? 'good' : ''}`}>{grade}</span>;
 }
 
-export default function BudgetView({ school }: { school: School }) {
+export default function BudgetView({ school, browsing = false }: { school: School; browsing?: boolean }) {
   const [fundraising, setFundraising] = useState(false);
   const b = school.budget;
   if (!b) return <div className="empty">No budget data found in this save.</div>;
@@ -24,12 +24,14 @@ export default function BudgetView({ school }: { school: School }) {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
-        <button type="button" className="btn" onClick={() => setFundraising(true)}>
-          FUNDRAISING
-        </button>
-      </div>
-      {fundraising && <ResourceModal kind="nil" onClose={() => setFundraising(false)} />}
+      {!browsing && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+          <button type="button" className="btn" onClick={() => setFundraising(true)}>
+            FUNDRAISING
+          </button>
+        </div>
+      )}
+      {fundraising && !browsing && <ResourceModal kind="nil" onClose={() => setFundraising(false)} />}
       <div className="statgrid" style={{ marginTop: 10 }}>
         <div className="stat">
           <div className="lbl">

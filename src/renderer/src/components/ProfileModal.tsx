@@ -892,6 +892,7 @@ function SeasonBrowser({ seasons }: { seasons: SchoolSeason[] }) {
 // School
 
 function SchoolBody({ s }: { s: SchoolProfile }) {
+  const browseHQ = useHQ((st) => st.browseHQ);
   const at = s.allTime;
   const ledger: [string, string][] = at
     ? [
@@ -915,7 +916,16 @@ function SchoolBody({ s }: { s: SchoolProfile }) {
         <TeamLogo row={s.row} size={56} fallback={null} />
         <div className="pf-id">
           <div className="pf-name">
-            {s.name} <span className="pf-nick">{s.nickName}</span>
+            {s.name} <span className="pf-nick">{s.nickName}</span>{' '}
+            <button
+              type="button"
+              className="pf-btn"
+              style={{ verticalAlign: 'middle' }}
+              onClick={() => browseHQ(s.row)}
+              title="Open this program's full Team HQ, read-only"
+            >
+              OPEN TEAM HQ
+            </button>
           </div>
           <div className="pf-meta">
             {s.city && (

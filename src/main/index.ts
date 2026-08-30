@@ -285,6 +285,13 @@ function registerIpc(): void {
     return result;
   });
 
+  // View-only browse of another school's full Team HQ, from the cached parse.
+  ipcMain.handle('hq:browse', (_e, teamRow: number) => {
+    const { savePath } = getSettings();
+    if (!Number.isInteger(teamRow) || teamRow < 0 || !savePath) return null;
+    return pipeline.browseSchool(teamRow, savePath);
+  });
+
   // Depth-chart reorders/swaps — the same _RJsEdited write path.
   ipcMain.handle('depth:edit', async (_e, req: unknown) => {
     const r = req as { changes?: unknown };
@@ -549,6 +556,20 @@ function createWindow(): void {
                 `[...document.querySelectorAll('.nav-item')].find((b) => b.textContent.includes(${JSON.stringify(navLabel)}))?.click()`
               );
               await new Promise((r) => setTimeout(r, 1200));
+            }
+            // HQ_CAPTURE_BROWSE=<teamRow> browses another school's HQ via the switcher.
+            const browseRowEnv = process.env['HQ_CAPTURE_BROWSE'];
+            if (browseRowEnv) {
+              await win!.webContents.executeJavaScript(
+                `(() => {
+                  const sel = document.querySelector('select.hq-browse-select');
+                  if (!sel) return;
+                  const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+                  set.call(sel, ${JSON.stringify(browseRowEnv)});
+                  sel.dispatchEvent(new Event('change', { bubbles: true }));
+                })()`
+              );
+              await new Promise((r) => setTimeout(r, 2600));
             }
             for (const label of (process.env['HQ_CAPTURE_CLICK'] ?? '').split(',').filter(Boolean)) {
               // Prefix match tolerates count badges inside the control ("THE WIRE 133").

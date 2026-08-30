@@ -284,6 +284,32 @@ export class Pipeline {
     });
   }
 
+  /**
+   * View-only extract of another school's full HQ data from the cached parse.
+   * Leaves the user's scope, media state and events untouched; takes the busy
+   * lock so a watcher refresh queues instead of interleaving table reads.
+   */
+  async browseSchool(teamRow: number, savePath: string): Promise<Snapshot['school'] | null> {
+    if (!this.franchise || this.busy) return null;
+    this.busy = true;
+    try {
+      const snapshot = await extractSnapshot(this.franchise, {
+        schoolTeamRow: teamRow,
+        fileName: basename(savePath)
+      });
+      return snapshot.school;
+    } catch {
+      return null;
+    } finally {
+      this.busy = false;
+      if (this.queuedArgs) {
+        const next = this.queuedArgs;
+        this.queuedArgs = null;
+        void this.refresh(next.savePath, next.schoolTeamRow);
+      }
+    }
+  }
+
   /** Re-scope to a different school without re-parsing the file. */
   async rescope(savePath: string, schoolTeamRow: number | null): Promise<void> {
     if (!this.franchise) {

@@ -18,7 +18,7 @@ interface DragFrom {
  * <save>_RJsEdited sibling on SAVE TO COPY, through the same guarded path as
  * every other edit.
  */
-export default function DepthChartView({ school }: { school: School }) {
+export default function DepthChartView({ school, browsing = false }: { school: School; browsing?: boolean }) {
   const byRow = useMemo(() => new Map(school.roster.map((p) => [p.row, p])), [school.roster]);
   const slots = useMemo(() => new Map(school.depthChart.map((s) => [s.position, s])), [school.depthChart]);
 
@@ -89,7 +89,7 @@ export default function DepthChartView({ school }: { school: School }) {
 
   return (
     <>
-      {(changes.length > 0 || note || error) && (
+      {!browsing && (changes.length > 0 || note || error) && (
         <div className="dc-savebar">
           {error ? (
             <span className="dc-save-error">{error}</span>
@@ -147,8 +147,9 @@ export default function DepthChartView({ school }: { school: School }) {
                         <div
                           key={`${row}-${i}`}
                           className={`dc-row ${i === 0 ? 'starter' : ''} ${moved ? 'moved' : ''} ${isOver ? 'dragover' : ''} ${isDragged ? 'dragging' : ''}`}
-                          draggable
+                          draggable={!browsing}
                           onDragStart={(e) => {
+                            if (browsing) return;
                             setDragging({ pos, index: i });
                             e.dataTransfer.effectAllowed = 'move';
                             e.dataTransfer.setData('text/plain', `${pos}:${i}`);
@@ -166,7 +167,7 @@ export default function DepthChartView({ school }: { school: School }) {
                           onDrop={(e) => {
                             e.preventDefault();
                             const [fromPos, fromIdx] = e.dataTransfer.getData('text/plain').split(':');
-                            if (fromPos && fromIdx !== undefined) {
+                            if (!browsing && fromPos && fromIdx !== undefined) {
                               swap({ pos: fromPos, index: Number(fromIdx) }, { pos, index: i });
                             }
                             setDragging(null);
@@ -197,11 +198,15 @@ export default function DepthChartView({ school }: { school: School }) {
           </div>
         );
       })}
+      {browsing ? (
+        <p className="foot-note">Another program's chart — view only.</p>
+      ) : (
       <p className="foot-note">
         Drag one name onto another to swap their spots — within a window or across windows. Windows
         keep the game's own slot counts; changes stage here and write to a separate _RJsEdited copy
         of your save.
       </p>
+      )}
     </>
   );
 }

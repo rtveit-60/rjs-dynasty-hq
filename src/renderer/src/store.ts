@@ -25,9 +25,13 @@ interface HQStore {
   effectiveZoom: number;
   /** Open profile pop-ups, oldest first — click a name inside one and it stacks. */
   profileStack: ProfileRequest[];
+  /** Team row whose HQ is being browsed view-only; null = your own program. */
+  browseRow: number | null;
 
   init: () => Promise<void>;
   setNav: (nav: NavKey) => void;
+  /** Open another school's Team HQ (view-only); null returns to your own. */
+  browseHQ: (row: number | null) => void;
   openProfile: (req: ProfileRequest) => void;
   backProfile: () => void;
   closeProfiles: () => void;
@@ -55,6 +59,7 @@ export const useHQ = create<HQStore>((set, get) => ({
   detectedSaves: [],
   effectiveZoom: 1,
   profileStack: [],
+  browseRow: null,
 
   init: async () => {
     if (initialized) return;
@@ -73,6 +78,9 @@ export const useHQ = create<HQStore>((set, get) => ({
   },
 
   setNav: (nav) => set({ nav }),
+
+  browseHQ: (row) =>
+    set(() => (row === null ? { browseRow: null } : { browseRow: row, nav: 'team', profileStack: [] })),
 
   openProfile: (req) =>
     set((s) => {
