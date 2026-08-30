@@ -67,7 +67,9 @@ The app auto-detects saves there (files starting with `DYNASTY-`) and lists them
 
 ## Is my save safe?
 
-Yes. The app is strictly **read-only** with your game files: it copies the save to its own cache folder before parsing and never opens your save for writing. Nothing it does can corrupt a dynasty.
+Yes. The app never modifies your save: it copies the file to its own cache folder before parsing and never opens the original for writing.
+
+The optional player editor follows the same rule by writing somewhere else entirely — using **Edit** in a player's profile creates a separate copy of your dynasty named `<save>_RJsEdited` next to the original and puts the changes there. Your original file keeps its exact bytes. Re-editing an edited copy updates that copy in place, after a timestamped backup is stored in the app's data folder. Load the `_RJsEdited` save in the game to play with your changes.
 
 ## Build from source
 

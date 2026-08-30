@@ -140,6 +140,19 @@ function useSave(savePath: string): void {
   void pipeline.refresh(savePath, getSettings().schoolTeamRow);
 }
 
+/**
+ * After an edit lands in its _RJsEdited sibling, the dashboard follows that
+ * file. Same dynasty, same scope — no auto-scope, no pipeline reset (the
+ * cached parse already matches the written content, so the refresh is just a
+ * re-extract).
+ */
+function followEditedSave(editedPath: string): void {
+  updateSettings({ savePath: editedPath });
+  startWatching(editedPath);
+  pushSettings();
+  void pipeline.refresh(editedPath, getSettings().schoolTeamRow);
+}
+
 function registerIpc(): void {
   ipcMain.handle('state:get', (): AppState => ({ settings: getSettings(), status, snapshot, media, updateReady }));
 
@@ -225,6 +238,29 @@ function registerIpc(): void {
       return null;
     }
     return pipeline.profile({ kind: r.kind, row: r.row } as never);
+  });
+
+  // Current values + options for the player edit dialog, from the cached parse.
+  ipcMain.handle('player:editform', (_e, playerRow: number) => {
+    const { savePath } = getSettings();
+    if (!Number.isInteger(playerRow) || playerRow < 0 || !savePath) return null;
+    return pipeline.editForm(playerRow, savePath);
+  });
+
+  // The app's only write path: lands in <save>_RJsEdited (never the original),
+  // then the dashboard switches to follow the edited file.
+  ipcMain.handle('player:edit', async (_e, changes: unknown) => {
+    const c = changes as { playerRow?: unknown };
+    const { savePath } = getSettings();
+    if (!c || !Number.isInteger(c.playerRow) || (c.playerRow as number) < 0 || !savePath) {
+      return { ok: false, message: 'Nothing to edit.' };
+    }
+    const result = await pipeline.editPlayer(c as never, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
   });
 
   // Returns the pre-extracted playbook the team runs (formations, plays, alignments,
