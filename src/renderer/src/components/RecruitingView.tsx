@@ -112,15 +112,21 @@ export default function RecruitingView() {
     if (!scheme) return 'Special teams — schemes carry no archetype preference.';
     const slots = SCHEME_FITS[scheme]?.[r.position];
     if (!slots) return `${schemeLabel(scheme)} carries no fit data for ${recruitPos(r.position)}.`;
+    // The scheme's top two archetypes for the position, best slot first.
+    const best = new Map<string, number>();
+    for (const s of slots) best.set(s.archetype, Math.max(best.get(s.archetype) ?? 0, s.importance));
+    const top2 = [...best.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([a]) => archetypeLabel(a));
     const imp = schemeFitImportance(scheme, r.position, r.archetype);
     if (imp >= FIT_STRONG) {
-      return `${schemeLabel(scheme)} starts ${archetypeLabel(r.archetype)} at ${recruitPos(r.position)} (importance ${imp}).`;
+      return `${schemeLabel(scheme)} starts ${archetypeLabel(r.archetype)} at ${recruitPos(r.position)}. Top fits: ${top2.join(', ')}.`;
     }
     if (imp > 0) {
-      return `${schemeLabel(scheme)} wants ${archetypeLabel(r.archetype)} as ${recruitPos(r.position)} depth (importance ${imp}).`;
+      return `${schemeLabel(scheme)} wants ${archetypeLabel(r.archetype)} as ${recruitPos(r.position)} depth. Top fits: ${top2.join(', ')}.`;
     }
-    const wanted = [...new Set(slots.map((s) => archetypeLabel(s.archetype)))];
-    return `${schemeLabel(scheme)} looks for ${wanted.join(', ')} at ${recruitPos(r.position)} — not ${archetypeLabel(r.archetype)}.`;
+    return `${schemeLabel(scheme)} looks for ${top2.join(', ')} at ${recruitPos(r.position)} — not ${archetypeLabel(r.archetype)}.`;
   };
 
   const filtered = useMemo(() => {

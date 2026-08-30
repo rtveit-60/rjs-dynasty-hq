@@ -85,9 +85,9 @@ export default function TeamHQ() {
         const row = Number(e.target.value);
         browseHQ(row < 0 || row === snapshot.school!.team.row ? null : row);
       }}
-      title="View any program's Team HQ, read-only"
+      title="View any team's HQ, read-only"
     >
-      <option value={-1}>{browsing ? '← Back to your HQ' : 'View another HQ…'}</option>
+      <option value={-1}>{browsing ? '← Back to your HQ' : 'View another team…'}</option>
       {teamOptions.map((t) => (
         <option key={t.row} value={t.row}>
           {t.longName}

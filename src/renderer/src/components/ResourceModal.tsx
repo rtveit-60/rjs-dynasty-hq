@@ -25,7 +25,7 @@ export default function ResourceModal({
   const [amount, setAmount] = useState(0);
 
   const isNil = kind === 'nil';
-  const title = isNil ? 'Fundraising' : 'Hire Additional Recruiters';
+  const title = isNil ? 'Fundraising' : 'Hire Scouts';
   const unit = isNil ? 'points' : 'hours';
   const steps = isNil ? NIL_STEPS : HOUR_STEPS;
 
