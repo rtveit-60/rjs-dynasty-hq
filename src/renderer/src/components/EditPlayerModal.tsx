@@ -1,6 +1,97 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EditMentalSlot, PlayerEditChanges, PlayerEditForm } from '../../../shared/types.ts';
 import InfoDot from './InfoDot.tsx';
+
+/**
+ * Broadcast-style number stepper: a segmented − / value / + plate replacing
+ * the browser's native spinners. Typing still works (digits only), arrow keys
+ * step, and holding a stepper button repeats.
+ */
+function Stepper({
+  value,
+  min,
+  max,
+  changed,
+  label,
+  onChange
+}: {
+  value: number;
+  min: number;
+  max: number;
+  changed: boolean;
+  label: string;
+  onChange: (next: number) => void;
+}) {
+  const repeat = useRef<{ t: number | null; i: number | null }>({ t: null, i: null });
+  const latest = useRef({ value, onChange });
+  latest.current = { value, onChange };
+
+  const clamp = (n: number): number => Math.max(min, Math.min(max, n));
+  const step = (dir: 1 | -1): void => {
+    const { value: v, onChange: fire } = latest.current;
+    const next = clamp(v + dir);
+    if (next !== v) fire(next);
+  };
+  const stopRepeat = (): void => {
+    if (repeat.current.t !== null) window.clearTimeout(repeat.current.t);
+    if (repeat.current.i !== null) window.clearInterval(repeat.current.i);
+    repeat.current = { t: null, i: null };
+  };
+  const startRepeat = (dir: 1 | -1): void => {
+    step(dir);
+    stopRepeat();
+    repeat.current.t = window.setTimeout(() => {
+      repeat.current.i = window.setInterval(() => step(dir), 55);
+    }, 350);
+  };
+  useEffect(() => stopRepeat, []);
+
+  return (
+    <span className={`ed-step ${changed ? 'changed' : ''}`}>
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={`${label} down`}
+        disabled={value <= min}
+        onPointerDown={(e) => e.button === 0 && startRepeat(-1)}
+        onPointerUp={stopRepeat}
+        onPointerLeave={stopRepeat}
+      >
+        −
+      </button>
+      <input
+        inputMode="numeric"
+        value={value}
+        aria-label={label}
+        onChange={(e) => {
+          const digits = e.target.value.replace(/\D/g, '').slice(0, String(max).length);
+          onChange(clamp(Number(digits || 0)));
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            step(1);
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            step(-1);
+          }
+        }}
+        onFocus={(e) => e.target.select()}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={`${label} up`}
+        disabled={value >= max}
+        onPointerDown={(e) => e.button === 0 && startRepeat(1)}
+        onPointerUp={stopRepeat}
+        onPointerLeave={stopRepeat}
+      >
+        +
+      </button>
+    </span>
+  );
+}
 
 /**
  * The Edit Player dialog, opened from a profile's EDIT control. Values and
@@ -138,8 +229,6 @@ export default function EditPlayerModal({
     }
   };
 
-  const clamp99 = (raw: string): number => Math.max(0, Math.min(99, Math.round(Number(raw) || 0)));
-
   return (
     <div className="ed-overlay" onMouseDown={onClose}>
       <div className="ed-panel" onMouseDown={(e) => e.stopPropagation()}>
@@ -200,12 +289,13 @@ export default function EditPlayerModal({
               {form.jersey !== null && (
                 <label className="ed-jersey">
                   <span>Jersey</span>
-                  <input
-                    type="number"
+                  <Stepper
+                    value={Number(jersey)}
                     min={0}
                     max={99}
-                    value={jersey}
-                    onChange={(e) => setJersey(String(clamp99(e.target.value)))}
+                    changed={Number(jersey) !== form.jersey}
+                    label="Jersey"
+                    onChange={(n) => setJersey(String(n))}
                   />
                 </label>
               )}
@@ -216,15 +306,13 @@ export default function EditPlayerModal({
               {form.ratings.map((r) => (
                 <label key={r.field} className="ed-cell" title={r.field.replace(/Rating$/, '')}>
                   <span>{r.label}</span>
-                  <input
-                    type="number"
+                  <Stepper
+                    value={ratings[r.field] ?? 0}
                     min={0}
                     max={99}
-                    value={ratings[r.field] ?? 0}
-                    className={ratings[r.field] !== r.value ? 'changed' : ''}
-                    onChange={(e) =>
-                      setRatings((prev) => ({ ...prev, [r.field]: clamp99(e.target.value) }))
-                    }
+                    changed={ratings[r.field] !== r.value}
+                    label={r.label}
+                    onChange={(n) => setRatings((prev) => ({ ...prev, [r.field]: n }))}
                   />
                 </label>
               ))}
