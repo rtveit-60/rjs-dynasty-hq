@@ -49,6 +49,7 @@ const PLAYER_FIELDS = [
   'PlayerType',
   'PLYR_HOME_TOWN',
   'RecruitingDealbreaker',
+  'IdealRecruitingPitch',
   'PLYR_DRAFTROUND'
 ];
 
@@ -553,6 +554,11 @@ function departureOf(rec: any): 'senior' | 'drafted' | null {
   return null;
 }
 
+function idealPitchOf(rec: any): string {
+  const p = String(val(rec, 'IdealRecruitingPitch') ?? '');
+  return /^Invalid/.test(p) || p === 'undefined' ? '' : p;
+}
+
 function dealbreakerOf(rec: any): string {
   const d = String(val(rec, 'RecruitingDealbreaker') ?? '');
   return /^Invalid/.test(d) ? '' : d;
@@ -957,6 +963,7 @@ async function extractBoard(
           offers: Number(val(recruitRec, 'TotalScholarshipOffers') ?? 0),
           homeState: String(val(playerRec, 'PLYR_HOME_STATE') ?? ''),
           dealbreaker: dealbreakerOf(playerRec),
+          idealPitch: idealPitchOf(playerRec),
           pursuing
         });
       }

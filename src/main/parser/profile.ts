@@ -299,6 +299,7 @@ const PROFILE_PLAYER_FIELDS = [
   'InjuryStatus',
   'ProspectStarRating',
   'RecruitingDealbreaker',
+  'IdealRecruitingPitch',
   'SeasonStats',
   'CareerStats',
   'GameStats'
@@ -499,6 +500,7 @@ export async function extractPlayerProfile(
         const committedTo = stage.includes('Committed') ? (pursuing[0]?.name ?? null) : null;
 
         const deal = String(val(rec, 'RecruitingDealbreaker') ?? '');
+        const pitch = String(val(rec, 'IdealRecruitingPitch') ?? '');
         recruit = {
           stars: STAR_MAP[String(val(rec, 'ProspectStarRating'))] ?? 0,
           nationalRank: numOf(rrec, 'NationalRank'),
@@ -508,6 +510,7 @@ export async function extractPlayerProfile(
           offers: numOf(rrec, 'TotalScholarshipOffers'),
           committedTo,
           dealbreaker: /^Invalid/.test(deal) ? '' : deal,
+          idealPitch: /^Invalid/.test(pitch) || pitch === 'undefined' ? '' : pitch,
           pursuing
         };
         break;

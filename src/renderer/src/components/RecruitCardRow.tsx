@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { RecruitCard } from '../../../shared/types.ts';
+import { PITCHES } from '../../../shared/pitches.ts';
 import { RATINGS } from '../../../shared/ratings.ts';
 import { archetypeLabel, devClass, devLabel, heightFt, ovrTier, recruitPos, spaceOut } from '../lib/format.ts';
 
@@ -106,6 +107,25 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+
+              {card.idealPitch && PITCHES[card.idealPitch] && (
+                <div className="rc-abilities">
+                  <div>
+                    <div className="rc-sub">Motivations</div>
+                    {PITCHES[card.idealPitch].motivations.map((m) => (
+                      <span key={m} className="chip">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                  <div>
+                    <div className="rc-sub">Ideal Pitch</div>
+                    <span className="chip">
+                      <b>{PITCHES[card.idealPitch].name}</b>
+                    </span>
+                  </div>
                 </div>
               )}
 

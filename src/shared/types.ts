@@ -369,6 +369,8 @@ export interface RecruitTargetEntry {
   homeState: string;
   /** Save enum, e.g. PlayingTime, ProximityToHome; '' when none. */
   dealbreaker: string;
+  /** IdealRecruitingPitch enum key (ItsGameTime…); '' when none. Display data in shared/pitches. */
+  idealPitch: string;
   pursuing: TargetSchool[];
 }
 
@@ -446,6 +448,8 @@ export interface RecruitCard {
   devTrait: string;
   homeTown: string;
   homeState: string;
+  /** IdealRecruitingPitch enum key (ItsGameTime…); '' when none. Display data in shared/pitches. */
+  idealPitch: string;
   /** The skills the position lives on, ordered for the At a Glance card. */
   glance: { label: string; value: number }[];
   mental: AbilitySlot[];
@@ -618,6 +622,8 @@ export interface PlayerProfile {
     committedTo: string | null;
     /** Save enum, e.g. PlayingTime; '' when none. */
     dealbreaker: string;
+    /** IdealRecruitingPitch enum key; '' when none. Display data in shared/pitches. */
+    idealPitch: string;
     /** The race: pursuing schools by influence, user school flagged. */
     pursuing: TargetSchool[];
   } | null;
