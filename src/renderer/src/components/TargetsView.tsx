@@ -89,7 +89,7 @@ const DEAL_LABELS: Record<string, string> = {
   ConferencePrestige: 'Conf. Prestige'
 };
 
-export default function TargetsView({ school }: { school: School }) {
+export default function TargetsView({ school, browsing = false }: { school: School; browsing?: boolean }) {
   const board = school.board;
   const currentWeek = useHQ((s) => s.snapshot?.season?.week ?? 0);
   const [sortKey, setSortKey] = useState<SortKey>('stars');
@@ -206,10 +206,12 @@ export default function TargetsView({ school }: { school: School }) {
             {board.hoursAssigned}/{board.hoursTotal}
           </b>
         </span>
-        <button type="button" className="btn" onClick={() => setHiring(true)}>
-          HIRE ADDITIONAL RECRUITERS
-        </button>
-        {hiring && <ResourceModal kind="hours" onClose={() => setHiring(false)} />}
+        {!browsing && (
+          <button type="button" className="btn" onClick={() => setHiring(true)}>
+            HIRE ADDITIONAL RECRUITERS
+          </button>
+        )}
+        {hiring && !browsing && <ResourceModal kind="hours" onClose={() => setHiring(false)} />}
         <span className="chip">
           <span className="k">COMMITS</span> <b>{committed}</b>
         </span>

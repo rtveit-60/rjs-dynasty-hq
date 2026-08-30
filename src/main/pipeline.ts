@@ -9,6 +9,8 @@ import type {
   PlayerEditForm,
   PlayerEditResult,
   Profile,
+  CoachFireRequest,
+  DepthChartEditRequest,
   ResourceEditRequest,
   ResourceForm,
   ProfileRequest,
@@ -17,7 +19,14 @@ import type {
   WatchStatus
 } from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
-import { applyPlayerEdit, applyResourceEdit, buildEditForm, buildResourceForm } from './editor.ts';
+import {
+  applyCoachFire,
+  applyDepthChartEdit,
+  applyPlayerEdit,
+  applyResourceEdit,
+  buildEditForm,
+  buildResourceForm
+} from './editor.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
 import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from './parser/profile.ts';
@@ -257,6 +266,68 @@ export class Pipeline {
             : `Added ${applied} ${unit} (the save format caps the field there) — saved to ${basename(editedPath)}.`
       };
     });
+  }
+
+  /** Depth-chart reorders/swaps, via the same guarded write shell. */
+  async editDepthChart(req: DepthChartEditRequest, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, windows } = await applyDepthChartEdit(
+        this.franchise,
+        savePath,
+        { teamRow, changes: req.changes },
+        app.getPath('userData')
+      );
+      return {
+        editedPath,
+        message: `Depth chart updated (${windows} window${windows === 1 ? '' : 's'}) — saved to ${basename(editedPath)}.`
+      };
+    });
+  }
+
+  /** Mark a CPU coach PendingFire (or restore Signed), via the guarded shell. */
+  async fireCoach(req: CoachFireRequest, savePath: string): Promise<PlayerEditResult> {
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, coachName } = await applyCoachFire(
+        this.franchise,
+        savePath,
+        { coachRow: req.coachRow, undo: req.undo },
+        app.getPath('userData')
+      );
+      return {
+        editedPath,
+        message: req.undo
+          ? `${coachName} is off the chopping block — saved to ${basename(editedPath)}.`
+          : `${coachName} marked to be fired at season's end — saved to ${basename(editedPath)}.`
+      };
+    });
+  }
+
+  /**
+   * View-only extract of another school's full HQ data from the cached parse.
+   * Leaves the user's scope, media state and events untouched; takes the busy
+   * lock so a watcher refresh queues instead of interleaving table reads.
+   */
+  async browseSchool(teamRow: number, savePath: string): Promise<Snapshot['school'] | null> {
+    if (!this.franchise || this.busy) return null;
+    this.busy = true;
+    try {
+      const snapshot = await extractSnapshot(this.franchise, {
+        schoolTeamRow: teamRow,
+        fileName: basename(savePath)
+      });
+      return snapshot.school;
+    } catch {
+      return null;
+    } finally {
+      this.busy = false;
+      if (this.queuedArgs) {
+        const next = this.queuedArgs;
+        this.queuedArgs = null;
+        void this.refresh(next.savePath, next.schoolTeamRow);
+      }
+    }
   }
 
   /** Re-scope to a different school without re-parsing the file. */

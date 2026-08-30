@@ -15,12 +15,15 @@ import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync } from
 import os from 'node:os';
 import path from 'node:path';
 import {
+  applyCoachFire,
+  applyDepthChartEdit,
   applyPlayerEdit,
   applyResourceEdit,
   buildEditForm,
   buildResourceForm,
   editedPathFor
 } from '../src/main/editor.ts';
+import { ensureCoachSchema } from '../src/main/parser/coach-schema.ts';
 import { loadFranchise, mainTable, refFromRecord, val } from '../src/main/parser/franchise.ts';
 
 const savePath = process.argv[2] ?? 'samples/DYNASTY-VIRGINIA-MIDSEASON';
@@ -208,6 +211,116 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   await rejects('resource reject: zero amount', async () =>
     applyResourceEdit(await loadFranchise(editedPath), editedPath, { teamRow, kind: 'nil', amount: 0 }, dir));
   check('source still untouched after resource edits', sha(work) === sourceHash);
+}
+
+// --- 6. depth chart: swap round-trip + whole-payload rejections ---
+{
+  const fr = await loadFranchise(editedPath);
+  const teams = mainTable(fr, 'Team');
+  await teams.readRecords();
+  let teamRow = -1;
+  for (let i = 0; i < teams.records.length; i++) {
+    const r = teams.records[i];
+    if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) {
+      teamRow = i;
+      break;
+    }
+  }
+  const players = mainTable(fr, 'Player');
+  await players.readRecords(['TeamIndex']);
+  const pid = players.header?.tableId ?? -1;
+  const windowOf = async (franchise: any, row: number, pos: string): Promise<number[]> => {
+    const t = mainTable(franchise, 'Team');
+    await t.readRecords();
+    const dcRef = refFromRecord(t.records[row], 'DepthChart');
+    const dcT = franchise.getTableById(dcRef!.tableId);
+    if (!dcT.recordsRead) await dcT.readRecords();
+    const slotRef = refFromRecord(dcT.records[dcRef!.row], pos);
+    const arrT = franchise.getTableById(slotRef!.tableId);
+    if (!arrT.recordsRead) await arrT.readRecords();
+    const arr = arrT.records[slotRef!.row];
+    const out: number[] = [];
+    for (let i = 0; i < (arr.arraySize ?? 0); i++) {
+      const v = arr._fields[`Player${i}`]?.value as string;
+      out.push(parseInt(v.slice(15), 2));
+    }
+    return out;
+  };
+
+  const before = await windowOf(fr, teamRow, 'QB');
+  check('depth: QB window resolves', before.length >= 2, `${before.length} slots`);
+  const swapped = [...before];
+  [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+  const res = await applyDepthChartEdit(
+    fr, editedPath, { teamRow, changes: [{ position: 'QB', playerRows: swapped }] }, dir
+  );
+  check('depth: swap wrote in place', res.editedPath === editedPath && res.windows === 1);
+  const after = await windowOf(await loadFranchise(editedPath), teamRow, 'QB');
+  check('depth: swap persisted through cold reload', after.join(',') === swapped.join(','));
+
+  const fr2 = await loadFranchise(editedPath);
+  await rejects('depth reject: wrong slot count', () =>
+    applyDepthChartEdit(fr2, editedPath, { teamRow, changes: [{ position: 'QB', playerRows: swapped.slice(1) }] }, dir));
+  await rejects('depth reject: duplicate player in a window', () =>
+    applyDepthChartEdit(fr2, editedPath, { teamRow, changes: [{ position: 'QB', playerRows: swapped.map(() => swapped[0]) }] }, dir));
+  await rejects('depth reject: unknown window', () =>
+    applyDepthChartEdit(fr2, editedPath, { teamRow, changes: [{ position: 'QB9', playerRows: swapped }] }, dir));
+  const foreign = (() => {
+    const teamIndex = Number(val(teams.records[teamRow], 'TeamIndex'));
+    for (let i = 0; i < players.records.length; i++) {
+      const p = players.records[i];
+      if (!p.isEmpty && Number(val(p, 'TeamIndex')) !== teamIndex) return i;
+    }
+    return -1;
+  })();
+  await rejects('depth reject: player from another roster', () =>
+    applyDepthChartEdit(fr2, editedPath, { teamRow, changes: [{ position: 'QB', playerRows: [foreign, ...swapped.slice(1)] }] }, dir));
+  check('source still untouched after depth edits', sha(work) === sourceHash);
+}
+
+// --- 7. fire coach: PendingFire round-trip + rejections ---
+{
+  const fr = await loadFranchise(editedPath);
+  const coach = mainTable(fr, 'Coach');
+  await ensureCoachSchema(fr, coach);
+  await coach.readRecords(['FirstName', 'Position', 'IsUserControlled', 'ContractStatus', 'TeamIndex']);
+  let cpuHC = -1;
+  let userCoach = -1;
+  coach.records.forEach((r: any, i: number) => {
+    const ti = Number(val(r, 'TeamIndex'));
+    if (r.isEmpty || !val(r, 'FirstName') || !Number.isInteger(ti) || ti < 0 || ti >= 250) return;
+    const status = String(val(r, 'ContractStatus'));
+    if (cpuHC < 0 && val(r, 'IsUserControlled') !== true && String(val(r, 'Position')) === 'HeadCoach' && (status === 'First_Active' || status === 'Signed')) cpuHC = i;
+    if (userCoach < 0 && val(r, 'IsUserControlled') === true) userCoach = i;
+  });
+  check('fire: found a CPU head coach', cpuHC >= 0, `row ${cpuHC}`);
+
+  const fired = await applyCoachFire(fr, editedPath, { coachRow: cpuHC, undo: false }, dir);
+  check('fire: PendingFire written', fired.editedPath === editedPath, fired.coachName);
+  const fr2 = await loadFranchise(editedPath);
+  const c2 = mainTable(fr2, 'Coach');
+  await ensureCoachSchema(fr2, c2);
+  await c2.readRecords(['ContractStatus']);
+  const readBackStatus = String(val(c2.records[cpuHC], 'ContractStatus'));
+  check('fire: persisted through cold reload (alias-tolerant)',
+    readBackStatus === 'PendingFire' || readBackStatus === 'First_Pending', readBackStatus);
+
+  await rejects('fire reject: already marked', () =>
+    applyCoachFire(fr2, editedPath, { coachRow: cpuHC, undo: false }, dir));
+  if (userCoach >= 0) {
+    await rejects('fire reject: user-controlled coach', () =>
+      applyCoachFire(fr2, editedPath, { coachRow: userCoach, undo: false }, dir));
+  }
+
+  const undone = await applyCoachFire(fr2, editedPath, { coachRow: cpuHC, undo: true }, dir);
+  check('fire: undo restores Signed', undone.coachName === fired.coachName);
+  const fr3 = await loadFranchise(editedPath);
+  const c3 = mainTable(fr3, 'Coach');
+  await ensureCoachSchema(fr3, c3);
+  await c3.readRecords(['ContractStatus']);
+  const restored = String(val(c3.records[cpuHC], 'ContractStatus'));
+  check('fire: undo persisted', restored === 'Signed' || restored === 'First_Active', restored);
+  check('source still untouched after fire edits', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

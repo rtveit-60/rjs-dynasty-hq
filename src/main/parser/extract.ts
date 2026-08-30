@@ -421,6 +421,16 @@ async function extractCarousel(
       const name = `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
       if (!name) continue;
       const age = Number(val(rec, 'Age'));
+      // The enum aliases range markers onto real values (First_Active=Signed,
+      // First_Pending=PendingFire...) and the lib reads back whichever name
+      // comes first — normalize so the UI always sees the semantic one.
+      const CONTRACT_ALIAS: Record<string, string> = {
+        First_Active: 'Signed',
+        First_Pending: 'PendingFire',
+        Last_Active: 'PendingRetire',
+        Last_Pending: 'PendingHire'
+      };
+      const rawContract = String(val(rec, 'ContractStatus') ?? '');
       out.push({
         teamRow,
         role: role.toUpperCase() as 'HC' | 'OC' | 'DC',
@@ -432,6 +442,7 @@ async function extractCarousel(
         securityRank: Number(val(rec, 'CurrentJobSecurityPercentageRank') ?? 0),
         yearsRemaining: Number(val(rec, 'ContractYearsRemaining') ?? 0),
         contractLength: Number(val(rec, 'ContractLength') ?? 0),
+        contractStatus: CONTRACT_ALIAS[rawContract] ?? rawContract,
         isUser: val(rec, 'IsUserControlled') === true
       });
     }

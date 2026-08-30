@@ -285,6 +285,46 @@ function registerIpc(): void {
     return result;
   });
 
+  // Mark a CPU coach to be fired at season's end (the game's own PendingFire state).
+  ipcMain.handle('coach:fire', async (_e, req: unknown) => {
+    const r = req as { coachRow?: unknown; undo?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !Number.isInteger(r?.coachRow) || (r.coachRow as number) < 0) {
+      return { ok: false, message: 'Nothing to apply.' };
+    }
+    const result = await pipeline.fireCoach(
+      { coachRow: r.coachRow as number, undo: r.undo === true },
+      savePath
+    );
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
+  // View-only browse of another school's full Team HQ, from the cached parse.
+  ipcMain.handle('hq:browse', (_e, teamRow: number) => {
+    const { savePath } = getSettings();
+    if (!Number.isInteger(teamRow) || teamRow < 0 || !savePath) return null;
+    return pipeline.browseSchool(teamRow, savePath);
+  });
+
+  // Depth-chart reorders/swaps — the same _RJsEdited write path.
+  ipcMain.handle('depth:edit', async (_e, req: unknown) => {
+    const r = req as { changes?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !Array.isArray(r?.changes) || !r.changes.length) {
+      return { ok: false, message: 'Nothing to save.' };
+    }
+    const result = await pipeline.editDepthChart({ changes: r.changes as never }, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // Returns the pre-extracted playbook the team runs (formations, plays, alignments,
   // routes): the coach's selected book by its playbook row, falling back to the scheme
   // archetype. null if nothing matches.
@@ -534,6 +574,20 @@ function createWindow(): void {
                 `[...document.querySelectorAll('.nav-item')].find((b) => b.textContent.includes(${JSON.stringify(navLabel)}))?.click()`
               );
               await new Promise((r) => setTimeout(r, 1200));
+            }
+            // HQ_CAPTURE_BROWSE=<teamRow> browses another school's HQ via the switcher.
+            const browseRowEnv = process.env['HQ_CAPTURE_BROWSE'];
+            if (browseRowEnv) {
+              await win!.webContents.executeJavaScript(
+                `(() => {
+                  const sel = document.querySelector('select.hq-browse-select');
+                  if (!sel) return;
+                  const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+                  set.call(sel, ${JSON.stringify(browseRowEnv)});
+                  sel.dispatchEvent(new Event('change', { bubbles: true }));
+                })()`
+              );
+              await new Promise((r) => setTimeout(r, 2600));
             }
             for (const label of (process.env['HQ_CAPTURE_CLICK'] ?? '').split(',').filter(Boolean)) {
               // Prefix match tolerates count badges inside the control ("THE WIRE 133").

@@ -85,6 +85,8 @@ export interface CarouselEntry {
   securityRank: number;
   yearsRemaining: number;
   contractLength: number;
+  /** Normalized ContractStatus: Signed | Expiring | PendingFire | PendingNFL | PendingRenewal | PendingRetire | PendingHire | FreeAgent. */
+  contractStatus: string;
   isUser: boolean;
 }
 
@@ -740,6 +742,22 @@ export interface ResourceEditRequest {
   kind: 'nil' | 'hours';
   /** Whole points/hours to add; clamped to the form's headroom. */
   amount: number;
+}
+
+/** Fire (or un-fire) a CPU coach: flips the game's own PendingFire contract state. */
+export interface CoachFireRequest {
+  coachRow: number;
+  /** true restores the Signed state instead. */
+  undo: boolean;
+}
+
+/**
+ * Depth-chart edit: the full new player order for each touched window.
+ * Size-preserving — every window keeps its game-defined slot count, so
+ * edits are reorders and swaps, never adds or removes.
+ */
+export interface DepthChartEditRequest {
+  changes: { position: string; playerRows: number[] }[];
 }
 
 /** A coach's career ledger, from the save's CareerCoachStats row. */

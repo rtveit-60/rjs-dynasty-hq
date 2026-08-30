@@ -4374,3 +4374,111 @@ table.tbl.tbl-wide {
 .fit-none {
   color: var(--ink-3);
 }
+
+/* --- Depth chart editing (drag a name onto another to swap) -------------- */
+
+.dc-row[draggable='true'] {
+  cursor: grab;
+}
+
+.dc-row.dragging {
+  opacity: 0.45;
+}
+
+.dc-row.dragover {
+  outline: 1px dashed var(--team, var(--hot));
+  outline-offset: -1px;
+}
+
+.dc-row.moved .dc-depth {
+  color: var(--hot);
+  font-weight: 700;
+}
+
+.dc-row.moved .nm {
+  color: var(--hot);
+}
+
+.dc-savebar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--team, var(--hot));
+}
+
+.dc-save-note {
+  flex: 1;
+  font: 500 12px var(--font-ui);
+  color: var(--ink-2);
+}
+
+.dc-save-note strong {
+  color: var(--ink);
+}
+
+.dc-save-error {
+  flex: 1;
+  font: 600 12px var(--font-ui);
+  color: var(--bad);
+}
+
+/* --- Browse another school's Team HQ (view-only) ------------------------- */
+
+.hq-browse-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--team, var(--hot));
+}
+
+.hq-browse-note {
+  flex: 1;
+  font: 500 12px var(--font-ui);
+  color: var(--ink-2);
+}
+
+.hq-browse-note strong {
+  color: var(--ink);
+}
+
+.hq-browse-select {
+  appearance: none;
+  align-self: flex-start;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface);
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--ink-2);
+  font: 600 11px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 26px 6px 10px;
+  max-width: 220px;
+}
+
+/* --- Fire Coach dialog copy ---------------------------------------------- */
+
+.fire-copy {
+  margin-top: 16px;
+  font: 500 13px/1.55 var(--font-ui);
+  color: var(--ink-2);
+}
+
+.fire-copy strong {
+  color: var(--ink);
+}
