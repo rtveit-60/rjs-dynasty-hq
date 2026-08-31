@@ -309,15 +309,10 @@ export class Pipeline {
   /** Create a brand-new class recruit, via the guarded shell. */
   async createRecruit(req: CreateRecruitRequest, savePath: string): Promise<PlayerEditResult> {
     return this.guardedEdit(savePath, async () => {
-      const { editedPath } = await applyCreateRecruit(
-        this.franchise,
-        savePath,
-        req,
-        app.getPath('userData')
-      );
+      const res = await applyCreateRecruit(this.franchise, savePath, req, app.getPath('userData'));
       return {
-        editedPath,
-        message: `${req.firstName.trim()} ${req.lastName.trim()} joins the class — saved to ${basename(editedPath)}.`
+        editedPath: res.editedPath,
+        message: `${req.firstName.trim()} ${req.lastName.trim()} joins the class at #${res.nationalRank}, taking the slot of ${res.replaced} (${res.replacedPosition}) — saved to ${basename(res.editedPath)}.`
       };
     });
   }

@@ -414,7 +414,10 @@ export async function applyPlayerEdit(
 
   apply(rec, changes);
   if (changes.face) {
-    rec.PLYR_GENERICHEAD = changes.face.headId;
+    // recruit convention: unenrolled prospects keep the NoHead enum; rostered
+    // players carry the catalog triple as observed.
+    const recruitLinked = await isRecruitRow(franchise, changes.playerRow);
+    rec.PLYR_GENERICHEAD = recruitLinked ? 'NoHead' : changes.face.headId;
     rec.GenericHeadAssetName = changes.face.assetName;
     if (rec._fields?.PLYR_PORTRAIT) rec.PLYR_PORTRAIT = changes.face.portraitId;
   }
@@ -915,7 +918,14 @@ export async function applyCreateRecruit(
   savePath: string,
   req: CreateRecruitRequest,
   backupDir: string
-): Promise<{ editedPath: string; recruitRow: number; playerRow: number }> {
+): Promise<{
+  editedPath: string;
+  recruitRow: number;
+  playerRow: number;
+  nationalRank: number;
+  replaced: string;
+  replacedPosition: string;
+}> {
   // ---- validate ----
   const nameOk = (s: string): boolean => /^[\x20-\x7e]+$/.test(s);
   const first = req.firstName.trim();
@@ -965,9 +975,36 @@ export async function applyCreateRecruit(
   }
 
   const newPlayerRow = firstEmptyRow(playerTable);
-  const newRecruitRow = firstEmptyRow(recruitTable);
   if (newPlayerRow < 0) throw new Error('The save has no free player rows left.');
-  if (newRecruitRow < 0) throw new Error('The save has no free recruit rows left.');
+
+  // In-game verified 2026-08-30: the game's prospect list walks an index
+  // built at class generation — appended Recruit rows never join it, no
+  // matter how real their fields look. A created prospect therefore TAKES
+  // OVER an existing class slot: the lowest-ranked uncommitted filler at
+  // three stars or fewer. The star gate keeps earlier creations (usually
+  // four or five stars) from being cannibalized by the next create.
+  const hostPlayerTableId = playerTable.header?.tableId;
+  let hostRow = -1;
+  let hostRank = -1;
+  let displacedRow = -1;
+  for (let i = 0; i < recruitTable.records.length; i++) {
+    const r = recruitTable.records[i];
+    if (r.isEmpty) continue;
+    if (String(val(r, 'RecruitStage') ?? '').includes('Committed')) continue;
+    const pRef = refFromRecord(r, 'Player');
+    if (!pRef || pRef.tableId !== hostPlayerTableId) continue;
+    const p = playerTable.records[pRef.row];
+    if (!p || p.isEmpty) continue;
+    if (!['THREE_STAR', 'TWO_STAR', 'ONE_STAR'].includes(String(val(p, 'ProspectStarRating') ?? ''))) continue;
+    const rank = Number(val(r, 'NationalRank'));
+    if (!Number.isFinite(rank) || rank <= 0) continue;
+    if (rank > hostRank) {
+      hostRank = rank;
+      hostRow = i;
+      displacedRow = pRef.row;
+    }
+  }
+  if (hostRow < 0) throw new Error('No replaceable filler prospect is left in the class.');
 
   // ---- clone the template player, then override identity ----
   const tp = playerTable.records[template.playerRow];
@@ -998,33 +1035,43 @@ export async function applyCreateRecruit(
   // Their own face: a chosen catalog head brings its real headshot; otherwise
   // portrait 0 falls back to the generated avatar.
   if (req.face) {
-    np.PLYR_GENERICHEAD = req.face.headId;
+    // recruit convention: the head enum stays NoHead (252 of 253 QB-class
+    // recruits carry it); the asset + portrait are the face.
+    np.PLYR_GENERICHEAD = 'NoHead';
     np.GenericHeadAssetName = req.face.assetName;
     if (np._fields?.PLYR_PORTRAIT) np.PLYR_PORTRAIT = req.face.portraitId;
   } else if (np._fields?.PLYR_PORTRAIT) {
     np.PLYR_PORTRAIT = 0;
   }
 
-  // ---- clone the template recruit row, then re-point and reset ----
-  const tr = recruitTable.records[template.recruitRow];
-  const nr = recruitTable.records[newRecruitRow];
-  for (const k of Object.keys(tr._fields)) {
-    try {
-      nr[k] = tr._fields[k].value;
-    } catch {
-      // as above
+  // ---- take over the host slot ----
+  const hr = recruitTable.records[hostRow];
+  const displaced = playerTable.records[displacedRow];
+  const replacedName = `${val(displaced, 'FirstName') ?? ''} ${val(displaced, 'LastName') ?? ''}`.trim();
+  const replacedPosition = String(val(displaced, 'Position') ?? '');
+  hr.Player = refString(playerTable.header?.tableId ?? -1, newPlayerRow);
+  // The slot keeps its class identity — national rank, race list, stage,
+  // offers — while position and state ranks re-rank at the end of the new
+  // player's pools.
+  let maxPosRank = 0;
+  let maxStateRank = 0;
+  for (let i = 0; i < recruitTable.records.length; i++) {
+    if (i === hostRow || recruitTable.records[i].isEmpty) continue;
+    const pRef = refFromRecord(recruitTable.records[i], 'Player');
+    const p = pRef && pRef.tableId === hostPlayerTableId ? playerTable.records[pRef.row] : null;
+    if (!p || p.isEmpty) continue;
+    if (String(val(p, 'Position')) === req.position) {
+      maxPosRank = Math.max(maxPosRank, Number(val(recruitTable.records[i], 'PositionRank')) || 0);
+    }
+    if (String(val(p, 'PLYR_HOME_STATE')) === req.homeState) {
+      maxStateRank = Math.max(maxStateRank, Number(val(recruitTable.records[i], 'StateRank')) || 0);
     }
   }
-  nr.Player = refString(playerTable.header?.tableId ?? -1, newPlayerRow);
-  nr.TopSchoolsList = ZERO_REF;
-  nr.RecruitStage = 'Top10';
-  nr.QualityModifier = 'NORMAL';
-  nr.NationalRank = 0;
-  nr.StateRank = 0;
-  nr.PositionRank = 0;
-  nr.TotalScholarshipOffers = 0;
-  if (nr._fields?.CommitScore) nr.CommitScore = 0;
-  if (nr._fields?.SurnameAudioID) nr.SurnameAudioID = 0;
+  hr.PositionRank = maxPosRank + 1;
+  hr.StateRank = maxStateRank + 1;
+  if (hr._fields?.SurnameAudioID) hr.SurnameAudioID = 0;
+  // the displaced filler leaves the dynasty entirely
+  displaced.empty();
 
   try {
     playerTable.recalculateEmptyRecordReferences?.();
@@ -1038,15 +1085,17 @@ export async function applyCreateRecruit(
     await rT.readRecords();
     const pT = mainTable(check, 'Player');
     await pT.readRecords(['FirstName', 'LastName', 'Position']);
-    const wr = rT.records?.[newRecruitRow];
+    const wr = rT.records?.[hostRow];
     const wpRef = wr && refFromRecord(wr, 'Player');
     const wp = wpRef && pT.records?.[wpRef.row];
     if (
       !wr || wr.isEmpty || !wp || wp.isEmpty ||
+      wpRef!.row !== newPlayerRow ||
       String(val(wp, 'FirstName')) !== first ||
       String(val(wp, 'LastName')) !== last ||
       String(val(wp, 'Position')) !== req.position ||
-      !String(val(wr, 'RecruitStage')).includes('Top10')
+      Number(val(wr, 'NationalRank')) !== hostRank ||
+      !pT.records?.[displacedRow]?.isEmpty
     ) {
       throw new Error('The written save did not read back with the new recruit.');
     }
@@ -1058,7 +1107,14 @@ export async function applyCreateRecruit(
       }
     }
   });
-  return { editedPath, recruitRow: newRecruitRow, playerRow: newPlayerRow };
+  return {
+    editedPath,
+    recruitRow: hostRow,
+    playerRow: newPlayerRow,
+    nationalRank: hostRank,
+    replaced: replacedName,
+    replacedPosition
+  };
 }
 
 // --- Recruiting board membership (add/remove targets) -----------------------

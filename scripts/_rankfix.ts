@@ -1,0 +1,34 @@
+import { loadFranchise, mainTable, refFromRecord, val } from '../src/main/parser/franchise.ts';
+const path = process.argv[2];
+const fr = await loadFranchise(path);
+const rT = mainTable(fr, 'Recruit');
+await rT.readRecords();
+const pT = mainTable(fr, 'Player');
+await pT.readRecords();
+const aaron = rT.records[4101];
+const aRef = refFromRecord(aaron, 'Player')!;
+const ap = pT.records[aRef.row];
+const aPos = String(val(ap, 'Position'));
+const aState = String(val(ap, 'PLYR_HOME_STATE'));
+console.log(`Aaron: ${val(ap, 'FirstName')} ${val(ap, 'LastName')} ${aPos} ${aState}`);
+let maxNat = 0, maxPos = 0, maxState = 0;
+for (let i = 0; i < rT.records.length; i++) {
+  if (i === 4101) continue;
+  const r = rT.records[i];
+  if (r.isEmpty) continue;
+  maxNat = Math.max(maxNat, Number(val(r, 'NationalRank')));
+  const ref = refFromRecord(r, 'Player');
+  const p = ref && pT.records[ref.row];
+  if (!p) continue;
+  if (String(val(p, 'Position')) === aPos) maxPos = Math.max(maxPos, Number(val(r, 'PositionRank')));
+  if (String(val(p, 'PLYR_HOME_STATE')) === aState) maxState = Math.max(maxState, Number(val(r, 'StateRank')));
+}
+console.log(`appending ranks: national ${maxNat + 1}, ${aPos} ${maxPos + 1}, ${aState} ${maxState + 1}`);
+(aaron as any).NationalRank = maxNat + 1;
+(aaron as any).PositionRank = maxPos + 1;
+(aaron as any).StateRank = maxState + 1;
+await (fr as any).save(path);
+const check = await loadFranchise(path);
+const rT2 = mainTable(check, 'Recruit');
+await rT2.readRecords();
+console.log('written:', `nat ${val(rT2.records[4101], 'NationalRank')}, pos ${val(rT2.records[4101], 'PositionRank')}, state ${val(rT2.records[4101], 'StateRank')}`);

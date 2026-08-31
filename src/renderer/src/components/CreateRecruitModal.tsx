@@ -110,7 +110,7 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
         face: face ?? undefined
       });
       if (res.ok) {
-        setSavedNote(`${res.message} Search the board for the name, then stage + to target them, and refine ratings through the profile's EDIT.`);
+        setSavedNote(`${res.message} Search the board for the name, stage + to target them, and refine ratings through the profile's EDIT.`);
         setState('saved');
         setTimeout(onClose, 4200);
       } else {
@@ -137,12 +137,11 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
               other recruit.
             </p>
             <p>
-              Honest limits from the save format: they enter unranked (the class's rankings
-              belong to real recruits), their pursuit race starts empty (the game
-              pre-allocates race lists at class generation and cannot mint new ones),
-              commentary will not speak the name, and their in-game appearance borrows the
-              template's model. Everything writes to a <strong>…_RJsEdited</strong> copy —
-              the original save is never touched.
+              The new prospect takes over the class slot of its lowest-ranked uncommitted
+              filler (three stars or fewer) — the game's prospect list only shows slots it
+              built at class generation, so joining means replacing. They inherit that
+              slot's national rank and pursuit race; commentary will not speak the name.
+              Everything writes to an edited copy — the original save is never touched.
             </p>
           </InfoDot>
           <button type="button" className="pf-btn ed-close" onClick={onClose} aria-label="Close">

@@ -578,12 +578,13 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     `H${val(np, 'Height')} W${val(np, 'Weight')} ${val(np, 'ProspectStarRating')}`);
   check('create: ratings inherited from the template (non-zero sheet)',
     Number(val(np, 'SpeedRating')) > 0 && Number(val(np, 'AwarenessRating')) > 0);
-  check('create: recruit row state',
-    String(val(nr, 'RecruitStage')) === 'Top10' && Number(val(nr, 'NationalRank')) === 0 &&
-    String(val(nr, 'QualityModifier')) === 'NORMAL',
-    `${val(nr, 'RecruitStage')} rank ${val(nr, 'NationalRank')}`);
+  check('create: takes over the lowest filler slot',
+    res.nationalRank > 0 && Number(val(nr, 'NationalRank')) === res.nationalRank &&
+    !String(val(nr, 'RecruitStage')).includes('Committed') && res.replaced.length > 0,
+    `#${res.nationalRank}, replaced ${res.replaced} (${res.replacedPosition})`);
   const raceRef = refFromRecord(nr, 'TopSchoolsList');
-  check('create: race list starts empty (zero ref)', !raceRef || raceRef.tableId === 0);
+  check("create: inherits the slot's real race list", !!raceRef && raceRef.tableId !== 0,
+    JSON.stringify(raceRef));
   check('create: hometown pipeline follows the city',
     String(val(np, 'PLYR_HOME_TOWN')) === homeCity.town &&
     String(val(np, 'HomePipeline')) === homeCity.pipeline,
@@ -712,11 +713,14 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const pTF = mainTable(frF2, 'Player');
   await pTF.readRecords();
   const npF = pTF.records[resF.playerRow];
-  check('create: chosen face lands on the player',
-    String(val(npF, 'PLYR_GENERICHEAD')) === face.headId &&
+  check('create: chosen face lands, enum stays NoHead (recruit convention)',
+    String(val(npF, 'PLYR_GENERICHEAD')) === 'NoHead' &&
     String(val(npF, 'GenericHeadAssetName')) === face.assetName &&
     Number(val(npF, 'PLYR_PORTRAIT')) === face.portraitId,
     `${val(npF, 'PLYR_GENERICHEAD')} / ${val(npF, 'GenericHeadAssetName')} / ${val(npF, 'PLYR_PORTRAIT')}`);
+  check('create: star gate picks a fresh slot (no cannibalizing)',
+    resF.recruitRow !== res.recruitRow && resF.nationalRank !== res.nationalRank,
+    `first #${res.nationalRank} (5-star), second #${resF.nationalRank}`);
   const vRefF = refFromRecord(npF, 'CharacterVisuals');
   check('create: created recruit stays undressed (game dresses at enrollment)',
     !vRefF || vRefF.tableId === 0, JSON.stringify(vRefF));
