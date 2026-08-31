@@ -94,22 +94,27 @@ export default function TeamNeedsStrip({ needs }: { needs: TeamNeed[] }) {
       </div>
       <div className="needs-body">
         <div className="needs-main">
-          {MAIN_SIDES.map(({ key, row }) => {
-            const rows = needs.filter((n) => n.side === key);
-            return (
-              <div key={key} className="needs-row">
-                <span className="needs-row-label">{row}</span>
-                <div
-                  className="needs-cells"
-                  style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}
-                >
-                  {rows.map((n) => (
-                    <Tile key={n.group} n={n} />
-                  ))}
-                </div>
-              </div>
+          {(() => {
+            const cols = Math.max(
+              ...MAIN_SIDES.map(({ key }) => needs.filter((n) => n.side === key).length)
             );
-          })}
+            return MAIN_SIDES.map(({ key, row }) => {
+              const rows = needs.filter((n) => n.side === key);
+              return (
+                <div key={key} className="needs-row">
+                  <span className="needs-row-label">{row}</span>
+                  <div
+                    className="needs-cells"
+                    style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+                  >
+                    {rows.map((n) => (
+                      <Tile key={n.group} n={n} />
+                    ))}
+                  </div>
+                </div>
+              );
+            });
+          })()}
         </div>
         <div className="needs-st">
           <span className="needs-row-label">SPECIAL TEAMS</span>
