@@ -90,6 +90,23 @@ export default function TargetActionsModal({
   const budgetCeiling = form ? form.budgetBase + form.budgetBonus : 0;
   const overBudget = form ? derivedHours > budgetCeiling : false;
   const overPool = form ? poolAfter > form.poolTotal || overBudget : false;
+  // The blocker: options that would push the plan past the prospect's weekly
+  // allotment — or past the board pool's remaining headroom — lock instead of
+  // arming a rejected save. Deselecting is always allowed.
+  const maxSpend = form
+    ? Math.min(budgetCeiling, form.poolTotal - (form.poolAssigned - form.hours))
+    : 0;
+  const hoursLeft = maxSpend - derivedHours;
+  const offerLocked = form
+    ? scholarship !== 'Offered' && form.scholarship !== 'Offered' && ACTION_HOURS.scholarship > hoursLeft
+    : false;
+  const swayLocked = swayPitch === 'Invalid' && ACTION_HOURS.sway > hoursLeft;
+  const scoutMax = form
+    ? Math.min(
+        form.scoutsMax - form.scoutsDone,
+        scoutPasses + Math.max(0, Math.floor(hoursLeft / ACTION_HOURS.scoutFull))
+      )
+    : 0;
 
   const changes: TargetActionChanges | null = useMemo(() => {
     if (!form) return null;
@@ -164,14 +181,20 @@ export default function TargetActionsModal({
               when it processes the next week.
             </p>
             <p>
+              You cannot select past the allotment: an option that would push the week over
+              this prospect's hours — or over the board pool's remaining headroom — locks
+              until you free hours by deselecting something else.
+            </p>
+            <p>
               One label differs from the save's internals: the action the save calls
               "contact high school coaches" is <strong>DM the Player</strong> in the game
               itself, so that is the name shown here.
             </p>
             <p>
-              Scout fully unlocks every piece of the recruit's intel at once — the same state
-              the game reaches after full scouting. Changes land in a{' '}
-              <strong>…_RJsEdited</strong> copy; the original save is never touched.
+              Scouting is metered: each pass reveals another slice of the recruit's intel and
+              five passes reach full knowledge. You can run several in one week if the hours
+              fit. Changes land in a <strong>…_RJsEdited</strong> copy; the original save is
+              never touched.
             </p>
           </InfoDot>
           <button type="button" className="pf-btn ed-close" onClick={onClose} aria-label="Close">
@@ -191,7 +214,7 @@ export default function TargetActionsModal({
                   {derivedHours}
                   <em>/{budgetCeiling}</em>
                 </span>
-                <span className="wp-cap">Hours committed</span>
+                <span className="wp-cap">Hours committed · {Math.max(0, hoursLeft)} left</span>
                 <span className={`wp-pool ${overPool ? 'over' : ''}`}>
                   Team pool {poolAfter}/{form.poolTotal}
                 </span>
@@ -220,24 +243,35 @@ export default function TargetActionsModal({
 
             <div className="ed-sec">Actions</div>
             <div className="wp-rows">
-              {ACTION_LABELS.map(({ key, label, cost }) => (
-                <label key={key} className={`wp-row ${actions[key] ? 'on' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={actions[key]}
-                    onChange={(e) => setActions((prev) => ({ ...prev, [key]: e.target.checked }))}
-                  />
-                  <span className="wp-box" aria-hidden="true" />
-                  <span className="wp-name">{label}</span>
-                  {actions[key] !== form.actions[key] && <span className="wp-changed" title="changed this visit" />}
-                  <span className="wp-price">{cost} hrs</span>
-                </label>
-              ))}
+              {ACTION_LABELS.map(({ key, label, cost }) => {
+                const locked = !actions[key] && cost > hoursLeft;
+                return (
+                  <label
+                    key={key}
+                    className={`wp-row ${actions[key] ? 'on' : ''} ${locked ? 'locked' : ''}`}
+                    title={locked ? `Needs ${cost} hrs — only ${Math.max(0, hoursLeft)} left this week` : undefined}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={actions[key]}
+                      disabled={locked}
+                      onChange={(e) => setActions((prev) => ({ ...prev, [key]: e.target.checked }))}
+                    />
+                    <span className="wp-box" aria-hidden="true" />
+                    <span className="wp-name">{label}</span>
+                    {actions[key] !== form.actions[key] && <span className="wp-changed" title="changed this visit" />}
+                    <span className="wp-price">{cost} hrs</span>
+                  </label>
+                );
+              })}
             </div>
 
             <div className="ed-sec">Offers</div>
             <div className="ta-offers">
-              <label className="ta-field">
+              <label
+                className="ta-field"
+                title={offerLocked ? `A new offer needs ${ACTION_HOURS.scholarship} hrs — only ${Math.max(0, hoursLeft)} left this week` : undefined}
+              >
                 <span>
                   Scholarship <em>(new offer {ACTION_HOURS.scholarship} hrs)</em>
                 </span>
@@ -245,7 +279,14 @@ export default function TargetActionsModal({
                   {[form.scholarship, 'None', 'Offered', 'Revoked']
                     .filter((v, i, a) => a.indexOf(v) === i)
                     .map((v) => (
-                      <option key={v} value={v} disabled={!['None', 'Offered', 'Revoked', form.scholarship].includes(v)}>
+                      <option
+                        key={v}
+                        value={v}
+                        disabled={
+                          (v === 'Offered' && offerLocked) ||
+                          !['None', 'Offered', 'Revoked', form.scholarship].includes(v)
+                        }
+                      >
                         {v}
                       </option>
                     ))}
@@ -264,14 +305,17 @@ export default function TargetActionsModal({
                   onChange={setNilOffer}
                 />
               </label>
-              <label className="ta-field">
+              <label
+                className="ta-field"
+                title={swayLocked ? `A sway pitch needs ${ACTION_HOURS.sway} hrs — only ${Math.max(0, hoursLeft)} left this week` : undefined}
+              >
                 <span>
                   Sway pitch <em>({ACTION_HOURS.sway} hrs when set)</em>
                 </span>
                 <select value={swayPitch} onChange={(e) => setSwayPitch(e.target.value)}>
                   <option value="Invalid">—</option>
                   {form.swayOptions.map((o) => (
-                    <option key={o.id} value={o.id}>
+                    <option key={o.id} value={o.id} disabled={swayLocked}>
                       {o.name}
                     </option>
                   ))}
@@ -288,15 +332,17 @@ export default function TargetActionsModal({
                   <span className="wp-name">
                     Scout passes this week{' '}
                     <em>
-                      ({form.scoutsDone} of {form.scoutsMax} done — each reveals another slice;
-                      run all {form.scoutsMax - form.scoutsDone} to finish now)
+                      ({form.scoutsDone} of {form.scoutsMax} done — each reveals another slice
+                      {scoutMax >= form.scoutsMax - form.scoutsDone
+                        ? `; run all ${form.scoutsMax - form.scoutsDone} to finish now`
+                        : `; hours left allow ${scoutMax} this week`})
                     </em>
                   </span>
                   {scoutPasses > 0 && <span className="wp-changed" title="changed this visit" />}
                   <Stepper
                     value={scoutPasses}
                     min={0}
-                    max={form.scoutsMax - form.scoutsDone}
+                    max={scoutMax}
                     changed={scoutPasses > 0}
                     label="Scouting passes"
                     onChange={setScoutPasses}

@@ -4953,3 +4953,12 @@ table.tbl.tbl-wide {
 .wp-row.on .wp-price {
   color: var(--ink);
 }
+
+.wp-row.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.wp-row.locked:hover {
+  border-color: var(--line);
+}
