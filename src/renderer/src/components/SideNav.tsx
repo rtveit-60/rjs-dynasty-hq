@@ -71,6 +71,9 @@ export default function SideNav() {
           </button>
         ))}
       </nav>
+      <div className="rail-fill" aria-hidden="true">
+        {team && <TeamLogo row={team.row} size={170} fallback={null} />}
+      </div>
       <div className="rail-foot">
         <UpdateBanner />
         <div className="rail-controls">

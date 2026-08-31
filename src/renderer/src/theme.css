@@ -220,14 +220,12 @@ body {
   margin-top: 2px;
 }
 
-/* The nav as one of the broadcast modules: a header-capped, ruled card. */
+/* The nav as a full-bleed broadcast band: header cap, ruled rows, no card. */
 .nav {
-  margin: 12px 10px 0;
   display: flex;
   flex-direction: column;
   gap: 0;
-  background: var(--paper);
-  border: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .nav::before {
@@ -288,6 +286,24 @@ body {
   border: 1px solid var(--line);
   padding: 1px 5px;
   border-radius: 2px;
+}
+
+/* The space under the nav: broadcast set dressing — a ghosted team mark. */
+.rail-fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 20px 0 8px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.06;
+}
+
+.rail-fill .team-logo,
+.rail-fill .school-mark {
+  filter: saturate(0.6);
 }
 
 .rail-foot {
@@ -3392,11 +3408,11 @@ table.tbl.tbl-wide {
     display: none;
   }
 
-  .nav {
-    margin: 8px 4px 0;
+  .nav::before {
+    display: none;
   }
 
-  .nav::before {
+  .rail-fill {
     display: none;
   }
 
@@ -5300,7 +5316,7 @@ table.tbl.tbl-wide {
 
 /* Modules float: rim light on top, team in the border, shadow below. */
 .panel, .staff-grid, .statgrid, .tbl-wrap, .needs-strip, .hqm, .story, .pager,
-.hq-browse-bar, .wp-meter, .nav {
+.hq-browse-bar, .wp-meter {
   border-color: color-mix(in srgb, var(--team) 22%, var(--line));
   background-image: var(--sheen);
   box-shadow:
