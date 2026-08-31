@@ -909,9 +909,9 @@ export interface TargetActionChanges {
   scholarship?: 'Offered' | 'Revoked' | 'None';
   nilOffer?: number;
   swayPitch?: string;
-  /** Queue one scouting pass (the game's own increment: ~a fifth of the
-   *  intel per scout, five scouts to full). */
-  scout?: boolean;
+  /** Scouting passes to run this week (each at the game's per-pass price;
+   *  multiple passes in one week are legal, up to full intel). */
+  scoutPasses?: number;
 }
 
 /** Fire (or un-fire) a CPU coach: flips the game's own PendingFire contract state. */

@@ -43,7 +43,7 @@ export default function TargetActionsModal({
   const [scholarship, setScholarship] = useState('None');
   const [nilOffer, setNilOffer] = useState(0);
   const [swayPitch, setSwayPitch] = useState('Invalid');
-  const [scout, setScout] = useState(false);
+  const [scoutPasses, setScoutPasses] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -83,7 +83,7 @@ export default function TargetActionsModal({
   const derivedHours = form
     ? ACTION_LABELS.reduce((sum, a) => sum + (actions[a.key] ? a.cost : 0), 0) +
       (swayPitch !== 'Invalid' ? ACTION_HOURS.sway : 0) +
-      (scout && form.intel < form.intelMax ? ACTION_HOURS.scoutFull : 0) +
+      (form.intel < form.intelMax ? ACTION_HOURS.scoutFull * scoutPasses : 0) +
       (scholarship === 'Offered' && form.scholarship !== 'Offered' ? ACTION_HOURS.scholarship : 0)
     : 0;
   const poolAfter = form ? form.poolAssigned - form.hours + derivedHours : 0;
@@ -116,12 +116,12 @@ export default function TargetActionsModal({
       out.swayPitch = swayPitch;
       any = true;
     }
-    if (scout && form.intel < form.intelMax) {
-      out.scout = true;
+    if (scoutPasses > 0 && form.intel < form.intelMax) {
+      out.scoutPasses = scoutPasses;
       any = true;
     }
     return any ? out : null;
-  }, [form, actions, scholarship, nilOffer, swayPitch, scout]);
+  }, [form, actions, scholarship, nilOffer, swayPitch, scoutPasses]);
 
   const save = async (): Promise<void> => {
     if (!changes || overPool) return;
@@ -292,19 +292,25 @@ export default function TargetActionsModal({
               {scouted ? (
                 <span className="ta-scouted">Fully scouted ({form.scoutsMax} of {form.scoutsMax} passes)</span>
               ) : (
-                <label className={`wp-row ${scout ? 'on' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={scout}
-                    onChange={(e) => setScout(e.target.checked)}
-                  />
-                  <span className="wp-box" aria-hidden="true" />
+                <div className={`wp-row wp-scout ${scoutPasses > 0 ? 'on' : ''}`}>
                   <span className="wp-name">
-                    Scout <em>(pass {Math.min(form.scoutsDone + 1, form.scoutsMax)} of {form.scoutsMax} — reveals another slice of intel)</em>
+                    Scout passes this week{' '}
+                    <em>
+                      ({form.scoutsDone} of {form.scoutsMax} done — each reveals another slice;
+                      run all {form.scoutsMax - form.scoutsDone} to finish now)
+                    </em>
                   </span>
-                  {scout && <span className="wp-changed" title="changed this visit" />}
-                  <span className="wp-price">{ACTION_HOURS.scoutFull} hrs</span>
-                </label>
+                  {scoutPasses > 0 && <span className="wp-changed" title="changed this visit" />}
+                  <Stepper
+                    value={scoutPasses}
+                    min={0}
+                    max={form.scoutsMax - form.scoutsDone}
+                    changed={scoutPasses > 0}
+                    label="Scouting passes"
+                    onChange={setScoutPasses}
+                  />
+                  <span className="wp-price">{ACTION_HOURS.scoutFull * scoutPasses} hrs</span>
+                </div>
               )}
               {form.scoutBoost > 0 && (
                 <p className="cr-note">

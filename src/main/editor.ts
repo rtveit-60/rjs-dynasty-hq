@@ -1610,8 +1610,16 @@ export async function applyTargetActions(
   if (swayAfter !== 'Invalid') derivedHours += ACTION_HOURS.sway;
   const intelCap = fieldMax(target, 'UnlockedIntelBitfield', 16383);
   const intelNow = Number(val(target, 'UnlockedIntelBitfield') ?? 0);
-  if (req.scout && intelNow < intelCap) {
-    derivedHours += ACTION_HOURS.scoutFull;
+  const passesLeftNow = SCOUTS_MAX - scoutsDoneFor(intelNow);
+  const scoutPasses = req.scoutPasses ?? 0;
+  if (scoutPasses < 0 || !Number.isInteger(scoutPasses)) {
+    throw new Error('Scouting passes must be a whole number.');
+  }
+  if (scoutPasses > passesLeftNow) {
+    throw new Error(`Only ${passesLeftNow} scouting pass${passesLeftNow === 1 ? '' : 'es'} left on this prospect.`);
+  }
+  if (scoutPasses > 0 && intelNow < intelCap) {
+    derivedHours += ACTION_HOURS.scoutFull * scoutPasses;
   }
   if (req.scholarship === 'Offered' && String(val(target, 'ScholarshipStatus') ?? '') !== 'Offered') {
     derivedHours += ACTION_HOURS.scholarship;
@@ -1659,8 +1667,8 @@ export async function applyTargetActions(
   if (req.nilOffer !== undefined) target.CurrentNILOffer = req.nilOffer;
   if (req.swayPitch !== undefined) target.SwayPitch = req.swayPitch;
   let intelAfter = intelNow;
-  if (req.scout && intelNow < intelCap) {
-    intelAfter = scoutOnce(intelNow, req.recruitRow);
+  if (scoutPasses > 0 && intelNow < intelCap) {
+    for (let i = 0; i < scoutPasses; i++) intelAfter = scoutOnce(intelAfter, req.recruitRow);
     target.UnlockedIntelBitfield = intelAfter;
   }
 
@@ -1672,7 +1680,7 @@ export async function applyTargetActions(
     if (req.nilOffer !== undefined && Number(val(written, 'CurrentNILOffer')) !== req.nilOffer) {
       throw new Error('The written save did not read back with the new NIL offer.');
     }
-    if (req.scout && Number(val(written, 'UnlockedIntelBitfield')) !== intelAfter) {
+    if (scoutPasses > 0 && Number(val(written, 'UnlockedIntelBitfield')) !== intelAfter) {
       throw new Error('The written save did not read back with the scouting pass.');
     }
     if (derivedHours !== oldHours) {
