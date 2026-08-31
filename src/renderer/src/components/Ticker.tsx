@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { GameInfo, LeagueLeaders, TeamInfo } from '../../../shared/types.ts';
 import { AWARD_SHORT } from '../../../shared/awards.ts';
+import Delta from './Delta.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 
@@ -97,8 +98,7 @@ export default function Ticker({
             <span className="rec">
               {rec.w}–{rec.l}
             </span>
-            {delta > 0 && <span className="up">▲{delta}</span>}
-            {delta < 0 && <span className="dn">▼{-delta}</span>}
+            {delta !== 0 && <Delta delta={delta} size="sm" />}
           </span>
         );
       });

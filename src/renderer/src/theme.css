@@ -3564,14 +3564,92 @@ table.tbl.tbl-wide {
   align-self: center;
 }
 
-.up {
-  color: var(--good);
-  font-weight: 700;
+/* Poll-movement chips: drawn glyph + tabular count on tinted glass. */
+.mv {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 5px;
+  border-radius: 2px;
+  font: 700 10.5px/1.4 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  vertical-align: 1px;
 }
 
-.dn {
+.mv.up {
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 13%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px color-mix(in srgb, var(--good) 28%, transparent);
+}
+
+.mv.dn {
   color: var(--bad);
-  font-weight: 700;
+  background: color-mix(in srgb, var(--bad) 13%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px color-mix(in srgb, var(--bad) 28%, transparent);
+}
+
+.mv.new {
+  color: var(--hot);
+  background: color-mix(in srgb, var(--hot) 12%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px color-mix(in srgb, var(--hot) 30%, transparent);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+}
+
+.mv.flat {
+  color: var(--ink-3);
+  padding: 1px 6px;
+}
+
+.mv-g {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  flex: 0 0 auto;
+}
+
+.mv-g.up {
+  border-bottom: 5.5px solid currentColor;
+}
+
+.mv-g.dn {
+  border-top: 5.5px solid currentColor;
+}
+
+.mv-g.flat {
+  width: 7px;
+  height: 0;
+  border: 0;
+  border-top: 2px solid currentColor;
+  border-radius: 1px;
+  opacity: 0.8;
+}
+
+.mv.sm {
+  gap: 2px;
+  padding: 0 4px 0 3px;
+  font-size: 9.5px;
+}
+
+.mv.sm .mv-g {
+  border-left-width: 3px;
+  border-right-width: 3px;
+}
+
+.mv.sm .mv-g.up {
+  border-bottom-width: 4.5px;
+}
+
+.mv.sm .mv-g.dn {
+  border-top-width: 4.5px;
 }
 
 /* HQ module grid */
