@@ -4745,3 +4745,12 @@ tr:hover .bd-btn,
   font: 700 13px var(--font-ui);
   color: var(--ink);
 }
+
+.ta-total.warn {
+  color: var(--hot);
+}
+
+.ta-total.over,
+.cr-note.over {
+  color: #d9534f;
+}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { TargetActionChanges, TargetActionFlags, TargetActionForm } from '../../../shared/types.ts';
 import { stars } from '../lib/format.ts';
 import { ACTION_HOURS, ACTION_LABELS as GAME_ACTION_LABELS } from '../../../shared/recruiting-actions.ts';
+import { PROSPECT_HOURS_CEILING, PROSPECT_HOURS_FLOOR } from '../../../shared/recruiting-budget.ts';
 import { Stepper } from './EditPlayerModal.tsx';
 import InfoDot from './InfoDot.tsx';
 
@@ -87,7 +88,9 @@ export default function TargetActionsModal({
       (scholarship === 'Offered' && form.scholarship !== 'Offered' ? ACTION_HOURS.scholarship : 0)
     : 0;
   const poolAfter = form ? form.poolAssigned - form.hours + derivedHours : 0;
-  const overPool = form ? poolAfter > form.poolTotal || derivedHours > form.hoursCap : false;
+  const overBudget = derivedHours > PROSPECT_HOURS_CEILING;
+  const inPerkBand = derivedHours > PROSPECT_HOURS_FLOOR && !overBudget;
+  const overPool = form ? poolAfter > form.poolTotal || overBudget : false;
 
   const changes: TargetActionChanges | null = useMemo(() => {
     if (!form) return null;
@@ -198,13 +201,25 @@ export default function TargetActionsModal({
               ))}
             </div>
             <div className="ta-hours">
-              <span className="ta-total">
+              <span className={`ta-total ${overBudget ? 'over' : inPerkBand ? 'warn' : ''}`}>
                 {derivedHours} hrs this week
               </span>
               <span className={`ta-pool ${overPool ? 'over' : ''}`}>
                 pool {poolAfter}/{form.poolTotal} assigned
               </span>
             </div>
+            {overBudget && (
+              <p className="cr-note over">
+                No prospect allows more than {PROSPECT_HOURS_CEILING} hours in a week.
+              </p>
+            )}
+            {inPerkBand && (
+              <p className="cr-note">
+                Above the guaranteed {PROSPECT_HOURS_FLOOR} — prospects allow{' '}
+                {PROSPECT_HOURS_FLOOR}–{PROSPECT_HOURS_CEILING} depending on your recruiter
+                perks, so check this prospect's budget in game before counting on it.
+              </p>
+            )}
 
             <div className="ed-sec">Offers</div>
             <div className="ta-offers">

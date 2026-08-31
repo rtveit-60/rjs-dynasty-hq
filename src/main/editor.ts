@@ -27,6 +27,7 @@ import type {
 } from '../shared/types.ts';
 import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
 import { ACTION_HOURS } from '../shared/recruiting-actions.ts';
+import { PROSPECT_HOURS_CEILING } from '../shared/recruiting-budget.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
@@ -1482,9 +1483,13 @@ export async function applyTargetActions(
   if (req.scholarship === 'Offered' && String(val(target, 'ScholarshipStatus') ?? '') !== 'Offered') {
     derivedHours += ACTION_HOURS.scholarship;
   }
-  const hourCap = fieldMax(target, 'ProspectHoursSpentCurrent', 127);
-  if (derivedHours > hourCap) {
-    throw new Error(`Those actions total ${derivedHours} hours — the save stores at most ${hourCap} on one prospect.`);
+  // In-game verified 2026-08-31: every prospect's weekly budget falls between
+  // 50 and 65 hours (base plus recruiter perks) — beyond the ceiling is
+  // invalid for any coach.
+  if (derivedHours > PROSPECT_HOURS_CEILING) {
+    throw new Error(
+      `Those actions total ${derivedHours} hours — no prospect allows more than ${PROSPECT_HOURS_CEILING} in a week.`
+    );
   }
   if (poolAssigned - oldHours + derivedHours > poolTotal) {
     throw new Error(
