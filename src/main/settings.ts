@@ -14,8 +14,7 @@ const DEFAULTS: Settings = {
   logosDir: null,
   autoUpdate: true,
   uiScale: 1,
-  uiFit: true,
-  needsView: 'tiles'
+  uiFit: true
 };
 
 let current: Settings | null = null;

@@ -208,11 +208,6 @@ function registerIpc(): void {
     return settings;
   });
 
-  ipcMain.handle('needsview:set', (_e, view: string) => {
-    const v = view === 'bar' || view === 'focus' ? view : 'tiles';
-    return updateSettings({ needsView: v });
-  });
-
   ipcMain.handle('save:reveal', () => {
     const { savePath } = getSettings();
     if (savePath) shell.showItemInFolder(savePath);

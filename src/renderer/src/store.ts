@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import type {
   DetectedSave,
   MediaEvent,
-  NeedsView,
   ProfileRequest,
   Settings,
   Snapshot,
@@ -49,7 +48,6 @@ interface HQStore {
   setUiScale: (scale: number) => Promise<void>;
   setUiFit: (on: boolean) => Promise<void>;
   setAutoUpdate: (enabled: boolean) => Promise<void>;
-  setNeedsView: (view: NeedsView) => Promise<void>;
 }
 
 let initialized = false;
@@ -145,11 +143,6 @@ export const useHQ = create<HQStore>((set, get) => ({
 
   setAutoUpdate: async (enabled) => {
     const settings = await window.hq.setAutoUpdate(enabled);
-    set({ settings });
-  },
-
-  setNeedsView: async (view) => {
-    const settings = await window.hq.setNeedsView(view);
     set({ settings });
   }
 }));

@@ -2,9 +2,6 @@ export type ThemeMode = 'system' | 'light' | 'dark';
 
 export type BrandPack = 'real' | 'parody';
 
-/** Team Needs strip presentation: seat tiles, lower-third bars, or needs-first plates. */
-export type NeedsView = 'tiles' | 'bar' | 'focus';
-
 export interface Settings {
   savePath: string | null;
   schoolTeamRow: number | null;
@@ -17,7 +14,6 @@ export interface Settings {
   uiScale: number;
   /** Scale the UI with window width (uiScale becomes a bias on the fit). */
   uiFit: boolean;
-  needsView: NeedsView;
   windowBounds?: { x: number; y: number; width: number; height: number };
 }
 

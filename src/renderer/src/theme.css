@@ -2824,8 +2824,8 @@ table.tbl.tbl-wide {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding-bottom: 6px;
-  margin-bottom: 4px;
+  padding-bottom: 4px;
+  margin-bottom: 2px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -2850,26 +2850,15 @@ table.tbl.tbl-wide {
   margin-left: 8px;
 }
 
-.needs-mode {
-  margin-left: auto;
-  display: inline-flex;
-  gap: 4px;
-}
-
-.needs-mode .filter {
-  font-size: 10px;
-  padding: 2px 8px 1px;
-}
-
 .needs-row {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .needs-row .needs-row-label {
-  padding-top: 6px;
+  padding-top: 5px;
 }
 
 .needs-row + .needs-row {
@@ -2890,7 +2879,7 @@ table.tbl.tbl-wide {
 .needs-cells {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px 5px;
   align-items: center;
 }
 
@@ -2907,11 +2896,6 @@ table.tbl.tbl-wide {
   height: 10px;
   border-radius: 2px;
   flex: 0 0 auto;
-}
-
-.nd-pips.sm .nd-pip {
-  width: 8px;
-  height: 8px;
 }
 
 .nd-pip.ret {
@@ -2944,14 +2928,13 @@ table.tbl.tbl-wide {
   font-weight: 700;
 }
 
-/* ——— Seats: tiles view ——— */
+/* ——— Seats: position tiles (two-line: identity+seats, then the counts) ——— */
 
 .nd-cell {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 3px;
-  padding: 5px 8px 6px;
-  min-width: 78px;
+  padding: 3px 7px 4px;
 }
 
 .nd-cell.short {
@@ -2961,15 +2944,20 @@ table.tbl.tbl-wide {
 
 .nd-cell-top {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 7px;
+}
+
+.nd-pos {
+  min-width: 22px;
 }
 
 .nd-open {
   font: 700 9.5px/1 var(--font-ui);
   letter-spacing: 0.04em;
   color: var(--bad);
+  margin-left: auto;
+  padding-left: 4px;
 }
 
 .nd-open.set {
@@ -2977,146 +2965,11 @@ table.tbl.tbl-wide {
   font-weight: 600;
 }
 
-.nd-cell .nd-pips {
-  margin-top: 5px;
-}
-
 .nd-foot {
-  margin-top: 4px;
-  font: 600 9px/1 var(--font-ui);
+  margin-top: 3px;
+  font: 600 8.5px/1 var(--font-ui);
   color: var(--ink-3);
   white-space: nowrap;
-}
-
-/* ——— Seats: lower-third view ——— */
-
-.nd-bar {
-  display: flex;
-  align-items: stretch;
-  border: 1px solid var(--line);
-  background: var(--sunken);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.nd-bar + .nd-bar {
-  margin-top: 5px;
-}
-
-.nd-bar-cap {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  font: 700 11.5px var(--font-display);
-  letter-spacing: 0.12em;
-  color: var(--team-contrast);
-  background: var(--team);
-  padding: 0 18px 0 11px;
-  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
-}
-
-.nd-bar-flow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  padding: 5px 10px;
-}
-
-.nd-bar-group {
-  display: inline-flex;
-  align-items: center;
-}
-
-.nd-bar-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 2px;
-}
-
-.nd-bar-item.short {
-  background: color-mix(in srgb, var(--bad) 12%, transparent);
-}
-
-.nd-bar-pos {
-  font: 700 11.5px/1 var(--font-display);
-  letter-spacing: 0.06em;
-  color: var(--ink-2);
-}
-
-.nd-bar-item.short .nd-bar-pos {
-  color: var(--bad);
-}
-
-.nd-bar-n {
-  font: 600 12px/1 var(--font-display);
-  color: var(--bad);
-  font-variant-numeric: tabular-nums;
-}
-
-.nd-bar-sep {
-  width: 1px;
-  align-self: stretch;
-  background: var(--line-soft);
-  margin: 2px 4px;
-}
-
-/* ——— Seats: needs-first view ——— */
-
-.nd-plate {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--paper);
-  border: 1px solid color-mix(in srgb, var(--bad) 55%, var(--line));
-  border-left: 4px solid var(--bad);
-  border-radius: 3px;
-  padding: 5px 12px 6px 10px;
-}
-
-.nd-plate-n {
-  font: 400 24px/1 var(--font-score);
-  color: var(--bad);
-}
-
-.nd-plate-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.nd-plate-sub {
-  font: 600 9px/1 var(--font-ui);
-  color: var(--ink-3);
-}
-
-.nd-allset {
-  font: 600 11px var(--font-ui);
-  color: var(--ink-3);
-  padding: 6px 0;
-}
-
-.nd-quiet {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  padding: 6px 10px;
-  border: 1px solid var(--line-soft);
-  border-radius: 3px;
-  align-items: center;
-}
-
-.nd-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.nd-chip-pos {
-  font: 600 10.5px/1 var(--font-display);
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
 }
 
 
