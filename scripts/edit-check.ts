@@ -108,6 +108,8 @@ check('form: recruit is undressed until enrollment', recruitForm.look === null);
 const ratingField = form.ratings[0].field;
 const mentalPick = form.mentalOptions[0].id;
 const editFace = form.faces.find((f) => f.tone === 4) ?? form.faces[0];
+const editState = Object.keys(form.cities).sort().find((st) => st !== form.homeState && form.cities[st].length)!;
+const editTown = form.cities[editState][0];
 const preLookRef = refFromRecord(
   (mainTable(franchise, 'Player')).records[rosterRow], 'CharacterVisuals'
 );
@@ -125,7 +127,9 @@ const { editedPath } = await applyPlayerEdit(
     face: editFace,
     skinTone: editFace.tone,
     bodyType: 2,
-    gear: { Towel: 'Towel_West' }
+    gear: { Towel: 'Towel_West' },
+    homeState: editState,
+    homeTown: editTown.town
   },
   dir
 );
@@ -146,6 +150,11 @@ if (form.physical.length) {
   check('write: physical tier persisted',
     String(val(rb, `PhysicalAbility${form.physical[0].slot}`)) === 'Platinum');
 }
+check('write: hometown pair + pipeline persisted',
+  String(val(rb, 'PLYR_HOME_STATE')) === editState &&
+  String(val(rb, 'PLYR_HOME_TOWN')) === editTown.town &&
+  String(val(rb, 'HomePipeline')) === editTown.pipeline,
+  `${val(rb, 'PLYR_HOME_TOWN')}, ${val(rb, 'PLYR_HOME_STATE')} -> ${val(rb, 'HomePipeline')}`);
 check('write: face swap persisted on the player row',
   String(val(rb, 'GenericHeadAssetName')) === editFace.assetName &&
   Number(val(rb, 'PLYR_PORTRAIT')) === editFace.portraitId,
@@ -210,6 +219,8 @@ await rejects('reject: dressing an unenrolled prospect (game blanks on it)', () 
   applyPlayerEdit(readBack2, editedPath, { playerRow: recruitRow, gear: { Towel: 'Towel_West' } }, dir));
 await rejects('reject: skin tone off the scale', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, skinTone: 9 }, dir));
+await rejects('reject: hometown not on the state list', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, homeTown: 'Made Up Ville' }, dir));
 await rejects('reject: unknown body type', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, bodyType: 9 }, dir));
 check('rejections left the edited file unchanged', sha(editedPath) === before);
@@ -530,6 +541,10 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const pos = positions.includes('QB') ? 'QB' : positions[0];
   const archetype = cform.archetypesByPosition[pos][0];
   const state = cform.states.includes('Ohio') ? 'Ohio' : cform.states[0];
+  const homeCity = cform.cities[state]?.[0];
+  check('create form: hometowns per state with pipelines',
+    Object.keys(cform.cities).length >= 40 && !!homeCity?.town && !!homeCity?.pipeline,
+    `${Object.keys(cform.cities).length} states; ${state} first: ${homeCity?.town} (${homeCity?.pipeline})`);
   const res = await applyCreateRecruit(fr, editedPath, {
     firstName: 'Custom',
     lastName: 'Prospect',
@@ -540,7 +555,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     heightIn: 76,
     weightLb: 215,
     homeState: state,
-    homeTown: 'Harness City'
+    homeTown: homeCity.town
   }, dir);
   check('create: wrote in place', res.editedPath === editedPath, `recruit row ${res.recruitRow}`);
 
@@ -569,6 +584,16 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     `${val(nr, 'RecruitStage')} rank ${val(nr, 'NationalRank')}`);
   const raceRef = refFromRecord(nr, 'TopSchoolsList');
   check('create: race list starts empty (zero ref)', !raceRef || raceRef.tableId === 0);
+  check('create: hometown pipeline follows the city',
+    String(val(np, 'PLYR_HOME_TOWN')) === homeCity.town &&
+    String(val(np, 'HomePipeline')) === homeCity.pipeline,
+    `${val(np, 'PLYR_HOME_TOWN')} -> ${val(np, 'HomePipeline')}`);
+  await rejects('create reject: hometown not in the state list', () =>
+    applyCreateRecruit(fr2, editedPath, {
+      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200,
+      homeState: state, homeTown: 'Made Up Ville'
+    }, dir));
 
   // The created recruit can immediately ride the other write families.
   const boardRes = await applyBoardEdit(
@@ -580,22 +605,22 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   await rejects('create reject: empty name', () =>
     applyCreateRecruit(fr3, editedPath, {
       firstName: ' ', lastName: 'X', position: pos, archetype, stars: 3,
-      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: ''
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: homeCity.town
     }, dir));
   await rejects('create reject: bad stars', () =>
     applyCreateRecruit(fr3, editedPath, {
       firstName: 'A', lastName: 'B', position: pos, archetype, stars: 7,
-      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: ''
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: homeCity.town
     }, dir));
   await rejects('create reject: unknown archetype/position template', () =>
     applyCreateRecruit(fr3, editedPath, {
       firstName: 'A', lastName: 'B', position: 'QQ', archetype: 'QQ_Wizard', stars: 3,
-      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: ''
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: homeCity.town
     }, dir));
   await rejects('create reject: unknown state', () =>
     applyCreateRecruit(fr3, editedPath, {
       firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
-      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: 'Narnia', homeTown: ''
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: 'Narnia', homeTown: homeCity.town
     }, dir));
   check('source still untouched after creation', sha(work) === sourceHash);
 
@@ -611,7 +636,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   await rejects('create reject: any look request (game dresses recruits)', async () =>
     applyCreateRecruit(await loadFranchise(editedPath), editedPath, {
       firstName: 'Styled', lastName: 'Prospect', position: pos, archetype, stars: 4,
-      devTrait: cform2.devTraits[0], heightIn: 75, weightLb: 220, homeState: state, homeTown: '',
+      devTrait: cform2.devTraits[0], heightIn: 75, weightLb: 220, homeState: state, homeTown: homeCity.town,
       skinTone: cform2.skinTones[0], bodyType: 4,
       gear: mask ? { FaceMask: mask.options[0] } : undefined
     }, dir));
@@ -680,7 +705,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   // frM2 already reflects the current on-disk state — reuse it for the write.
   const resF = await applyCreateRecruit(frM2, editedPath, {
     firstName: 'Chosen', lastName: 'Face', position: pos, archetype, stars: 3,
-    devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 210, homeState: state, homeTown: '',
+    devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 210, homeState: state, homeTown: homeCity.town,
     face
   }, dir);
   const frF2 = await loadFranchise(editedPath);
@@ -699,7 +724,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   await rejects('create reject: face not in the catalog', async () =>
     applyCreateRecruit(frF2, editedPath, {
       firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
-      devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: '',
+      devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: homeCity.town,
       face: { headId: face.headId, assetName: 'gen_head_madeup_001', portraitId: 99999, tone: face.tone }
     }, dir));
   check('source still untouched after face creation', sha(work) === sourceHash);

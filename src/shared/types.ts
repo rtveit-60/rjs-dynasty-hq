@@ -689,6 +689,10 @@ export interface PlayerEditForm {
   /** Tier member names, None first. */
   rankOptions: string[];
   physical: EditPhysicalSlot[];
+  homeState: string;
+  homeTown: string;
+  /** state -> the game's own hometowns there, each with its pipeline. */
+  cities: Record<string, { town: string; pipeline: string }[]>;
   /** slot -> the item the player's own visuals blob wears; null = undressed. */
   look: Record<string, string> | null;
   /** The blob's skin tone, when it carries one. */
@@ -718,6 +722,9 @@ export interface PlayerEditChanges {
   physical?: { slot: number; rank: string }[];
   /** A catalog face to put on the player (replaces a unique scan if present). */
   face?: FaceOption;
+  /** Hometown moves as a pair; the pipeline follows the town. */
+  homeState?: string;
+  homeTown?: string;
   skinTone?: number;
   bodyType?: number;
   /** slot -> item; '' removes the slot from the player's blob. */
@@ -771,6 +778,8 @@ export interface CreateRecruitForm {
   archetypesByPosition: Record<string, string[]>;
   /** PLYR_HOME_STATE enum member ids. */
   states: string[];
+  /** state -> the game's own hometowns there, each with its pipeline. */
+  cities: Record<string, { town: string; pipeline: string }[]>;
   /** TraitDevelopment enum member ids. */
   devTraits: string[];
   /** Raw Height field range (inches). */

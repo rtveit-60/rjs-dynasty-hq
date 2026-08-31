@@ -177,6 +177,8 @@ export async function buildEditForm(
     unique: !!ownAsset && !ownAsset.startsWith('Generic_')
   };
 
+  const cities = await cityCatalog(franchise);
+
   const target = editedPathFor(savePath);
   const jerseyRaw = Number(val(rec, 'JerseyNum'));
   return {
@@ -197,6 +199,9 @@ export async function buildEditForm(
     mentalOptions,
     rankOptions,
     physical,
+    homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
+    homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? '').trim(),
+    cities,
     look,
     lookTone,
     lookBody,
@@ -360,6 +365,18 @@ export async function applyPlayerEdit(
 
   // Appearance settles before anything is applied — a bad look changes nothing.
   if (changes.face) await validateFace(franchise, changes.face);
+  let homeCity: { town: string; pipeline: string } | null = null;
+  if (changes.homeState !== undefined || changes.homeTown !== undefined) {
+    const state = changes.homeState ?? String(val(rec, 'PLYR_HOME_STATE') ?? '');
+    const town = (changes.homeTown ?? String(val(rec, 'PLYR_HOME_TOWN') ?? '')).trim();
+    const cities = await cityCatalog(franchise);
+    homeCity = (cities[state] ?? []).find((c) => c.town === town) ?? null;
+    if (!homeCity) {
+      throw new Error('Pick a hometown from the list — the game ties towns and pipelines together.');
+    }
+    changes.homeState = state;
+    changes.homeTown = town;
+  }
   let lookJson: string | null = null;
   let lookRow = -1;
   let vT: any = null;
@@ -400,6 +417,11 @@ export async function applyPlayerEdit(
     rec.PLYR_GENERICHEAD = changes.face.headId;
     rec.GenericHeadAssetName = changes.face.assetName;
     if (rec._fields?.PLYR_PORTRAIT) rec.PLYR_PORTRAIT = changes.face.portraitId;
+  }
+  if (homeCity) {
+    rec.PLYR_HOME_STATE = changes.homeState;
+    if (rec._fields?.PLYR_HOME_TOWN) rec.PLYR_HOME_TOWN = changes.homeTown;
+    if (rec._fields?.HomePipeline) rec.HomePipeline = homeCity.pipeline;
   }
   if (lookJson && lookRow >= 0) {
     vT.records[lookRow].RawData = lookJson;
@@ -755,6 +777,40 @@ function annotateFaceShots(faces: FaceOption[], portraitsDir?: string | null): F
   return faces;
 }
 
+/**
+ * Hometowns per state, each with the pipeline the game itself assigns: every
+ * rostered player and recruit carries an observed (town, state, HomePipeline)
+ * triple, so the pick lists are the game's own vocabulary — 3,700+ towns
+ * across all 51 states in practice. Where a town shows more than one pipeline
+ * (big cities, occasional noise) the mode wins.
+ */
+async function cityCatalog(franchise: any): Promise<Record<string, { town: string; pipeline: string }[]>> {
+  const players = mainTable(franchise, 'Player');
+  await players.readRecords();
+  const byState = new Map<string, Map<string, Map<string, number>>>();
+  for (const p of players.records as any[]) {
+    if (p.isEmpty) continue;
+    const town = String(val(p, 'PLYR_HOME_TOWN') ?? '').trim();
+    const state = String(val(p, 'PLYR_HOME_STATE') ?? '');
+    const pipe = String(val(p, 'HomePipeline') ?? '');
+    if (!town || !state || state === 'INVALID' || !pipe || pipe === 'Invalid_') continue;
+    if (!byState.has(state)) byState.set(state, new Map());
+    const towns = byState.get(state)!;
+    if (!towns.has(town)) towns.set(town, new Map());
+    towns.get(town)!.set(pipe, (towns.get(town)!.get(pipe) ?? 0) + 1);
+  }
+  const out: Record<string, { town: string; pipeline: string }[]> = {};
+  for (const [state, towns] of byState) {
+    out[state] = [...towns.entries()]
+      .map(([town, pipes]) => ({
+        town,
+        pipeline: [...pipes.entries()].sort((a, b) => b[1] - a[1])[0][0]
+      }))
+      .sort((a, b) => a.town.localeCompare(b.town));
+  }
+  return out;
+}
+
 /** Class recruits by archetype: recruitRow + playerRow of a clean template. */
 async function templatePool(
   franchise: any
@@ -797,7 +853,8 @@ export async function buildCreateForm(
   for (const list of Object.values(archetypesByPosition)) list.sort();
 
   const sample = playerTable.records[byArchetype.values().next().value!.playerRow];
-  const states = enumMembers(sample, 'PLYR_HOME_STATE').map((m) => m.name);
+  const states = enumMembers(sample, 'PLYR_HOME_STATE').map((m) => m.name).filter((n) => n !== 'INVALID');
+  const cities = await cityCatalog(franchise);
   const devTraits = enumMembers(sample, 'TraitDevelopment').map((m) => m.name);
   let playerRowsFree = 0;
   for (const r of playerTable.records) if (r.isEmpty) playerRowsFree++;
@@ -825,6 +882,7 @@ export async function buildCreateForm(
     maxTownLen: stringCap(sample, 'PLYR_HOME_TOWN', 20),
     archetypesByPosition,
     states,
+    cities,
     devTraits,
     heightMin: 66,
     heightMax: Math.min(84, fieldMax(sample, 'Height', 127)),
@@ -871,8 +929,10 @@ export async function applyCreateRecruit(
   if (!last || last.length > stringCap(sample, 'LastName', 21) || !nameOk(last)) {
     throw new Error(`Last name must be 1–${stringCap(sample, 'LastName', 21)} plain characters.`);
   }
-  if (town && (town.length > stringCap(sample, 'PLYR_HOME_TOWN', 20) || !nameOk(town))) {
-    throw new Error('That hometown does not fit the save format.');
+  const cities = await cityCatalog(franchise);
+  const city = (cities[req.homeState] ?? []).find((c) => c.town === town);
+  if (!city) {
+    throw new Error('Pick a hometown from the list — the game ties towns and pipelines together.');
   }
   if (!STAR_ENUM[req.stars]) throw new Error('Stars must be 1–5.');
   if (!Number.isInteger(req.heightIn) || req.heightIn < 60 || req.heightIn > fieldMax(sample, 'Height', 127)) {
@@ -933,6 +993,8 @@ export async function applyCreateRecruit(
   np.Weight = rawWeight;
   np.PLYR_HOME_STATE = req.homeState;
   if (np._fields?.PLYR_HOME_TOWN) np.PLYR_HOME_TOWN = town;
+  // The pipeline rides the hometown — the clone's own must never survive.
+  if (np._fields?.HomePipeline) np.HomePipeline = city.pipeline;
   // Their own face: a chosen catalog head brings its real headshot; otherwise
   // portrait 0 falls back to the generated avatar.
   if (req.face) {

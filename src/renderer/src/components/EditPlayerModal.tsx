@@ -117,6 +117,8 @@ export default function EditPlayerModal({
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [jersey, setJersey] = useState('0');
+  const [homeState, setHomeState] = useState('');
+  const [homeTown, setHomeTown] = useState('');
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [mental, setMental] = useState<EditMentalSlot[]>([]);
   const [physical, setPhysical] = useState<Record<number, string>>({});
@@ -139,6 +141,8 @@ export default function EditPlayerModal({
         setFirstName(f.firstName);
         setLastName(f.lastName);
         setJersey(String(f.jersey ?? 0));
+        setHomeState(f.homeState);
+        setHomeTown(f.homeTown);
         setRatings(Object.fromEntries(f.ratings.map((r) => [r.field, r.value])));
         setMental(f.mental.map((m) => ({ ...m })));
         setPhysical(Object.fromEntries(f.physical.map((p) => [p.slot, p.rank])));
@@ -181,6 +185,11 @@ export default function EditPlayerModal({
     }
     if (form.jersey !== null && Number(jersey) !== form.jersey) {
       out.jersey = Number(jersey);
+      any = true;
+    }
+    if (homeState !== form.homeState || homeTown !== form.homeTown) {
+      out.homeState = homeState;
+      out.homeTown = homeTown;
       any = true;
     }
     const changedRatings: Record<string, number> = {};
@@ -336,6 +345,38 @@ export default function EditPlayerModal({
                   />
                 </label>
               )}
+              <label>
+                <span>Home state</span>
+                <select
+                  value={homeState}
+                  onChange={(e) => {
+                    const st = e.target.value;
+                    setHomeState(st);
+                    setHomeTown(form.cities[st]?.[0]?.town ?? '');
+                  }}
+                >
+                  {Object.keys(form.cities)
+                    .sort()
+                    .map((st) => (
+                      <option key={st} value={st}>
+                        {st.replace(/([a-z])([A-Z])/g, '$1 $2')}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                <span>Hometown</span>
+                <select value={homeTown} onChange={(e) => setHomeTown(e.target.value)}>
+                  {homeTown && !(form.cities[homeState] ?? []).some((c) => c.town === homeTown) && (
+                    <option value={homeTown}>{homeTown}</option>
+                  )}
+                  {(form.cities[homeState] ?? []).map((c) => (
+                    <option key={c.town} value={c.town}>
+                      {c.town}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <div className="ed-sec">Ratings</div>

@@ -48,7 +48,9 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
           : Object.keys(f.archetypesByPosition).sort()[0];
         setPosition(firstPos);
         setArchetype(f.archetypesByPosition[firstPos][0]);
-        setHomeState(f.states[0] ?? '');
+        const st0 = f.states.find((x) => (f.cities[x] ?? []).length) ?? f.states[0] ?? '';
+        setHomeState(st0);
+        setHomeTown(f.cities[st0]?.[0]?.town ?? '');
         setDevTrait(f.devTraits[0] ?? 'Normal');
         setGear(effectiveLook(f.baseLook[firstPos] ?? {}));
         setSkinTone(f.baseTones[firstPos] ?? 0);
@@ -244,7 +246,15 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
               </label>
               <label className="ta-field">
                 <span>Home state</span>
-                <select value={homeState} onChange={(e) => setHomeState(e.target.value)}>
+                <select
+                  value={homeState}
+                  onChange={(e) => {
+                    const st = e.target.value;
+                    setHomeState(st);
+                    // Towns are the game's own list per state; pipeline follows.
+                    setHomeTown(form.cities[st]?.[0]?.town ?? '');
+                  }}
+                >
                   {form.states.map((s) => (
                     <option key={s} value={s}>
                       {spaceOut(s)}
@@ -254,7 +264,13 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
               </label>
               <label className="ta-field">
                 <span>Hometown</span>
-                <input value={homeTown} maxLength={form.maxTownLen} onChange={(e) => setHomeTown(e.target.value)} />
+                <select value={homeTown} onChange={(e) => setHomeTown(e.target.value)}>
+                  {(form.cities[homeState] ?? []).map((c) => (
+                    <option key={c.town} value={c.town}>
+                      {c.town}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
 
