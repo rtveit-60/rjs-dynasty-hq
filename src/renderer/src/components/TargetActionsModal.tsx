@@ -202,7 +202,7 @@ export default function TargetActionsModal({
             </div>
             <div className="ta-hours">
               <span className={`ta-total ${overBudget ? 'over' : inPerkBand ? 'warn' : ''}`}>
-                {derivedHours} hrs this week
+                {derivedHours}/{budgetCeiling} hrs this week
               </span>
               <span className={`ta-pool ${overPool ? 'over' : ''}`}>
                 pool {poolAfter}/{form.poolTotal} assigned
