@@ -3560,7 +3560,8 @@ table.tbl.tbl-wide {
 .tk-item .team-logo,
 .tk-item .swatch,
 .hqm-row .team-logo,
-.hqm-row .swatch {
+.hqm-row .swatch,
+.tk-item .mv {
   align-self: center;
 }
 
