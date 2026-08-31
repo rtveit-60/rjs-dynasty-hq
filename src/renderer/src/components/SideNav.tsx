@@ -72,6 +72,16 @@ export default function SideNav() {
         ))}
       </nav>
       <div className="rail-fill" aria-hidden="true">
+        {team?.state && (
+          <img
+            className="rail-state"
+            src={`gameicon://state-${team.state.toLowerCase().replace(/[^a-z]/g, '')}`}
+            alt=""
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        )}
         {team && <TeamLogo row={team.row} size={170} fallback={null} />}
       </div>
       <div className="rail-foot">
