@@ -147,7 +147,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
   if (!board || !board.targets.length) {
     return (
       <>
-        <TeamNeedsStrip needs={school.teamNeeds} />
+        <TeamNeedsStrip needs={school.teamNeeds} targets={board?.targets} />
         <div className="empty">No recruiting board found in this save.</div>
       </>
     );
@@ -197,7 +197,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
 
   return (
     <>
-      <TeamNeedsStrip needs={school.teamNeeds} />
+      <TeamNeedsStrip needs={school.teamNeeds} targets={board.targets} />
 
       <div className="filters" style={{ alignItems: 'center' }}>
         <span className="chip">

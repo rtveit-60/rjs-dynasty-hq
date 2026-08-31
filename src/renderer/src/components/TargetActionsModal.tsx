@@ -100,6 +100,10 @@ export default function TargetActionsModal({
   const offerLocked = form
     ? scholarship !== 'Offered' && form.scholarship !== 'Offered' && ACTION_HOURS.scholarship > hoursLeft
     : false;
+  // The season's hard cap: no NEW offer once all of the game's 35 are out.
+  const offerCapped = form
+    ? form.scholarship !== 'Offered' && form.scholarshipsUsed >= form.scholarshipsCap
+    : false;
   const swayLocked = swayPitch === 'Invalid' && ACTION_HOURS.sway > hoursLeft;
   const scoutMax = form
     ? Math.min(
@@ -278,9 +282,13 @@ export default function TargetActionsModal({
 
             <div className="ed-sec">Offers</div>
             <div className="ta-offers">
-              <label className={`ta-field ${offerLocked ? 'locked' : ''}`}>
+              <label className={`ta-field ${offerLocked || offerCapped ? 'locked' : ''}`}>
                 <span>
-                  Scholarship <em>(new offer {ACTION_HOURS.scholarship} hrs)</em>
+                  Scholarship{' '}
+                  <em>
+                    (new offer {ACTION_HOURS.scholarship} hrs · {form.scholarshipsUsed}/
+                    {form.scholarshipsCap} out)
+                  </em>
                 </span>
                 <select value={scholarship} onChange={(e) => setScholarship(e.target.value)}>
                   {[form.scholarship, 'None', 'Offered', 'Revoked']
@@ -290,7 +298,7 @@ export default function TargetActionsModal({
                         key={v}
                         value={v}
                         disabled={
-                          (v === 'Offered' && offerLocked) ||
+                          (v === 'Offered' && (offerLocked || offerCapped)) ||
                           !['None', 'Offered', 'Revoked', form.scholarship].includes(v)
                         }
                       >
@@ -326,6 +334,12 @@ export default function TargetActionsModal({
                 </select>
               </label>
             </div>
+            {offerCapped && (
+              <p className="cr-note">
+                All {form.scholarshipsCap} scholarship offers are out for the season — the
+                game grants no more, and pulling one back does not refund it.
+              </p>
+            )}
 
             <div className="ed-sec">Scouting</div>
             <div className="ta-scout">

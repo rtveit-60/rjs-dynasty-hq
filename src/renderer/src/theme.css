@@ -2850,6 +2850,27 @@ table.tbl.tbl-wide {
   margin-left: 8px;
 }
 
+.needs-schol {
+  margin-left: auto;
+  font: 600 10px var(--font-display);
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+
+.needs-schol b {
+  font: 700 11px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.needs-schol.near b {
+  color: var(--warn);
+}
+
+.needs-schol.full b {
+  color: var(--bad);
+}
+
 .needs-body {
   display: flex;
   align-items: stretch;

@@ -1,4 +1,5 @@
-import type { TeamNeed } from '../../../shared/types.ts';
+import type { RecruitTargetEntry, TeamNeed } from '../../../shared/types.ts';
+import { RECRUITING_TUNABLES } from '../../../shared/recruiting-tunables.ts';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 
 /**
@@ -62,8 +63,23 @@ function Tile({ n }: { n: TeamNeed }) {
   );
 }
 
-export default function TeamNeedsStrip({ needs }: { needs: TeamNeed[] }) {
+/** An offer is spent once made — Offered, Revoked, or the committed terminal state. */
+function offersOut(targets: RecruitTargetEntry[]): number {
+  return targets.filter((t) =>
+    ['Offered', 'Revoked', 'Committed', 'Last_'].includes(t.scholarship)
+  ).length;
+}
+
+export default function TeamNeedsStrip({
+  needs,
+  targets
+}: {
+  needs: TeamNeed[];
+  targets?: RecruitTargetEntry[];
+}) {
   if (!needs.length) return null;
+  const cap = RECRUITING_TUNABLES.maxTeamScholarshipOffers;
+  const used = targets ? offersOut(targets) : null;
   return (
     <div className="needs-strip">
       <div className="needs-head">
@@ -81,6 +97,10 @@ export default function TeamNeedsStrip({ needs }: { needs: TeamNeed[] }) {
             </InfoRow>
             <InfoRow term="Targeted">Board targets still being chased at the position.</InfoRow>
             <InfoRow term="Committed">Recruits already locked in to your class.</InfoRow>
+            <InfoRow term="Scholarships">
+              The game allows {RECRUITING_TUNABLES.maxTeamScholarshipOffers} offers per
+              season across high school and the portal; a pulled offer stays spent.
+            </InfoRow>
             <p>
               One honesty note: departures leave the projection here immediately — the
               game itself carries them on the roster until week 4 of the offseason.
@@ -92,6 +112,16 @@ export default function TeamNeedsStrip({ needs }: { needs: TeamNeed[] }) {
           <span className="nd-pip commit" /> committed
           <span className="nd-pip open" /> open seat
         </span>
+        {used !== null && (
+          <span
+            className={`needs-schol ${used >= cap ? 'full' : used >= cap - 3 ? 'near' : ''}`}
+          >
+            SCHOLARSHIPS{' '}
+            <b>
+              {used}/{cap}
+            </b>
+          </span>
+        )}
       </div>
       <div className="needs-body">
         <div className="needs-main">

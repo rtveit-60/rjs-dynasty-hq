@@ -1367,6 +1367,26 @@ const ACTION_FIELDS: Record<keyof TargetActionFlags, string> = {
 /** Aliased range markers → the semantic member name. */
 const SCHOLARSHIP_ALIAS: Record<string, string> = { First_: 'None', Last_: 'Committed' };
 
+/**
+ * Scholarship offers already out on this board — Offered, Revoked (a pulled
+ * offer stays spent for the season), and the enum's Committed terminal state.
+ * The game stores no season counter; its own X/35 reads the same target state.
+ */
+async function scholarshipsOut(franchise: any, h: BoardHandles): Promise<number> {
+  let out = 0;
+  for (let i = 0; i < (h.arr.arraySize ?? 0); i++) {
+    const tr = refFromRecord(h.arr, `RecruitTarget${i}`);
+    if (!tr || (tr.tableId === 0 && tr.row === 0)) continue;
+    const tT = await tableById(franchise, tr.tableId);
+    const rec = tT?.records?.[tr.row];
+    if (!rec || rec.isEmpty) continue;
+    const raw = String(val(rec, 'ScholarshipStatus') ?? 'None');
+    const st = SCHOLARSHIP_ALIAS[raw] ?? raw;
+    if (st === 'Offered' || st === 'Revoked' || st === 'Committed') out++;
+  }
+  return out;
+}
+
 async function targetRecordFor(
   franchise: any,
   teamRow: number,
@@ -1428,6 +1448,8 @@ export async function buildTargetForm(
       visitSchool: val(target, 'VisitRecruitsSchool') === true
     },
     scholarship: SCHOLARSHIP_ALIAS[rawStatus] ?? rawStatus,
+    scholarshipsUsed: await scholarshipsOut(franchise, h),
+    scholarshipsCap: RECRUITING_TUNABLES.maxTeamScholarshipOffers,
     nilOffer: Number(val(target, 'CurrentNILOffer') ?? 0),
     nilCap: fieldMax(target, 'CurrentNILOffer', 1023),
     nilExpectation: Number(val(target, 'NILExpectation') ?? 0),
@@ -1653,6 +1675,17 @@ export async function applyTargetActions(
   }
   if (req.scholarship !== undefined && !['Offered', 'Revoked', 'None'].includes(req.scholarship)) {
     throw new Error('Unknown scholarship state.');
+  }
+  // The season's hard cap: a NEW offer must fit under the game's 35, counting
+  // every offer already out (revoked ones stay spent).
+  if (req.scholarship === 'Offered' && String(val(target, 'ScholarshipStatus') ?? '') !== 'Offered') {
+    const cap = RECRUITING_TUNABLES.maxTeamScholarshipOffers;
+    const used = await scholarshipsOut(franchise, h);
+    if (used >= cap) {
+      throw new Error(
+        `All ${cap} scholarship offers are already out — the game grants no more this season.`
+      );
+    }
   }
   if (req.swayPitch !== undefined && req.swayPitch !== 'Invalid') {
     const names = new Set(enumMembers(target, 'SwayPitch').map((m) => m.name));

@@ -503,6 +503,10 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   check('actions form: prospect budget from tuning + perks',
     form.budgetBase === 50 && form.budgetBonus >= 0,
     `${form.budgetBase} + ${form.budgetBonus} perk bound`);
+  check('actions form: scholarship season cap counted from the board',
+    form.scholarshipsCap === 35 && form.scholarshipsUsed > 0 &&
+    form.scholarshipsUsed <= form.scholarshipsCap,
+    `${form.scholarshipsUsed}/${form.scholarshipsCap}`);
   // write 1: visit 40 + social 5 + scholarship offer 5 = 50 (always legal)
   await applyTargetActions(fr, editedPath, {
     teamRow,
@@ -554,6 +558,9 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   check('actions: five passes in a week reach full intel',
     form2.intel === form2.intelMax && form2.scoutsDone === form2.scoutsMax && form2.scoutBoost >= 0,
     `intel ${form2.intel} (${form2.scoutsDone}/${form2.scoutsMax} passes, boost ${form2.scoutBoost})`);
+  check('actions: the new offer counts against the season cap',
+    form2.scholarshipsUsed === form.scholarshipsUsed + 1,
+    `${form.scholarshipsUsed} -> ${form2.scholarshipsUsed}`);
   check('actions: pool assigned moved with the derived hours', form2.poolAssigned === poolBefore + expectHours,
     `${poolBefore} -> ${form2.poolAssigned}`);
 
