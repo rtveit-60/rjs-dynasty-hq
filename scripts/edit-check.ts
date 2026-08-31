@@ -365,10 +365,14 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const fr2 = await loadFranchise(editedPath);
   const c2 = mainTable(fr2, 'Coach');
   await ensureCoachSchema(fr2, c2);
-  await c2.readRecords(['ContractStatus']);
+  await c2.readRecords(['ContractStatus', 'CurrentJobSecurityStatus', 'CurrentJobSecurityPercentage']);
   const readBackStatus = String(val(c2.records[cpuHC], 'ContractStatus'));
   check('fire: persisted through cold reload (alias-tolerant)',
     readBackStatus === 'PendingFire' || readBackStatus === 'First_Pending', readBackStatus);
+  check('fire: hot seat written (the carousel’s real input)',
+    String(val(c2.records[cpuHC], 'CurrentJobSecurityStatus')) === 'HotSeat' &&
+    Number(val(c2.records[cpuHC], 'CurrentJobSecurityPercentage')) <= 49,
+    `HotSeat ${val(c2.records[cpuHC], 'CurrentJobSecurityPercentage')}%`);
 
   await rejects('fire reject: already marked', () =>
     applyCoachFire(fr2, editedPath, { coachRow: cpuHC, undo: false }, dir));
@@ -382,9 +386,11 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const fr3 = await loadFranchise(editedPath);
   const c3 = mainTable(fr3, 'Coach');
   await ensureCoachSchema(fr3, c3);
-  await c3.readRecords(['ContractStatus']);
+  await c3.readRecords(['ContractStatus', 'CurrentJobSecurityStatus']);
   const restored = String(val(c3.records[cpuHC], 'ContractStatus'));
   check('fire: undo persisted', restored === 'Signed' || restored === 'First_Active', restored);
+  check('fire: undo restores Safe security',
+    String(val(c3.records[cpuHC], 'CurrentJobSecurityStatus')) === 'Safe');
   check('source still untouched after fire edits', sha(work) === sourceHash);
 }
 

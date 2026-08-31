@@ -1525,10 +1525,16 @@ const PENDING_FIRE_NAMES = new Set(['PendingFire', 'First_Pending']);
 const SIGNED_NAMES = new Set(['Signed', 'First_Active']);
 
 /**
- * Flip a CPU coach's ContractStatus to the game's own PendingFire state (or
- * back to Signed), and write the _RJsEdited sibling. The offseason carousel
- * is what processes PendingFire — this sets the flag the game itself uses;
- * whether a mid-season AD re-evaluation can clear it is verified in-game.
+ * Mark a CPU coach for firing, or unmark them. In-game verified 2026-08-31
+ * (full season simmed to the carousel): ContractStatus=PendingFire is the
+ * carousel's own OUTPUT bookkeeping, not an input — a Safe coach carrying it
+ * survives untouched, while every coach the carousel actually fired entered
+ * the offseason as Signed + CurrentJobSecurityStatus=HotSeat (41 of 41). So
+ * the real lever is the hot seat: firing writes HotSeat plus a percentage at
+ * the low end of the save's own observed HotSeat band, and keeps PendingFire
+ * as the app's visible marker/undo handle (harmless — proven inert). The AD
+ * re-evaluates security over played weeks, so a winning coach may climb off
+ * the seat; marking closest to season's end is the most reliable.
  */
 export async function applyCoachFire(
   franchise: any,
@@ -1546,7 +1552,9 @@ export async function applyCoachFire(
     'LastName',
     'Position',
     'IsUserControlled',
-    'ContractStatus'
+    'ContractStatus',
+    'CurrentJobSecurityStatus',
+    'CurrentJobSecurityPercentage'
   ]);
   const rec = table.records?.[req.coachRow];
   if (!rec || rec.isEmpty) throw new Error('No coach at that row in the save.');
@@ -1559,24 +1567,51 @@ export async function applyCoachFire(
   }
   const coachName = `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
   const current = String(val(rec, 'ContractStatus') ?? '');
+
+  // The save's own security bands calibrate the writes (fallbacks are the
+  // observed bands from a real dynasty: HotSeat 8-49, Safe 71-100).
+  let hotPct = 10;
+  let safePct = 95;
+  {
+    const hot: number[] = [];
+    const safe: number[] = [];
+    for (const c of table.records as any[]) {
+      if (c.isEmpty) continue;
+      const st = String(val(c, 'CurrentJobSecurityStatus') ?? '');
+      const pct = Number(val(c, 'CurrentJobSecurityPercentage'));
+      if (!Number.isFinite(pct)) continue;
+      if (st === 'HotSeat') hot.push(pct);
+      if (st === 'Safe') safe.push(pct);
+    }
+    if (hot.length) hotPct = Math.min(...hot);
+    if (safe.length) safePct = safe.sort((a, b) => a - b)[Math.floor(safe.length / 2)];
+  }
+
   if (req.undo) {
     if (!PENDING_FIRE_NAMES.has(current)) throw new Error(`${coachName} is not marked to be fired.`);
     rec.ContractStatus = 'Signed';
+    rec.CurrentJobSecurityStatus = 'Safe';
+    rec.CurrentJobSecurityPercentage = safePct;
   } else {
     if (PENDING_FIRE_NAMES.has(current)) throw new Error(`${coachName} is already marked to be fired.`);
     if (!SIGNED_NAMES.has(current) && current !== 'Expiring') {
       throw new Error(`${coachName} is in the ${current} state — only active coaches can be marked.`);
     }
+    // the carousel's real input, plus the app's own visible marker
+    rec.CurrentJobSecurityStatus = 'HotSeat';
+    rec.CurrentJobSecurityPercentage = hotPct;
     rec.ContractStatus = 'PendingFire';
   }
 
   const want = req.undo ? SIGNED_NAMES : PENDING_FIRE_NAMES;
+  const wantSecurity = req.undo ? 'Safe' : 'HotSeat';
   const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
     const t = mainTable(check, 'Coach');
     if (!(await ensureCoachSchema(check, t))) throw new Error('Verify reload failed.');
-    await t.readRecords(['ContractStatus']);
+    await t.readRecords(['ContractStatus', 'CurrentJobSecurityStatus']);
     const written = String(val(t.records?.[req.coachRow], 'ContractStatus') ?? '');
-    if (!want.has(written)) {
+    const security = String(val(t.records?.[req.coachRow], 'CurrentJobSecurityStatus') ?? '');
+    if (!want.has(written) || security !== wantSecurity) {
       throw new Error('The written save did not read back with the new contract state.');
     }
   });
