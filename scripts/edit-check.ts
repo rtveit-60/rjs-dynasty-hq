@@ -511,21 +511,25 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     scholarship: 'Offered',
     nilOffer: 300
   }, dir);
-  // write 2: drop the visit, add sway + full scouting = 5 + 30 + 10 = 45
+  // write 2: drop the visit, add sway + one scouting pass = 5 + 30 + 10 = 45
   await applyTargetActions(fr, editedPath, {
     teamRow,
     recruitRow: addTargetGlobal,
     actions: { visitSchool: false },
     swayPitch: 'HometownHero',
-    scoutFull: true
+    scout: true
   }, dir);
   const expectHours = 45;
   const form2 = await buildTargetForm(await loadFranchise(editedPath), teamRow, addTargetGlobal, editedPath);
   check('actions: hours derive from the game\u2019s action prices',
     form2.hours === expectHours && !form2.actions.visitSchool && form2.actions.socialMedia &&
     form2.scholarship === 'Offered' && form2.nilOffer === 300 &&
-    form2.swayPitch === 'HometownHero' && form2.intel === 16383,
-    JSON.stringify({ h: form2.hours, s: form2.scholarship, n: form2.nilOffer, p: form2.swayPitch, i: form2.intel }));
+    form2.swayPitch === 'HometownHero',
+    JSON.stringify({ h: form2.hours, s: form2.scholarship, n: form2.nilOffer, p: form2.swayPitch }));
+  check('actions: one scouting pass reveals a slice, not everything',
+    form2.intel > 0 && form2.intel < form2.intelMax && form2.scoutsDone === 1 &&
+    form2.scoutsMax === 5 && form2.scoutBoost >= 0,
+    `intel ${form2.intel} (${form2.scoutsDone}/${form2.scoutsMax} passes, boost ${form2.scoutBoost})`);
   check('actions: pool assigned moved with the derived hours', form2.poolAssigned === poolBefore + expectHours,
     `${poolBefore} -> ${form2.poolAssigned}`);
 

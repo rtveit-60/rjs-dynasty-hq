@@ -33,10 +33,10 @@ for (const chunk of toc.chunks) {
   console.log('RecruitingTunables (by schema idx):');
   const IDX: Record<string, number> = {
     MaxTotalHoursOnRecruitPerWeek: 34,
-    OffseasonRecruitingHoursSpline: 38,
-    PlayoffRecruitingHoursSpline: 42,
-    PreseasonRecruitingHoursSpline: 48,
-    RegularSeasonRecruitingHoursSpline: 64
+    MaxTimesScouted: 33,
+    IntelUnlockThresholdSplines: 24,
+    ScoutingAttributesUnlockPercentage: 71,
+    ScoutingPhysicalAbilityUnlockPercentage: 72
   };
   const keys = Object.keys(r0._fields);
   for (const [name, i] of Object.entries(IDX)) {
@@ -45,7 +45,7 @@ for (const chunk of toc.chunks) {
   // follow spline refs
   const byId = new Map<number, any>();
   for (const x of store.tables as any[]) if (x?.header?.tableId !== undefined) byId.set(x.header.tableId, x);
-  for (const k of ['Field_38', 'Field_42', 'Field_48', 'Field_64']) {
+  for (const k of ['Field_24', 'Field_71', 'Field_72']) {
     const v = Number(r0._fields[k]?.value ?? 0);
     if (!v) { console.log(`${k}: 0`); continue; }
     const tid = v >> 17;

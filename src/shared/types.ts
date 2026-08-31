@@ -893,6 +893,11 @@ export interface TargetActionForm {
   swayOptions: { id: string; name: string }[];
   intel: number;
   intelMax: number;
+  /** How many of the game's five scouting passes this intel represents. */
+  scoutsDone: number;
+  scoutsMax: number;
+  /** This staff's scouting-perk bonus total (condition-gated, from the save). */
+  scoutBoost: number;
   targetFileName: string;
   targetExists: boolean;
 }
@@ -904,7 +909,9 @@ export interface TargetActionChanges {
   scholarship?: 'Offered' | 'Revoked' | 'None';
   nilOffer?: number;
   swayPitch?: string;
-  scoutFull?: boolean;
+  /** Queue one scouting pass (the game's own increment: ~a fifth of the
+   *  intel per scout, five scouts to full). */
+  scout?: boolean;
 }
 
 /** Fire (or un-fire) a CPU coach: flips the game's own PendingFire contract state. */

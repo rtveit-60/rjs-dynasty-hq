@@ -43,7 +43,7 @@ export default function TargetActionsModal({
   const [scholarship, setScholarship] = useState('None');
   const [nilOffer, setNilOffer] = useState(0);
   const [swayPitch, setSwayPitch] = useState('Invalid');
-  const [scoutFull, setScoutFull] = useState(false);
+  const [scout, setScout] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -83,7 +83,7 @@ export default function TargetActionsModal({
   const derivedHours = form
     ? ACTION_LABELS.reduce((sum, a) => sum + (actions[a.key] ? a.cost : 0), 0) +
       (swayPitch !== 'Invalid' ? ACTION_HOURS.sway : 0) +
-      (scoutFull && form.intel < form.intelMax ? ACTION_HOURS.scoutFull : 0) +
+      (scout && form.intel < form.intelMax ? ACTION_HOURS.scoutFull : 0) +
       (scholarship === 'Offered' && form.scholarship !== 'Offered' ? ACTION_HOURS.scholarship : 0)
     : 0;
   const poolAfter = form ? form.poolAssigned - form.hours + derivedHours : 0;
@@ -116,12 +116,12 @@ export default function TargetActionsModal({
       out.swayPitch = swayPitch;
       any = true;
     }
-    if (scoutFull && form.intel < form.intelMax) {
-      out.scoutFull = true;
+    if (scout && form.intel < form.intelMax) {
+      out.scout = true;
       any = true;
     }
     return any ? out : null;
-  }, [form, actions, scholarship, nilOffer, swayPitch, scoutFull]);
+  }, [form, actions, scholarship, nilOffer, swayPitch, scout]);
 
   const save = async (): Promise<void> => {
     if (!changes || overPool) return;
@@ -290,21 +290,27 @@ export default function TargetActionsModal({
             <div className="ed-sec">Scouting</div>
             <div className="ta-scout">
               {scouted ? (
-                <span className="ta-scouted">Fully scouted</span>
+                <span className="ta-scouted">Fully scouted ({form.scoutsMax} of {form.scoutsMax} passes)</span>
               ) : (
-                <label className={`wp-row ${scoutFull ? 'on' : ''}`}>
+                <label className={`wp-row ${scout ? 'on' : ''}`}>
                   <input
                     type="checkbox"
-                    checked={scoutFull}
-                    onChange={(e) => setScoutFull(e.target.checked)}
+                    checked={scout}
+                    onChange={(e) => setScout(e.target.checked)}
                   />
                   <span className="wp-box" aria-hidden="true" />
                   <span className="wp-name">
-                    Scout fully <em>({form.intel} of {form.intelMax} intel unlocked now)</em>
+                    Scout <em>(pass {Math.min(form.scoutsDone + 1, form.scoutsMax)} of {form.scoutsMax} — reveals another slice of intel)</em>
                   </span>
-                  {scoutFull && <span className="wp-changed" title="changed this visit" />}
+                  {scout && <span className="wp-changed" title="changed this visit" />}
                   <span className="wp-price">{ACTION_HOURS.scoutFull} hrs</span>
                 </label>
+              )}
+              {form.scoutBoost > 0 && (
+                <p className="cr-note">
+                  Your staff's scouting perks add up to {form.scoutBoost} on prospects
+                  matching their conditions — the game applies that on top when it scouts.
+                </p>
               )}
             </div>
 

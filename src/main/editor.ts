@@ -1436,6 +1436,9 @@ export async function buildTargetForm(
     })),
     intel: Number(val(target, 'UnlockedIntelBitfield') ?? 0),
     intelMax: fieldMax(target, 'UnlockedIntelBitfield', 16383),
+    scoutsDone: scoutsDoneFor(Number(val(target, 'UnlockedIntelBitfield') ?? 0)),
+    scoutsMax: RECRUITING_TUNABLES.maxTimesScouted,
+    scoutBoost: await scoutingBoost(franchise, teamRow),
     targetFileName: basename(targetPath),
     targetExists: existsSync(targetPath)
   };
@@ -1489,6 +1492,90 @@ export async function prospectHourBudget(
   }
 }
 
+const INTEL_BITS = 14;
+const SCOUTS_MAX = RECRUITING_TUNABLES.maxTimesScouted;
+
+const popcount = (n: number): number => {
+  let c = 0;
+  while (n) {
+    c += n & 1;
+    n >>>= 1;
+  }
+  return c;
+};
+
+/** How many of the game's scouting passes this intel level represents. */
+export function scoutsDoneFor(intel: number): number {
+  const unlocked = popcount(intel & 0x3fff);
+  if (unlocked >= INTEL_BITS) return SCOUTS_MAX;
+  return Math.min(SCOUTS_MAX - 1, Math.floor((unlocked * SCOUTS_MAX) / INTEL_BITS));
+}
+
+/** Deterministic per-target PRNG so scout reveals verify on reload. */
+const mulberry32 = (seed: number) => (): number => {
+  seed |= 0;
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+/**
+ * One scouting pass, the way the game meters it: five passes to full intel
+ * (RecruitingTunables.MaxTimesScouted; ~10% of attributes and 20% of physical
+ * abilities per pass), so each pass reveals its share of the still-locked
+ * intel bits. Which attribute a bit uncovers is the game's own random roll —
+ * mirrored here with a per-target deterministic pick.
+ */
+export function scoutOnce(intel: number, recruitRow: number): number {
+  const current = intel & 0x3fff;
+  const unlockedNow = popcount(current);
+  if (unlockedNow >= INTEL_BITS) return current;
+  const done = scoutsDoneFor(current);
+  const passesLeft = Math.max(1, SCOUTS_MAX - done);
+  const toUnlock = Math.ceil((INTEL_BITS - unlockedNow) / passesLeft);
+  const locked: number[] = [];
+  for (let b = 0; b < INTEL_BITS; b++) if (!(current & (1 << b))) locked.push(b);
+  const rand = mulberry32(recruitRow * 31 + unlockedNow * 7 + 5);
+  let next = current;
+  for (let i = 0; i < toUnlock && locked.length; i++) {
+    const pick = Math.floor(rand() * locked.length);
+    next |= 1 << locked.splice(pick, 1)[0];
+  }
+  return next;
+}
+
+/** This staff's scouting-perk bonus total (condition-slotted, like hours). */
+async function scoutingBoost(franchise: any, teamRow: number): Promise<number> {
+  try {
+    const teams = mainTable(franchise, 'Team');
+    if (!teams.recordsRead) await teams.readRecords();
+    const teamIndex = Number(val(teams.records[teamRow], 'TeamIndex'));
+    if (!Number.isFinite(teamIndex)) return 0;
+    let eff: any = null;
+    for (const t of (franchise.tables as any[])) {
+      if (t?.name !== 'CoachTalentEffects') continue;
+      if (!eff || (t.header?.recordCapacity ?? 0) > (eff.header?.recordCapacity ?? 0)) eff = t;
+    }
+    if (!eff) return 0;
+    if (!eff.recordsRead) await eff.readRecords();
+    const row = eff.records?.[teamIndex];
+    if (!row || row.isEmpty) return 0;
+    const ref = refFromRecord(row, 'Recruiting_ScoutingBoost_Start');
+    if (!ref || ref.tableId === 0) return 0;
+    const arr = franchise.getTableById(ref.tableId);
+    if (!arr) return 0;
+    if (!arr.recordsRead) await arr.readRecords();
+    const slots = arr.records?.[ref.row];
+    if (!slots) return 0;
+    let total = 0;
+    for (let i = 0; i < 8; i++) total += Number(val(slots, `int${i}`) ?? 0) || 0;
+    return total;
+  } catch {
+    return 0;
+  }
+}
+
 export async function applyTargetActions(
   franchise: any,
   savePath: string,
@@ -1522,7 +1609,8 @@ export async function applyTargetActions(
   const swayAfter = req.swayPitch !== undefined ? req.swayPitch : String(val(target, 'SwayPitch') ?? 'Invalid');
   if (swayAfter !== 'Invalid') derivedHours += ACTION_HOURS.sway;
   const intelCap = fieldMax(target, 'UnlockedIntelBitfield', 16383);
-  if (req.scoutFull && Number(val(target, 'UnlockedIntelBitfield') ?? 0) < intelCap) {
+  const intelNow = Number(val(target, 'UnlockedIntelBitfield') ?? 0);
+  if (req.scout && intelNow < intelCap) {
     derivedHours += ACTION_HOURS.scoutFull;
   }
   if (req.scholarship === 'Offered' && String(val(target, 'ScholarshipStatus') ?? '') !== 'Offered') {
@@ -1570,7 +1658,11 @@ export async function applyTargetActions(
   if (req.scholarship !== undefined) target.ScholarshipStatus = req.scholarship;
   if (req.nilOffer !== undefined) target.CurrentNILOffer = req.nilOffer;
   if (req.swayPitch !== undefined) target.SwayPitch = req.swayPitch;
-  if (req.scoutFull) target.UnlockedIntelBitfield = fieldMax(target, 'UnlockedIntelBitfield', 16383);
+  let intelAfter = intelNow;
+  if (req.scout && intelNow < intelCap) {
+    intelAfter = scoutOnce(intelNow, req.recruitRow);
+    target.UnlockedIntelBitfield = intelAfter;
+  }
 
   return writeEditedSave(franchise, savePath, backupDir, async (check) => {
     const { target: written, h: h2 } = await targetRecordFor(check, req.teamRow, req.recruitRow);
@@ -1580,8 +1672,8 @@ export async function applyTargetActions(
     if (req.nilOffer !== undefined && Number(val(written, 'CurrentNILOffer')) !== req.nilOffer) {
       throw new Error('The written save did not read back with the new NIL offer.');
     }
-    if (req.scoutFull && Number(val(written, 'UnlockedIntelBitfield')) !== fieldMax(written, 'UnlockedIntelBitfield', 16383)) {
-      throw new Error('The written save did not read back fully scouted.');
+    if (req.scout && Number(val(written, 'UnlockedIntelBitfield')) !== intelAfter) {
+      throw new Error('The written save did not read back with the scouting pass.');
     }
     if (derivedHours !== oldHours) {
       const assigned = Number(val(h2.board, 'RecruitingHoursAssigned') ?? 0);
