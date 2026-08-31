@@ -4956,9 +4956,13 @@ table.tbl.tbl-wide {
 
 .wp-row.locked {
   opacity: 0.45;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .wp-row.locked:hover {
   border-color: var(--line);
+}
+
+.ta-field.locked {
+  opacity: 0.45;
 }

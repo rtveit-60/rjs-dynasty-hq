@@ -107,6 +107,10 @@ export default function TargetActionsModal({
         scoutPasses + Math.max(0, Math.floor(hoursLeft / ACTION_HOURS.scoutFull))
       )
     : 0;
+  const anyLocked =
+    ACTION_LABELS.some(({ key, cost }) => !actions[key] && cost > hoursLeft) ||
+    offerLocked ||
+    swayLocked;
 
   const changes: TargetActionChanges | null = useMemo(() => {
     if (!form) return null;
@@ -240,6 +244,13 @@ export default function TargetActionsModal({
                   : `A prospect allows ${form.budgetBase} hours per week — recruiter perks can raise it.`}
               </p>
             )}
+            {anyLocked && (
+              <p className="cr-note">
+                {hoursLeft <= 0
+                  ? 'The budget for this week has been reached — deselect something to free hours.'
+                  : `Greyed-out options need more hours than the ${hoursLeft} left this week.`}
+              </p>
+            )}
 
             <div className="ed-sec">Actions</div>
             <div className="wp-rows">
@@ -249,7 +260,6 @@ export default function TargetActionsModal({
                   <label
                     key={key}
                     className={`wp-row ${actions[key] ? 'on' : ''} ${locked ? 'locked' : ''}`}
-                    title={locked ? `Needs ${cost} hrs — only ${Math.max(0, hoursLeft)} left this week` : undefined}
                   >
                     <input
                       type="checkbox"
@@ -268,10 +278,7 @@ export default function TargetActionsModal({
 
             <div className="ed-sec">Offers</div>
             <div className="ta-offers">
-              <label
-                className="ta-field"
-                title={offerLocked ? `A new offer needs ${ACTION_HOURS.scholarship} hrs — only ${Math.max(0, hoursLeft)} left this week` : undefined}
-              >
+              <label className={`ta-field ${offerLocked ? 'locked' : ''}`}>
                 <span>
                   Scholarship <em>(new offer {ACTION_HOURS.scholarship} hrs)</em>
                 </span>
@@ -305,10 +312,7 @@ export default function TargetActionsModal({
                   onChange={setNilOffer}
                 />
               </label>
-              <label
-                className="ta-field"
-                title={swayLocked ? `A sway pitch needs ${ACTION_HOURS.sway} hrs — only ${Math.max(0, hoursLeft)} left this week` : undefined}
-              >
+              <label className={`ta-field ${swayLocked ? 'locked' : ''}`}>
                 <span>
                   Sway pitch <em>({ACTION_HOURS.sway} hrs when set)</em>
                 </span>
