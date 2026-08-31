@@ -99,7 +99,10 @@ export default function TeamNeedsStrip({ needs }: { needs: TeamNeed[] }) {
             return (
               <div key={key} className="needs-row">
                 <span className="needs-row-label">{row}</span>
-                <div className="needs-cells">
+                <div
+                  className="needs-cells"
+                  style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}
+                >
                   {rows.map((n) => (
                     <Tile key={n.group} n={n} />
                   ))}

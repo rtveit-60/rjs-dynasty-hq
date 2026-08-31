@@ -2902,9 +2902,11 @@ table.tbl.tbl-wide {
   color: var(--ink-3);
 }
 
+/* One row per side, always: the column count is set inline per row (8 OFF, 7
+   DEF) so the tiles share the width evenly; narrow windows wrap the words
+   inside a tile, never the row. */
 .needs-cells {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 4px 5px;
   flex: 1;
   min-width: 0;
