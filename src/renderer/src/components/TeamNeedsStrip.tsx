@@ -3,7 +3,7 @@ import InfoDot, { InfoRow } from './InfoDot.tsx';
 
 /**
  * Team Needs as seats: the game's own 57-man minimum composition rendered as
- * literal seats per position — filled (returning next season), gold (committed
+ * literal seats per position — filled (returning next season), green (committed
  * recruit), dashed red (open, nobody fills it) — one compact tile per
  * position. Departures (seniors + draft entries) leave the projection
  * immediately; the game itself carries them until week 4 of the offseason.
@@ -54,7 +54,8 @@ function Tile({ n }: { n: TeamNeed }) {
       </div>
       <Pips n={n} />
       <div className="nd-foot">
-        {`${n.departing} departing`} · {`${n.targeted} targeted`}
+        {`${n.departing} departing`} ·{' '}
+        <span className="nd-tgt">{`${n.targeted} targeted`}</span>
         {n.committed > 0 && <span className="nd-in"> · {`+${n.committed} committed`}</span>}
       </div>
     </div>
@@ -71,7 +72,7 @@ export default function TeamNeedsStrip({ needs }: { needs: TeamNeed[] }) {
           <InfoDot title="Team Needs">
             <p>
               Every position shows the game's own minimum roster composition as seats.
-              Filled seats return next season, gold seats are recruits committed to you,
+              Filled seats return next season, green seats are recruits committed to you,
               dashed red seats are open — nobody on the projected roster fills them. +n
               is depth beyond the minimum.
             </p>
