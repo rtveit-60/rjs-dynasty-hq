@@ -19,6 +19,7 @@ import type {
   RecruitCard,
   ResourceEditRequest,
   ResourceForm,
+  NeedsView,
   Settings,
   Snapshot,
   TargetActionChanges,
@@ -45,6 +46,7 @@ export interface HQBridge {
   setTheme: (theme: ThemeMode) => Promise<Settings>;
   setUiScale: (scale: number) => Promise<Settings>;
   setUiFit: (on: boolean) => Promise<Settings>;
+  setNeedsView: (view: NeedsView) => Promise<Settings>;
   onZoom: (cb: (effective: number) => void) => () => void;
   getZoom: () => number;
   setAutoUpdate: (enabled: boolean) => Promise<Settings>;
@@ -89,6 +91,7 @@ const bridge: HQBridge = {
   setTheme: (theme) => ipcRenderer.invoke('theme:set', theme),
   setUiScale: (scale) => ipcRenderer.invoke('zoom:set', scale),
   setUiFit: (on) => ipcRenderer.invoke('zoomfit:set', on),
+  setNeedsView: (view) => ipcRenderer.invoke('needsview:set', view),
   onZoom: subscribe<number>('ui:zoom'),
   getZoom: () => webFrame.getZoomFactor(),
   setAutoUpdate: (enabled) => ipcRenderer.invoke('autoupdate:set', enabled),
