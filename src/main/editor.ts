@@ -13,11 +13,19 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type {
+  CreateRecruitForm,
+  CreateRecruitRequest,
+  FaceOption,
+  GearSlotOptions,
   EditMentalSlot,
   PlayerEditChanges,
   PlayerEditForm,
-  ResourceForm
+  ResourceForm,
+  TargetActionChanges,
+  TargetActionFlags,
+  TargetActionForm
 } from '../shared/types.ts';
+import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
@@ -79,7 +87,9 @@ function stringCap(rec: any, field: string, fallback: number): number {
 
 async function playerRecord(franchise: any, playerRow: number): Promise<any> {
   const table = mainTable(franchise, 'Player');
-  await table.readRecords([...EDIT_BASE_FIELDS, ...allRatingFields()]);
+  // Full read: the edit touches fields well past the base list (face, look
+  // refs), and a table first read with a narrow field list never widens.
+  await table.readRecords();
   const rec = table.records?.[playerRow];
   if (!rec || rec.isEmpty) throw new Error('No player at that row in the save.');
   return rec;
@@ -105,7 +115,8 @@ async function isRecruitRow(franchise: any, playerRow: number): Promise<boolean>
 export async function buildEditForm(
   franchise: any,
   playerRow: number,
-  savePath: string
+  savePath: string,
+  portraitsDir?: string | null
 ): Promise<PlayerEditForm> {
   const rec = await playerRecord(franchise, playerRow);
   const recruit = await isRecruitRow(franchise, playerRow);
@@ -141,6 +152,33 @@ export async function buildEditForm(
       rank: String(val(rec, `PhysicalAbility${slot}`) ?? 'None')
     }));
 
+  // Appearance: the player's own look (recruits are usually undressed until
+  // enrollment), plus the same catalogs the create dialog offers.
+  let look: Record<string, string> | null = null;
+  let lookTone: number | null = null;
+  let lookBody: number | null = null;
+  const vT = visualsTable(franchise);
+  const lookRef = refFromRecord(rec, 'CharacterVisuals');
+  if (vT && lookRef && !(lookRef.tableId === 0 && lookRef.row === 0)) {
+    if (!vT.recordsRead) await vT.readRecords();
+    const own = parseVisuals(vT.records[lookRef.row]);
+    if (own) {
+      const summary = baseLookSummary(own);
+      look = summary.items;
+      lookTone = summary.tone;
+      lookBody = summary.body;
+    }
+  }
+  const { gearSlots, skinTones, helmetMasks } = await gearCatalog(franchise);
+  const faces = annotateFaceShots(await faceCatalog(franchise), portraitsDir);
+  const ownAsset = String(val(rec, 'GenericHeadAssetName') ?? '');
+  const currentFace = {
+    portraitId: Number(val(rec, 'PLYR_PORTRAIT') ?? 0),
+    unique: !!ownAsset && !ownAsset.startsWith('Generic_')
+  };
+
+  const cities = await cityCatalog(franchise);
+
   const target = editedPathFor(savePath);
   const jerseyRaw = Number(val(rec, 'JerseyNum'));
   return {
@@ -161,6 +199,17 @@ export async function buildEditForm(
     mentalOptions,
     rankOptions,
     physical,
+    homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
+    homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? '').trim(),
+    cities,
+    look,
+    lookTone,
+    lookBody,
+    gearSlots,
+    skinTones,
+    helmetMasks,
+    faces,
+    currentFace,
     targetFileName: basename(target),
     targetExists: existsSync(target)
   };
@@ -314,11 +363,76 @@ export async function applyPlayerEdit(
   const problem = validate(rec, changes);
   if (problem) throw new Error(problem);
 
+  // Appearance settles before anything is applied — a bad look changes nothing.
+  if (changes.face) await validateFace(franchise, changes.face);
+  let homeCity: { town: string; pipeline: string } | null = null;
+  if (changes.homeState !== undefined || changes.homeTown !== undefined) {
+    const state = changes.homeState ?? String(val(rec, 'PLYR_HOME_STATE') ?? '');
+    const town = (changes.homeTown ?? String(val(rec, 'PLYR_HOME_TOWN') ?? '')).trim();
+    const cities = await cityCatalog(franchise);
+    homeCity = (cities[state] ?? []).find((c) => c.town === town) ?? null;
+    if (!homeCity) {
+      throw new Error('Pick a hometown from the list — the game ties towns and pipelines together.');
+    }
+    changes.homeState = state;
+    changes.homeTown = town;
+  }
+  let lookJson: string | null = null;
+  let lookRow = -1;
+  let vT: any = null;
+  if (
+    (changes.skinTone && changes.skinTone >= 1) ||
+    changes.bodyType !== undefined ||
+    (changes.gear && Object.keys(changes.gear).length)
+  ) {
+    vT = visualsTable(franchise);
+    if (!vT) throw new Error('This save has no appearance table.');
+    if (!vT.recordsRead) await vT.readRecords();
+    const ref = refFromRecord(rec, 'CharacterVisuals');
+    const own = ref && !(ref.tableId === 0 && ref.row === 0) ? parseVisuals(vT.records[ref.row]) : null;
+    changes.gear = await resolveLook(
+      franchise,
+      own ? baseLookSummary(own).items : {},
+      changes.skinTone,
+      changes.gear,
+      changes.bodyType
+    );
+    if (own) {
+      // the player's own blob updates in place
+      applyLookToObject(own, changes.skinTone, changes.gear, changes.bodyType);
+      lookJson = JSON.stringify(own);
+      lookRow = ref!.row;
+    } else {
+      // In-game verified 2026-08-30: a pre-provisioned CharacterVisuals row
+      // on an unenrolled recruit blank-screens the dynasty at load — the
+      // game dresses them at enrollment. Face-only until they're rostered.
+      throw new Error('The game dresses this prospect at enrollment — only the face can be set until then.');
+    }
+  } else if (changes.skinTone !== undefined) {
+    await resolveLook(franchise, {}, changes.skinTone, undefined); // range check only
+  }
+
   apply(rec, changes);
+  if (changes.face) {
+    // recruit convention: unenrolled prospects keep the NoHead enum; rostered
+    // players carry the catalog triple as observed.
+    const recruitLinked = await isRecruitRow(franchise, changes.playerRow);
+    rec.PLYR_GENERICHEAD = recruitLinked ? 'NoHead' : changes.face.headId;
+    rec.GenericHeadAssetName = changes.face.assetName;
+    if (rec._fields?.PLYR_PORTRAIT) rec.PLYR_PORTRAIT = changes.face.portraitId;
+  }
+  if (homeCity) {
+    rec.PLYR_HOME_STATE = changes.homeState;
+    if (rec._fields?.PLYR_HOME_TOWN) rec.PLYR_HOME_TOWN = changes.homeTown;
+    if (rec._fields?.HomePipeline) rec.HomePipeline = homeCity.pipeline;
+  }
+  if (lookJson && lookRow >= 0) {
+    vT.records[lookRow].RawData = lookJson;
+  }
 
   return writeEditedSave(franchise, savePath, backupDir, async (check) => {
     const table = mainTable(check, 'Player');
-    await table.readRecords(['FirstName', 'LastName', 'JerseyNum']);
+    await table.readRecords(['FirstName', 'LastName', 'JerseyNum', 'GenericHeadAssetName']);
     const written = table.records?.[changes.playerRow];
     const expectFirst = changes.firstName?.trim();
     const expectLast = changes.lastName?.trim();
@@ -326,11 +440,681 @@ export async function applyPlayerEdit(
       !written ||
       (expectFirst !== undefined && String(val(written, 'FirstName')) !== expectFirst) ||
       (expectLast !== undefined && String(val(written, 'LastName')) !== expectLast) ||
-      (changes.jersey !== undefined && Number(val(written, 'JerseyNum')) !== changes.jersey)
+      (changes.jersey !== undefined && Number(val(written, 'JerseyNum')) !== changes.jersey) ||
+      (changes.face !== undefined &&
+        String(val(written, 'GenericHeadAssetName')) !== changes.face.assetName)
     ) {
       throw new Error('The written save did not read back with the edit.');
     }
+    if (lookJson && lookRow >= 0) {
+      const wvT = visualsTable(check);
+      if (wvT && !wvT.recordsRead) await wvT.readRecords();
+      const wj = wvT && parseVisuals(wvT.records[lookRow]);
+      if (
+        !wj ||
+        (changes.skinTone && changes.skinTone >= 1 && wj.skinTone !== changes.skinTone) ||
+        (changes.bodyType !== undefined && wj.bodyType !== changes.bodyType)
+      ) {
+        throw new Error('The written save did not read back with the new look.');
+      }
+    }
   });
+}
+
+// --- Appearance & gear (CharacterVisuals JSON blobs) ------------------------
+
+const VISUALS_TABLE_NAME = 'CharacterVisuals';
+
+/** The marquee gear slots the dialog offers; left/right pairs edit together. */
+const GEAR_SLOTS: { slot: string; label: string; pair?: string }[] = [
+  { slot: 'HeadWear', label: 'Helmet' },
+  { slot: 'FaceMask', label: 'Facemask' },
+  { slot: 'Visor', label: 'Visor' },
+  { slot: 'MouthWear', label: 'Mouthpiece' },
+  { slot: 'FacePaint', label: 'Face paint' },
+  { slot: 'LeftHandWear', label: 'Gloves', pair: 'RightHandWear' },
+  { slot: 'LeftShoe', label: 'Shoes', pair: 'RightShoe' },
+  { slot: 'LeftArmWear', label: 'Arm sleeves', pair: 'RightArmWear' },
+  { slot: 'Towel', label: 'Towel' },
+  { slot: 'BackPlate', label: 'Back plate' },
+  { slot: 'FlakJacket', label: 'Flak jacket' }
+];
+
+function visualsTable(franchise: any): any {
+  return (franchise.tables as any[])
+    .filter((t) => t?.name === VISUALS_TABLE_NAME)
+    .sort((a, b) => (b.header?.recordCapacity ?? 0) - (a.header?.recordCapacity ?? 0))[0];
+}
+
+function parseVisuals(rec: any): any | null {
+  try {
+    const j = JSON.parse(String(rec?._fields?.RawData?.value ?? ''));
+    return j && Array.isArray(j.loadouts) ? j : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Per-slot item vocabulary + observed skin tones. Options are the union of
+ * the game's own loadout vocabulary (generated src/shared/gear.ts) and
+ * whatever this save's dressed players wear; helmet↔mask compatibility merges
+ * the game's loadout pairings with the save's observed ones the same way.
+ */
+async function gearCatalog(
+  franchise: any
+): Promise<{ gearSlots: GearSlotOptions[]; skinTones: number[]; helmetMasks: Record<string, string[]> }> {
+  const vT = visualsTable(franchise);
+  if (!vT) return { gearSlots: [], skinTones: [], helmetMasks: {} };
+  if (!vT.recordsRead) await vT.readRecords();
+  const bySlot = new Map<string, Set<string>>();
+  const tones = new Set<number>();
+  const pairSets = new Map<string, Set<string>>();
+  for (const rec of vT.records as any[]) {
+    if (rec.isEmpty) continue;
+    const j = parseVisuals(rec);
+    if (!j) continue;
+    if (Number.isInteger(j.skinTone)) tones.add(j.skinTone);
+    let helmet: string | null = null;
+    let mask: string | null = null;
+    for (const lo of j.loadouts) {
+      for (const el of lo?.loadoutElements ?? []) {
+        if (!el?.slotType || !el?.itemAssetName) continue;
+        if (!bySlot.has(el.slotType)) bySlot.set(el.slotType, new Set());
+        bySlot.get(el.slotType)!.add(el.itemAssetName);
+        if (el.slotType === 'HeadWear') helmet = el.itemAssetName;
+        if (el.slotType === 'FaceMask') mask = el.itemAssetName;
+      }
+    }
+    // Helmet↔mask compatibility is whatever real players actually wear.
+    if (helmet && mask) {
+      if (!pairSets.has(helmet)) pairSets.set(helmet, new Set());
+      pairSets.get(helmet)!.add(mask);
+    }
+  }
+  for (const [slot, list] of Object.entries(GEAR_ITEMS)) {
+    if (!bySlot.has(slot)) bySlot.set(slot, new Set());
+    for (const item of list) bySlot.get(slot)!.add(item);
+  }
+  for (const [h, list] of Object.entries(HELMET_MASKS)) {
+    if (!pairSets.has(h)) pairSets.set(h, new Set());
+    for (const m of list) pairSets.get(h)!.add(m);
+  }
+  const gearSlots: GearSlotOptions[] = [];
+  for (const g of GEAR_SLOTS) {
+    const options = [...(bySlot.get(g.slot) ?? new Set<string>())].sort();
+    if (options.length > 1) gearSlots.push({ slot: g.slot, label: g.label, options });
+  }
+  const helmetMasks: Record<string, string[]> = {};
+  for (const [h, set] of pairSets) helmetMasks[h] = [...set].sort();
+  return { gearSlots, skinTones: [...tones].sort((a, b) => a - b), helmetMasks };
+}
+
+/**
+ * The base look for a new player at this position: the parsed visuals blob of
+ * the first dressed rostered player at the same position (any dressed player
+ * as a fallback). Returns a fresh object per call — callers may mutate it.
+ */
+async function pickBaseVisuals(franchise: any, position: string): Promise<any | null> {
+  const vT = visualsTable(franchise);
+  const players = mainTable(franchise, 'Player');
+  if (!vT) return null;
+  if (!vT.recordsRead) await vT.readRecords();
+  await players.readRecords();
+  for (const p of players.records as any[]) {
+    if (p.isEmpty || String(val(p, 'Position') ?? '') !== position) continue;
+    const ref = refFromRecord(p, 'CharacterVisuals');
+    if (!ref || (ref.tableId === 0 && ref.row === 0)) continue;
+    const base = parseVisuals(vT.records[ref.row]);
+    if (base) return base;
+  }
+  // any dressed player beats nothing
+  for (const rec of vT.records as any[]) {
+    if (rec.isEmpty) continue;
+    const base = parseVisuals(rec);
+    if (base) return base;
+  }
+  return null;
+}
+
+/** The look's effective item per offered slot (first hit wins), + tone + body. */
+function baseLookSummary(base: any): { items: Record<string, string>; tone: number | null; body: number } {
+  const items: Record<string, string> = {};
+  const wanted = new Set(GEAR_SLOTS.map((g) => g.slot));
+  for (const lo of base?.loadouts ?? []) {
+    for (const el of lo?.loadoutElements ?? []) {
+      if (el?.slotType && el?.itemAssetName && wanted.has(el.slotType) && items[el.slotType] === undefined) {
+        items[el.slotType] = el.itemAssetName;
+      }
+    }
+  }
+  return {
+    items,
+    tone: Number.isInteger(base?.skinTone) ? base.skinTone : null,
+    // An absent bodyType renders as the game's 0 = Standard.
+    body: Number.isInteger(base?.bodyType) ? base.bodyType : 0
+  };
+}
+
+/**
+ * A base visuals JSON for a new player: the loadout of a dressed rostered
+ * player at the same position (sane position-appropriate defaults), with the
+ * chosen skin tone and gear overrides applied. Left/right pairs move together.
+ */
+async function buildVisualsJson(
+  franchise: any,
+  position: string,
+  skinTone: number | undefined,
+  gear: Record<string, string> | undefined,
+  bodyType?: number
+): Promise<string | null> {
+  const base = await pickBaseVisuals(franchise, position);
+  if (!base) return null;
+  applyLookToObject(base, skinTone, gear, bodyType);
+  return JSON.stringify(base);
+}
+
+/** Apply tone + gear overrides to a parsed visuals blob, in place. Left/right
+ *  pairs move together; an '' override removes the slot outright. */
+function applyLookToObject(
+  base: any,
+  skinTone: number | undefined,
+  gear: Record<string, string> | undefined,
+  bodyType?: number
+): void {
+  if (skinTone && skinTone >= 1) base.skinTone = skinTone;
+  if (bodyType !== undefined) base.bodyType = bodyType;
+  if (!gear) return;
+  const pairOf = new Map(GEAR_SLOTS.filter((g) => g.pair).map((g) => [g.slot, g.pair!]));
+  const wanted = new Map<string, string>();
+  for (const [slot, item] of Object.entries(gear)) {
+    wanted.set(slot, item);
+    const pair = pairOf.get(slot);
+    if (pair) wanted.set(pair, item);
+  }
+  // An empty-string override removes the slot outright (helmets the data
+  // only shows maskless drop the mask rather than keep a fake pair).
+  for (const lo of base.loadouts) {
+    if (Array.isArray(lo?.loadoutElements)) {
+      lo.loadoutElements = lo.loadoutElements.filter(
+        (el: any) => wanted.get(el?.slotType) !== ''
+      );
+    }
+  }
+  const applied = new Set<string>();
+  for (const lo of base.loadouts) {
+    for (const el of lo?.loadoutElements ?? []) {
+      const item = wanted.get(el.slotType);
+      if (item !== undefined && item !== '') {
+        el.itemAssetName = item;
+        applied.add(el.slotType);
+      }
+    }
+  }
+  // A look without that slot gains it — the game's own rows mix and match
+  // which slots they carry.
+  const home = base.loadouts.find((lo: any) => Array.isArray(lo?.loadoutElements));
+  if (home) {
+    for (const [slot, item] of wanted) {
+      if (item !== '' && !applied.has(slot)) {
+        home.loadoutElements.push({ slotType: slot, itemAssetName: item });
+      }
+    }
+  }
+}
+
+/**
+ * Validate a look request against the merged catalog and settle the
+ * helmet↔mask coupling against the reference look — the position base for a
+ * new player, the player's own current look for an edit. Returns the gear map
+ * to apply, possibly with a helmet added or the mask swapped/removed.
+ */
+async function resolveLook(
+  franchise: any,
+  refItems: Record<string, string>,
+  skinTone: number | undefined,
+  gear: Record<string, string> | undefined,
+  bodyType?: number
+): Promise<Record<string, string> | undefined> {
+  if (skinTone !== undefined && skinTone !== 0 && !(skinTone >= 1 && skinTone <= 8)) {
+    throw new Error('Skin tone must be 1-8.');
+  }
+  if (bodyType !== undefined && !BODY_TYPES.some((b) => b.value === bodyType)) {
+    throw new Error('Unknown body type.');
+  }
+  if (!gear || !Object.keys(gear).length) return gear;
+  const { gearSlots, helmetMasks } = await gearCatalog(franchise);
+  for (const [slot, item] of Object.entries(gear)) {
+    if (item === '') continue; // explicit removal of the slot
+    const def = gearSlots.find((g) => g.slot === slot);
+    if (!def || !def.options.includes(item)) throw new Error(`Unknown gear choice for ${slot}.`);
+  }
+  // Helmet↔mask must be a combination real loadouts wear; a mask alone keeps
+  // the reference helmet when it fits, else brings a matching helmet.
+  if (gear.FaceMask) {
+    const mask = gear.FaceMask;
+    if (gear.HeadWear) {
+      if (!(helmetMasks[gear.HeadWear] ?? []).includes(mask)) {
+        throw new Error('That facemask does not fit the chosen helmet.');
+      }
+    } else {
+      const refHelmet = refItems['HeadWear'];
+      if (!refHelmet || !(helmetMasks[refHelmet] ?? []).includes(mask)) {
+        const owner = Object.keys(helmetMasks).find((h) => helmetMasks[h].includes(mask));
+        if (owner) gear = { ...gear, HeadWear: owner };
+      }
+    }
+  } else if (gear.HeadWear && gear.FaceMask === undefined) {
+    // A helmet alone must not keep an incompatible mask: swap it to the
+    // helmet's own default (else its first), or drop it for helmets the data
+    // only shows maskless ('' removes the slot). An explicit FaceMask '' is
+    // respected as removal.
+    const allowed = helmetMasks[gear.HeadWear] ?? [];
+    const refMask = refItems['FaceMask'];
+    if (refMask && !allowed.includes(refMask)) {
+      const def = DEFAULT_MASKS[gear.HeadWear];
+      gear = { ...gear, FaceMask: (def && allowed.includes(def) ? def : allowed[0]) ?? '' };
+    }
+  }
+  return gear;
+}
+
+/** The catalog triple must exist exactly as offered — faces are never minted. */
+async function validateFace(franchise: any, face: FaceOption): Promise<void> {
+  const catalog = await faceCatalog(franchise);
+  const hit = catalog.find(
+    (f) => f.assetName === face.assetName && f.headId === face.headId && f.portraitId === face.portraitId
+  );
+  if (!hit) throw new Error('That face is not in the catalog.');
+}
+
+// --- Create a recruit --------------------------------------------------------
+
+const STAR_ENUM: Record<number, string> = {
+  5: 'FIVE_STAR', 4: 'FOUR_STAR', 3: 'THREE_STAR', 2: 'TWO_STAR', 1: 'ONE_STAR'
+};
+
+/** Every head worn in the save: (head id, asset, portrait) triples + tone. */
+async function faceCatalog(franchise: any): Promise<FaceOption[]> {
+  const players = mainTable(franchise, 'Player');
+  await players.readRecords();
+  const byAsset = new Map<string, FaceOption>();
+  for (const p of players.records as any[]) {
+    if (p.isEmpty) continue;
+    const assetName = String(val(p, 'GenericHeadAssetName') ?? '');
+    const headId = String(val(p, 'PLYR_GENERICHEAD') ?? '');
+    // Generic heads only — Unique_* assets are individual people's scanned
+    // faces and portraits, not shareable art. A generic asset encodes its own
+    // portrait id (Generic_0877_… → portrait 877; observed PLYR_PORTRAIT must
+    // agree) and its native skin tone as the penultimate segment (…_D_5_4 →
+    // tone 5; matches worn visuals skinTone on 392 of 398 dressed wearers —
+    // the six are custom-painted individuals, so the art's own tag wins).
+    // headId rides along as observed: most wearers pair the asset with the
+    // enum's NoHead default, and the game renders them fine, so NoHead stays.
+    if (!assetName.startsWith('Generic_') || !headId || byAsset.has(assetName)) continue;
+    const parts = assetName.split('_');
+    const portraitId = Number(parts[1]);
+    const tone = Number(parts[parts.length - 2]);
+    if (!(portraitId > 0) || portraitId !== Number(val(p, 'PLYR_PORTRAIT') ?? 0)) continue;
+    if (!Number.isInteger(tone) || tone < 1 || tone > 8) continue;
+    byAsset.set(assetName, { headId, assetName, portraitId, tone });
+  }
+  return [...byAsset.values()].sort((a, b) => a.tone - b.tone || a.assetName.localeCompare(b.assetName));
+}
+
+/** Faces whose headshot exists in the user's portrait pack sort first within
+ *  each tone, so pickers lead with browsable photos (same lookup the
+ *  portrait:// protocol makes; absence only means the pack lacks the image). */
+function annotateFaceShots(faces: FaceOption[], portraitsDir?: string | null): FaceOption[] {
+  if (portraitsDir && existsSync(portraitsDir)) {
+    for (const f of faces) {
+      f.hasShot = ['png', 'jpg', 'jpeg', 'webp'].some((ext) =>
+        existsSync(join(portraitsDir, `${f.portraitId}.${ext}`))
+      );
+    }
+    faces.sort(
+      (a, b) =>
+        a.tone - b.tone || Number(b.hasShot) - Number(a.hasShot) || a.assetName.localeCompare(b.assetName)
+    );
+  }
+  return faces;
+}
+
+/**
+ * Hometowns per state, each with the pipeline the game itself assigns: every
+ * rostered player and recruit carries an observed (town, state, HomePipeline)
+ * triple, so the pick lists are the game's own vocabulary — 3,700+ towns
+ * across all 51 states in practice. Where a town shows more than one pipeline
+ * (big cities, occasional noise) the mode wins.
+ */
+async function cityCatalog(franchise: any): Promise<Record<string, { town: string; pipeline: string }[]>> {
+  const players = mainTable(franchise, 'Player');
+  await players.readRecords();
+  const byState = new Map<string, Map<string, Map<string, number>>>();
+  for (const p of players.records as any[]) {
+    if (p.isEmpty) continue;
+    const town = String(val(p, 'PLYR_HOME_TOWN') ?? '').trim();
+    const state = String(val(p, 'PLYR_HOME_STATE') ?? '');
+    const pipe = String(val(p, 'HomePipeline') ?? '');
+    if (!town || !state || state === 'INVALID' || !pipe || pipe === 'Invalid_') continue;
+    if (!byState.has(state)) byState.set(state, new Map());
+    const towns = byState.get(state)!;
+    if (!towns.has(town)) towns.set(town, new Map());
+    towns.get(town)!.set(pipe, (towns.get(town)!.get(pipe) ?? 0) + 1);
+  }
+  const out: Record<string, { town: string; pipeline: string }[]> = {};
+  for (const [state, towns] of byState) {
+    out[state] = [...towns.entries()]
+      .map(([town, pipes]) => ({
+        town,
+        pipeline: [...pipes.entries()].sort((a, b) => b[1] - a[1])[0][0]
+      }))
+      .sort((a, b) => a.town.localeCompare(b.town));
+  }
+  return out;
+}
+
+/** Class recruits by archetype: recruitRow + playerRow of a clean template. */
+async function templatePool(
+  franchise: any
+): Promise<{ recruitTable: any; playerTable: any; byArchetype: Map<string, { recruitRow: number; playerRow: number }>; byPosition: Map<string, { recruitRow: number; playerRow: number }> }> {
+  const recruitTable = mainTable(franchise, 'Recruit');
+  await recruitTable.readRecords();
+  const playerTable = mainTable(franchise, 'Player');
+  await playerTable.readRecords();
+  const playerTableId = playerTable.header?.tableId ?? -1;
+  const byArchetype = new Map<string, { recruitRow: number; playerRow: number }>();
+  const byPosition = new Map<string, { recruitRow: number; playerRow: number }>();
+  recruitTable.records.forEach((rec: any, recruitRow: number) => {
+    if (rec.isEmpty) return;
+    if (!String(val(rec, 'Class') ?? '').includes('HighSchool')) return;
+    if (String(val(rec, 'RecruitStage') ?? '').includes('Committed')) return;
+    if (String(val(rec, 'QualityModifier') ?? 'NORMAL') !== 'NORMAL') return;
+    const pRef = refFromRecord(rec, 'Player');
+    if (!pRef || pRef.tableId !== playerTableId) return;
+    const p = playerTable.records[pRef.row];
+    if (!p || p.isEmpty) return;
+    const archetype = String(val(p, 'PlayerType') ?? '');
+    const position = String(val(p, 'Position') ?? '');
+    if (archetype && !byArchetype.has(archetype)) byArchetype.set(archetype, { recruitRow, playerRow: pRef.row });
+    if (position && !byPosition.has(position)) byPosition.set(position, { recruitRow, playerRow: pRef.row });
+  });
+  return { recruitTable, playerTable, byArchetype, byPosition };
+}
+
+export async function buildCreateForm(
+  franchise: any,
+  savePath: string,
+  portraitsDir?: string | null
+): Promise<CreateRecruitForm> {
+  const { recruitTable, playerTable, byArchetype } = await templatePool(franchise);
+  const archetypesByPosition: Record<string, string[]> = {};
+  for (const [archetype, t] of byArchetype) {
+    const pos = String(val(playerTable.records[t.playerRow], 'Position') ?? '');
+    (archetypesByPosition[pos] ??= []).push(archetype);
+  }
+  for (const list of Object.values(archetypesByPosition)) list.sort();
+
+  const sample = playerTable.records[byArchetype.values().next().value!.playerRow];
+  const states = enumMembers(sample, 'PLYR_HOME_STATE').map((m) => m.name).filter((n) => n !== 'INVALID');
+  const cities = await cityCatalog(franchise);
+  const devTraits = enumMembers(sample, 'TraitDevelopment').map((m) => m.name);
+  let playerRowsFree = 0;
+  for (const r of playerTable.records) if (r.isEmpty) playerRowsFree++;
+  let recruitRowsFree = 0;
+  for (const r of recruitTable.records) if (r.isEmpty) recruitRowsFree++;
+  const { gearSlots, skinTones, helmetMasks } = await gearCatalog(franchise);
+  // What "leave it alone" actually dresses, per position: the same base-look
+  // selection the write path makes, snapshotted so the dialog can name it.
+  const baseLook: Record<string, Record<string, string>> = {};
+  const baseTones: Record<string, number> = {};
+  const baseBodies: Record<string, number> = {};
+  for (const pos of Object.keys(archetypesByPosition)) {
+    const base = await pickBaseVisuals(franchise, pos);
+    if (!base) continue;
+    const { items, tone, body } = baseLookSummary(base);
+    baseLook[pos] = items;
+    if (tone !== null) baseTones[pos] = tone;
+    baseBodies[pos] = body;
+  }
+  const faces = annotateFaceShots(await faceCatalog(franchise), portraitsDir);
+  const target = editedPathFor(savePath);
+  return {
+    maxFirstLen: stringCap(sample, 'FirstName', 17),
+    maxLastLen: stringCap(sample, 'LastName', 21),
+    maxTownLen: stringCap(sample, 'PLYR_HOME_TOWN', 20),
+    archetypesByPosition,
+    states,
+    cities,
+    devTraits,
+    heightMin: 66,
+    heightMax: Math.min(84, fieldMax(sample, 'Height', 127)),
+    weightMin: 160,
+    weightMax: 160 + Math.min(240, fieldMax(sample, 'Weight', 255)),
+    playerRowsFree,
+    recruitRowsFree,
+    gearSlots,
+    skinTones,
+    helmetMasks,
+    baseLook,
+    baseTones,
+    baseBodies,
+    faces,
+    targetFileName: basename(target),
+    targetExists: existsSync(target)
+  };
+}
+
+/**
+ * Create a brand-new high-school recruit by cloning an archetype-matched
+ * template from the class (perfect initialization by construction), then
+ * overriding identity, measurables, stars and dev. The new recruit starts at
+ * the wide-open Top10 stage, unranked, with an empty race list — a state one
+ * real recruit in the class already occupies (races are pre-allocated at
+ * class generation and cannot be minted; see RESEARCH).
+ */
+export async function applyCreateRecruit(
+  franchise: any,
+  savePath: string,
+  req: CreateRecruitRequest,
+  backupDir: string
+): Promise<{
+  editedPath: string;
+  recruitRow: number;
+  playerRow: number;
+  nationalRank: number;
+  replaced: string;
+  replacedPosition: string;
+}> {
+  // ---- validate ----
+  const nameOk = (s: string): boolean => /^[\x20-\x7e]+$/.test(s);
+  const first = req.firstName.trim();
+  const last = req.lastName.trim();
+  const town = req.homeTown.trim();
+  const { recruitTable, playerTable, byArchetype, byPosition } = await templatePool(franchise);
+  const sample = playerTable.records[byArchetype.values().next().value!.playerRow];
+  if (!first || first.length > stringCap(sample, 'FirstName', 17) || !nameOk(first)) {
+    throw new Error(`First name must be 1–${stringCap(sample, 'FirstName', 17)} plain characters.`);
+  }
+  if (!last || last.length > stringCap(sample, 'LastName', 21) || !nameOk(last)) {
+    throw new Error(`Last name must be 1–${stringCap(sample, 'LastName', 21)} plain characters.`);
+  }
+  const cities = await cityCatalog(franchise);
+  const city = (cities[req.homeState] ?? []).find((c) => c.town === town);
+  if (!city) {
+    throw new Error('Pick a hometown from the list — the game ties towns and pipelines together.');
+  }
+  if (!STAR_ENUM[req.stars]) throw new Error('Stars must be 1–5.');
+  if (!Number.isInteger(req.heightIn) || req.heightIn < 60 || req.heightIn > fieldMax(sample, 'Height', 127)) {
+    throw new Error('Height is out of range.');
+  }
+  const rawWeight = req.weightLb - 160;
+  if (!Number.isInteger(rawWeight) || rawWeight < 0 || rawWeight > fieldMax(sample, 'Weight', 255)) {
+    throw new Error('Weight is out of range.');
+  }
+  if (!enumMembers(sample, 'PLYR_HOME_STATE').some((m) => m.name === req.homeState)) {
+    throw new Error('Unknown home state.');
+  }
+  if (!enumMembers(sample, 'TraitDevelopment').some((m) => m.name === req.devTrait)) {
+    throw new Error('Unknown development trait.');
+  }
+  const template = byArchetype.get(req.archetype) ?? byPosition.get(req.position);
+  if (!template) throw new Error('No template recruit exists for that archetype or position.');
+
+  if (req.face) await validateFace(franchise, req.face);
+  // In-game verified 2026-08-30 (four-step bisect): a CharacterVisuals row on
+  // an unenrolled recruit blank-screens the dynasty UI at load. The game
+  // dresses recruits itself at enrollment; only the face fields ride the
+  // player row, so a look request on a create is refused outright.
+  if (
+    (req.skinTone !== undefined && req.skinTone !== 0) ||
+    req.bodyType !== undefined ||
+    (req.gear && Object.keys(req.gear).length)
+  ) {
+    throw new Error('The game dresses recruits at enrollment — only the face can be set here.');
+  }
+
+  const newPlayerRow = firstEmptyRow(playerTable);
+  if (newPlayerRow < 0) throw new Error('The save has no free player rows left.');
+
+  // In-game verified 2026-08-30: the game's prospect list walks an index
+  // built at class generation — appended Recruit rows never join it, no
+  // matter how real their fields look. A created prospect therefore TAKES
+  // OVER an existing class slot: the lowest-ranked uncommitted filler at
+  // three stars or fewer. The star gate keeps earlier creations (usually
+  // four or five stars) from being cannibalized by the next create.
+  const hostPlayerTableId = playerTable.header?.tableId;
+  let hostRow = -1;
+  let hostRank = -1;
+  let displacedRow = -1;
+  for (let i = 0; i < recruitTable.records.length; i++) {
+    const r = recruitTable.records[i];
+    if (r.isEmpty) continue;
+    if (String(val(r, 'RecruitStage') ?? '').includes('Committed')) continue;
+    const pRef = refFromRecord(r, 'Player');
+    if (!pRef || pRef.tableId !== hostPlayerTableId) continue;
+    const p = playerTable.records[pRef.row];
+    if (!p || p.isEmpty) continue;
+    if (!['THREE_STAR', 'TWO_STAR', 'ONE_STAR'].includes(String(val(p, 'ProspectStarRating') ?? ''))) continue;
+    const rank = Number(val(r, 'NationalRank'));
+    if (!Number.isFinite(rank) || rank <= 0) continue;
+    if (rank > hostRank) {
+      hostRank = rank;
+      hostRow = i;
+      displacedRow = pRef.row;
+    }
+  }
+  if (hostRow < 0) throw new Error('No replaceable filler prospect is left in the class.');
+
+  // ---- clone the template player, then override identity ----
+  const tp = playerTable.records[template.playerRow];
+  const np = playerTable.records[newPlayerRow];
+  for (const k of Object.keys(tp._fields)) {
+    try {
+      np[k] = tp._fields[k].value;
+    } catch {
+      // a handful of computed members refuse writes; the template value stands elsewhere
+    }
+  }
+  np.FirstName = first;
+  np.LastName = last;
+  if (byArchetype.has(req.archetype)) {
+    // archetype-matched template — Position/PlayerType already right
+  } else {
+    np.PlayerType = req.archetype;
+  }
+  np.Position = req.position;
+  np.ProspectStarRating = STAR_ENUM[req.stars];
+  np.TraitDevelopment = req.devTrait;
+  np.Height = req.heightIn;
+  np.Weight = rawWeight;
+  np.PLYR_HOME_STATE = req.homeState;
+  if (np._fields?.PLYR_HOME_TOWN) np.PLYR_HOME_TOWN = town;
+  // The pipeline rides the hometown — the clone's own must never survive.
+  if (np._fields?.HomePipeline) np.HomePipeline = city.pipeline;
+  // Their own face: a chosen catalog head brings its real headshot; otherwise
+  // portrait 0 falls back to the generated avatar.
+  if (req.face) {
+    // recruit convention: the head enum stays NoHead (252 of 253 QB-class
+    // recruits carry it); the asset + portrait are the face.
+    np.PLYR_GENERICHEAD = 'NoHead';
+    np.GenericHeadAssetName = req.face.assetName;
+    if (np._fields?.PLYR_PORTRAIT) np.PLYR_PORTRAIT = req.face.portraitId;
+  } else if (np._fields?.PLYR_PORTRAIT) {
+    np.PLYR_PORTRAIT = 0;
+  }
+
+  // ---- take over the host slot ----
+  const hr = recruitTable.records[hostRow];
+  const displaced = playerTable.records[displacedRow];
+  const replacedName = `${val(displaced, 'FirstName') ?? ''} ${val(displaced, 'LastName') ?? ''}`.trim();
+  const replacedPosition = String(val(displaced, 'Position') ?? '');
+  hr.Player = refString(playerTable.header?.tableId ?? -1, newPlayerRow);
+  // The slot keeps its class identity — national rank, race list, stage,
+  // offers — while position and state ranks re-rank at the end of the new
+  // player's pools.
+  let maxPosRank = 0;
+  let maxStateRank = 0;
+  for (let i = 0; i < recruitTable.records.length; i++) {
+    if (i === hostRow || recruitTable.records[i].isEmpty) continue;
+    const pRef = refFromRecord(recruitTable.records[i], 'Player');
+    const p = pRef && pRef.tableId === hostPlayerTableId ? playerTable.records[pRef.row] : null;
+    if (!p || p.isEmpty) continue;
+    if (String(val(p, 'Position')) === req.position) {
+      maxPosRank = Math.max(maxPosRank, Number(val(recruitTable.records[i], 'PositionRank')) || 0);
+    }
+    if (String(val(p, 'PLYR_HOME_STATE')) === req.homeState) {
+      maxStateRank = Math.max(maxStateRank, Number(val(recruitTable.records[i], 'StateRank')) || 0);
+    }
+  }
+  hr.PositionRank = maxPosRank + 1;
+  hr.StateRank = maxStateRank + 1;
+  if (hr._fields?.SurnameAudioID) hr.SurnameAudioID = 0;
+  // the displaced filler leaves the dynasty entirely
+  displaced.empty();
+
+  try {
+    playerTable.recalculateEmptyRecordReferences?.();
+    recruitTable.recalculateEmptyRecordReferences?.();
+  } catch {
+    // bookkeeping helper only; the write is verified below
+  }
+
+  const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const rT = mainTable(check, 'Recruit');
+    await rT.readRecords();
+    const pT = mainTable(check, 'Player');
+    await pT.readRecords(['FirstName', 'LastName', 'Position']);
+    const wr = rT.records?.[hostRow];
+    const wpRef = wr && refFromRecord(wr, 'Player');
+    const wp = wpRef && pT.records?.[wpRef.row];
+    if (
+      !wr || wr.isEmpty || !wp || wp.isEmpty ||
+      wpRef!.row !== newPlayerRow ||
+      String(val(wp, 'FirstName')) !== first ||
+      String(val(wp, 'LastName')) !== last ||
+      String(val(wp, 'Position')) !== req.position ||
+      Number(val(wr, 'NationalRank')) !== hostRank ||
+      !pT.records?.[displacedRow]?.isEmpty
+    ) {
+      throw new Error('The written save did not read back with the new recruit.');
+    }
+    if (req.face) {
+      const pT2 = mainTable(check, 'Player');
+      await pT2.readRecords();
+      if (String(val(pT2.records?.[wpRef!.row], 'GenericHeadAssetName')) !== req.face.assetName) {
+        throw new Error('The written save did not read back with the chosen face.');
+      }
+    }
+  });
+  return {
+    editedPath,
+    recruitRow: hostRow,
+    playerRow: newPlayerRow,
+    nationalRank: hostRank,
+    replaced: replacedName,
+    replacedPosition
+  };
 }
 
 // --- Recruiting board membership (add/remove targets) -----------------------
@@ -565,6 +1349,173 @@ export async function applyBoardEdit(
     }
   });
   return { editedPath, added: adds.length, removed: removes.length };
+}
+
+// --- Weekly recruit actions (hours, contacts, offers, scouting) -------------
+
+const ACTION_FIELDS: Record<keyof TargetActionFlags, string> = {
+  contactFamily: 'ContactFriendsAndFamily',
+  contactCoaches: 'ContactHighSchoolCoaches',
+  socialMedia: 'SearchSocialMedia',
+  sendHouse: 'SendTheHouse',
+  visitSchool: 'VisitRecruitsSchool'
+};
+
+/** Aliased range markers → the semantic member name. */
+const SCHOLARSHIP_ALIAS: Record<string, string> = { First_: 'None', Last_: 'Committed' };
+
+async function targetRecordFor(
+  franchise: any,
+  teamRow: number,
+  recruitRow: number
+): Promise<{ h: BoardHandles; target: any }> {
+  const h = await boardHandles(franchise, teamRow);
+  const slot = h.slotOf.get(recruitRow);
+  if (slot === undefined) throw new Error('That recruit is not on the board.');
+  const tr = refFromRecord(h.arr, `RecruitTarget${slot}`)!;
+  const target = h.targetTable.records[tr.row];
+  if (!target || target.isEmpty) throw new Error('That recruit is not on the board.');
+  return { h, target };
+}
+
+export async function buildTargetForm(
+  franchise: any,
+  teamRow: number,
+  recruitRow: number,
+  savePath: string
+): Promise<TargetActionForm> {
+  const { h, target } = await targetRecordFor(franchise, teamRow, recruitRow);
+
+  // Name from the recruit's Player row.
+  const rRec = h.recruitTable.records[recruitRow];
+  const pRef = refFromRecord(rRec, 'Player');
+  const players = mainTable(franchise, 'Player');
+  await players.readRecords(['FirstName', 'LastName', 'Position', 'ProspectStarRating']);
+  const pRec = pRef ? players.records?.[pRef.row] : null;
+  const STAR_MAP: Record<string, number> = {
+    FIVE_STAR: 5, FOUR_STAR: 4, THREE_STAR: 3, TWO_STAR: 2, ONE_STAR: 1
+  };
+
+  const rawStatus = String(val(target, 'ScholarshipStatus') ?? 'None');
+  const sway = String(val(target, 'SwayPitch') ?? 'Invalid');
+  const swayMembers = enumMembers(target, 'SwayPitch').filter((m) => m.name !== 'Invalid');
+  const { PITCHES } = await import('../shared/pitches.ts');
+
+  const targetPath = editedPathFor(savePath);
+  return {
+    recruitRow,
+    name: pRec
+      ? `${String(val(pRec, 'FirstName') ?? '')} ${String(val(pRec, 'LastName') ?? '')}`.trim()
+      : 'Recruit',
+    position: pRec ? String(val(pRec, 'Position') ?? '') : '',
+    stars: pRec ? (STAR_MAP[String(val(pRec, 'ProspectStarRating'))] ?? 0) : 0,
+    hours: Number(val(target, 'ProspectHoursSpentCurrent') ?? 0),
+    hoursCap: fieldMax(target, 'ProspectHoursSpentCurrent', 127),
+    poolTotal: Number(val(h.board, 'RecruitingHoursTotal') ?? 0),
+    poolAssigned: Number(val(h.board, 'RecruitingHoursAssigned') ?? 0),
+    actions: {
+      contactFamily: val(target, 'ContactFriendsAndFamily') === true,
+      contactCoaches: val(target, 'ContactHighSchoolCoaches') === true,
+      socialMedia: val(target, 'SearchSocialMedia') === true,
+      sendHouse: val(target, 'SendTheHouse') === true,
+      visitSchool: val(target, 'VisitRecruitsSchool') === true
+    },
+    scholarship: SCHOLARSHIP_ALIAS[rawStatus] ?? rawStatus,
+    nilOffer: Number(val(target, 'CurrentNILOffer') ?? 0),
+    nilCap: fieldMax(target, 'CurrentNILOffer', 1023),
+    nilExpectation: Number(val(target, 'NILExpectation') ?? 0),
+    swayPitch: sway,
+    swayOptions: swayMembers.map((m) => ({
+      id: m.name,
+      name: PITCHES[m.name]?.name ?? m.name
+    })),
+    intel: Number(val(target, 'UnlockedIntelBitfield') ?? 0),
+    intelMax: fieldMax(target, 'UnlockedIntelBitfield', 16383),
+    targetFileName: basename(targetPath),
+    targetExists: existsSync(targetPath)
+  };
+}
+
+/**
+ * Apply one target's weekly plan — hours, contact/visit actions, scholarship,
+ * NIL offer, sway pitch, full scout — and write the _RJsEdited sibling. Hour
+ * assignments move the board's assigned total with them and must fit the
+ * weekly pool.
+ */
+export async function applyTargetActions(
+  franchise: any,
+  savePath: string,
+  req: { teamRow: number } & TargetActionChanges,
+  backupDir: string
+): Promise<{ editedPath: string }> {
+  const { h, target } = await targetRecordFor(franchise, req.teamRow, req.recruitRow);
+  const rRec = h.recruitTable.records[req.recruitRow];
+  if (String(val(rRec, 'RecruitStage') ?? '').includes('Committed')) {
+    throw new Error('Committed recruits are managed by the game.');
+  }
+
+  const oldHours = Number(val(target, 'ProspectHoursSpentCurrent') ?? 0);
+  const poolTotal = Number(val(h.board, 'RecruitingHoursTotal') ?? 0);
+  const poolAssigned = Number(val(h.board, 'RecruitingHoursAssigned') ?? 0);
+
+  // ---- validate everything first ----
+  if (req.hours !== undefined) {
+    const cap = fieldMax(target, 'ProspectHoursSpentCurrent', 127);
+    if (!Number.isInteger(req.hours) || req.hours < 0 || req.hours > cap) {
+      throw new Error(`Hours must be 0–${cap}.`);
+    }
+    if (poolAssigned - oldHours + req.hours > poolTotal) {
+      throw new Error(
+        `That leaves the weekly pool over-assigned (${poolAssigned - oldHours + req.hours} of ${poolTotal}).`
+      );
+    }
+  }
+  if (req.nilOffer !== undefined) {
+    const cap = fieldMax(target, 'CurrentNILOffer', 1023);
+    if (!Number.isInteger(req.nilOffer) || req.nilOffer < 0 || req.nilOffer > cap) {
+      throw new Error(`The NIL offer must be 0–${cap}.`);
+    }
+  }
+  if (req.scholarship !== undefined && !['Offered', 'Revoked', 'None'].includes(req.scholarship)) {
+    throw new Error('Unknown scholarship state.');
+  }
+  if (req.swayPitch !== undefined && req.swayPitch !== 'Invalid') {
+    const names = new Set(enumMembers(target, 'SwayPitch').map((m) => m.name));
+    if (!names.has(req.swayPitch)) throw new Error(`Unknown pitch: ${req.swayPitch}`);
+  }
+
+  // ---- apply ----
+  if (req.hours !== undefined && req.hours !== oldHours) {
+    target.ProspectHoursSpentCurrent = req.hours;
+    h.board.RecruitingHoursAssigned = Math.max(0, poolAssigned - oldHours + req.hours);
+  }
+  for (const [key, field] of Object.entries(ACTION_FIELDS)) {
+    const want = req.actions?.[key as keyof TargetActionFlags];
+    if (want !== undefined) target[field] = want === true;
+  }
+  if (req.scholarship !== undefined) target.ScholarshipStatus = req.scholarship;
+  if (req.nilOffer !== undefined) target.CurrentNILOffer = req.nilOffer;
+  if (req.swayPitch !== undefined) target.SwayPitch = req.swayPitch;
+  if (req.scoutFull) target.UnlockedIntelBitfield = fieldMax(target, 'UnlockedIntelBitfield', 16383);
+
+  return writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const { target: written, h: h2 } = await targetRecordFor(check, req.teamRow, req.recruitRow);
+    if (req.hours !== undefined && Number(val(written, 'ProspectHoursSpentCurrent')) !== req.hours) {
+      throw new Error('The written save did not read back with the new hours.');
+    }
+    if (req.nilOffer !== undefined && Number(val(written, 'CurrentNILOffer')) !== req.nilOffer) {
+      throw new Error('The written save did not read back with the new NIL offer.');
+    }
+    if (req.scoutFull && Number(val(written, 'UnlockedIntelBitfield')) !== fieldMax(written, 'UnlockedIntelBitfield', 16383)) {
+      throw new Error('The written save did not read back fully scouted.');
+    }
+    if (req.hours !== undefined) {
+      const assigned = Number(val(h2.board, 'RecruitingHoursAssigned') ?? 0);
+      if (assigned !== Math.max(0, poolAssigned - oldHours + req.hours)) {
+        throw new Error('The board pool did not read back with the new assignment.');
+      }
+    }
+  });
 }
 
 // --- Fire Coach -------------------------------------------------------------

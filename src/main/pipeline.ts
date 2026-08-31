@@ -11,6 +11,10 @@ import type {
   Profile,
   BoardEditRequest,
   CoachFireRequest,
+  CreateRecruitForm,
+  CreateRecruitRequest,
+  TargetActionChanges,
+  TargetActionForm,
   DepthChartEditRequest,
   ResourceEditRequest,
   ResourceForm,
@@ -23,11 +27,15 @@ import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
 import {
   applyBoardEdit,
   applyCoachFire,
+  applyCreateRecruit,
+  applyTargetActions,
   applyDepthChartEdit,
   applyPlayerEdit,
   applyResourceEdit,
+  buildCreateForm,
   buildEditForm,
-  buildResourceForm
+  buildResourceForm,
+  buildTargetForm
 } from './editor.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
@@ -166,10 +174,10 @@ export class Pipeline {
   }
 
   /** Current values + options for the edit dialog, from the cached parse. */
-  async editForm(playerRow: number, savePath: string): Promise<PlayerEditForm | null> {
+  async editForm(playerRow: number, savePath: string, portraitsDir?: string | null): Promise<PlayerEditForm | null> {
     if (!this.franchise || !savePath) return null;
     try {
-      return await buildEditForm(this.franchise, playerRow, savePath);
+      return await buildEditForm(this.franchise, playerRow, savePath, portraitsDir);
     } catch {
       return null;
     }
@@ -285,6 +293,52 @@ export class Pipeline {
         editedPath,
         message: `Depth chart updated (${windows} window${windows === 1 ? '' : 's'}) — saved to ${basename(editedPath)}.`
       };
+    });
+  }
+
+  /** Options + caps for the Create Recruit dialog. */
+  async createForm(savePath: string, portraitsDir?: string | null): Promise<CreateRecruitForm | null> {
+    if (!this.franchise || !savePath) return null;
+    try {
+      return await buildCreateForm(this.franchise, savePath, portraitsDir);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Create a brand-new class recruit, via the guarded shell. */
+  async createRecruit(req: CreateRecruitRequest, savePath: string): Promise<PlayerEditResult> {
+    return this.guardedEdit(savePath, async () => {
+      const res = await applyCreateRecruit(this.franchise, savePath, req, app.getPath('userData'));
+      return {
+        editedPath: res.editedPath,
+        message: `${req.firstName.trim()} ${req.lastName.trim()} joins the class at #${res.nationalRank}, taking the slot of ${res.replaced} (${res.replacedPosition}) — saved to ${basename(res.editedPath)}.`
+      };
+    });
+  }
+
+  /** Current weekly-action state for one board target. */
+  async targetForm(recruitRow: number, savePath: string): Promise<TargetActionForm | null> {
+    if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
+    try {
+      return await buildTargetForm(this.franchise, this.lastSchoolRow, recruitRow, savePath);
+    } catch {
+      return null;
+    }
+  }
+
+  /** One target's weekly plan, via the guarded shell. */
+  async editTarget(req: TargetActionChanges, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath } = await applyTargetActions(
+        this.franchise,
+        savePath,
+        { teamRow, ...req },
+        app.getPath('userData')
+      );
+      return { editedPath, message: `Weekly plan saved to ${basename(editedPath)}.` };
     });
   }
 

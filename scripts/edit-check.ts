@@ -17,6 +17,10 @@ import path from 'node:path';
 import {
   applyBoardEdit,
   applyCoachFire,
+  applyCreateRecruit,
+  applyTargetActions,
+  buildCreateForm,
+  buildTargetForm,
   applyDepthChartEdit,
   applyPlayerEdit,
   applyResourceEdit,
@@ -48,6 +52,9 @@ async function rejects(label: string, fn: () => Promise<unknown>): Promise<void>
     check(label, true, err instanceof Error ? err.message : String(err));
   }
 }
+
+let addTargetGlobal = -1;
+let removedTargetGlobal = -1;
 
 const franchise = await loadFranchise(work);
 
@@ -86,12 +93,26 @@ check('form: tier options', ['Bronze', 'Silver', 'Gold', 'Platinum'].every((t) =
 check('form: rostered player has a jersey', form.jersey !== null && !form.isRecruit);
 check('form: target is the _RJsEdited sibling', form.targetFileName === 'DYNASTY-EDITCHECK_RJsEdited' && !form.targetExists);
 
+check('form: rostered player carries his own look record',
+  form.look !== null && (form.lookTone === null || (form.lookTone >= 1 && form.lookTone <= 8)),
+  `${Object.keys(form.look ?? {}).length} slots, tone ${form.lookTone}`);
+check('form: appearance catalogs ride the edit form',
+  form.faces.length >= 200 && form.gearSlots.length >= 6 && Object.keys(form.helmetMasks).length >= 15,
+  `${form.faces.length} faces, ${form.gearSlots.length} slots`);
+
 const recruitForm = await buildEditForm(franchise, recruitRow, work);
 check('form: recruit flagged, no jersey', recruitForm.isRecruit && recruitForm.jersey === null);
+check('form: recruit is undressed until enrollment', recruitForm.look === null);
 
 // --- 2. the edit writes the sibling; the source file never changes ---
 const ratingField = form.ratings[0].field;
 const mentalPick = form.mentalOptions[0].id;
+const editFace = form.faces.find((f) => f.tone === 4) ?? form.faces[0];
+const editState = Object.keys(form.cities).sort().find((st) => st !== form.homeState && form.cities[st].length)!;
+const editTown = form.cities[editState][0];
+const preLookRef = refFromRecord(
+  (mainTable(franchise, 'Player')).records[rosterRow], 'CharacterVisuals'
+);
 const { editedPath } = await applyPlayerEdit(
   franchise,
   work,
@@ -102,7 +123,13 @@ const { editedPath } = await applyPlayerEdit(
     jersey: 7,
     ratings: { [ratingField]: 99 },
     mental: [{ slot: 1, ability: mentalPick, rank: 'Gold' }],
-    physical: form.physical.length ? [{ slot: form.physical[0].slot, rank: 'Platinum' }] : []
+    physical: form.physical.length ? [{ slot: form.physical[0].slot, rank: 'Platinum' }] : [],
+    face: editFace,
+    skinTone: editFace.tone,
+    bodyType: 2,
+    gear: { Towel: 'Towel_West' },
+    homeState: editState,
+    homeTown: editTown.town
   },
   dir
 );
@@ -111,8 +138,7 @@ check('write: source file bytes untouched', sha(work) === sourceHash);
 
 const readBack = await loadFranchise(editedPath);
 const p2 = mainTable(readBack, 'Player');
-await p2.readRecords(['FirstName', 'LastName', 'JerseyNum', ratingField, 'MentalAbility1', 'MentalAbilityRank1',
-  ...(form.physical.length ? [`PhysicalAbility${form.physical[0].slot}`] : [])]);
+await p2.readRecords();
 const rb = p2.records[rosterRow];
 check('write: names + jersey persisted',
   String(val(rb, 'FirstName')) === 'Harness' && String(val(rb, 'LastName')) === 'Verified' && Number(val(rb, 'JerseyNum')) === 7);
@@ -123,6 +149,27 @@ check('write: mental ability + tier persisted',
 if (form.physical.length) {
   check('write: physical tier persisted',
     String(val(rb, `PhysicalAbility${form.physical[0].slot}`)) === 'Platinum');
+}
+check('write: hometown pair + pipeline persisted',
+  String(val(rb, 'PLYR_HOME_STATE')) === editState &&
+  String(val(rb, 'PLYR_HOME_TOWN')) === editTown.town &&
+  String(val(rb, 'HomePipeline')) === editTown.pipeline,
+  `${val(rb, 'PLYR_HOME_TOWN')}, ${val(rb, 'PLYR_HOME_STATE')} -> ${val(rb, 'HomePipeline')}`);
+check('write: face swap persisted on the player row',
+  String(val(rb, 'GenericHeadAssetName')) === editFace.assetName &&
+  Number(val(rb, 'PLYR_PORTRAIT')) === editFace.portraitId,
+  `${val(rb, 'GenericHeadAssetName')} / ${val(rb, 'PLYR_PORTRAIT')}`);
+{
+  const ref2 = refFromRecord(rb, 'CharacterVisuals');
+  const vT2 = ref2 && ref2.tableId !== 0 ? readBack.getTableById(ref2.tableId) : null;
+  if (vT2 && !vT2.recordsRead) await vT2.readRecords();
+  const blob = vT2 ? JSON.parse(String(vT2.records[ref2!.row]._fields.RawData.value)) : null;
+  const towel = (blob?.loadouts ?? []).flatMap((l: any) => l.loadoutElements ?? [])
+    .find((e: any) => e.slotType === 'Towel')?.itemAssetName;
+  check('write: look edited in the player\'s own visuals row',
+    !!preLookRef && ref2?.tableId === preLookRef.tableId && ref2?.row === preLookRef.row &&
+    blob?.skinTone === editFace.tone && blob?.bodyType === 2 && towel === 'Towel_West',
+    `row ${ref2?.row} (was ${preLookRef?.row}), tone ${blob?.skinTone}, body ${blob?.bodyType}, towel ${towel}`);
 }
 
 // --- 3. editing the edited save updates it in place, with a backup ---
@@ -140,8 +187,10 @@ const backups = existsSync(path.join(dir, 'backups')) ? readdirSync(path.join(di
 check('in-place: backup taken first', backups.length === 1, backups.join(', '));
 const readBack2 = await loadFranchise(editedPath);
 const p3 = mainTable(readBack2, 'Player');
-await p3.readRecords(['FirstName', 'LastName']);
+await p3.readRecords();
 check('in-place: second edit persisted', String(val(p3.records[recruitRow], 'FirstName')) === 'Second');
+check('in-place: recruit stays undressed (no visuals ref)',
+  (() => { const r = refFromRecord(p3.records[recruitRow], 'CharacterVisuals'); return !r || r.tableId === 0; })());
 check('in-place: first edit survives', String(val(p3.records[rosterRow], 'FirstName')) === 'Harness');
 check('source still untouched after everything', sha(work) === sourceHash);
 
@@ -159,6 +208,21 @@ await rejects('reject: unknown rating field', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, ratings: { OverallRating: 99 } }, dir));
 await rejects('reject: jersey out of range', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, jersey: 100 }, dir));
+await rejects('reject: face outside the catalog', () =>
+  applyPlayerEdit(readBack2, editedPath, {
+    playerRow: rosterRow,
+    face: { headId: 'NoHead', assetName: 'gen_head_madeup_001', portraitId: 99999, tone: 4 }
+  }, dir));
+await rejects('reject: unknown gear on an edit', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, gear: { Towel: 'Towel_Imaginary' } }, dir));
+await rejects('reject: dressing an unenrolled prospect (game blanks on it)', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: recruitRow, gear: { Towel: 'Towel_West' } }, dir));
+await rejects('reject: skin tone off the scale', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, skinTone: 9 }, dir));
+await rejects('reject: hometown not on the state list', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, homeTown: 'Made Up Ville' }, dir));
+await rejects('reject: unknown body type', () =>
+  applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, bodyType: 9 }, dir));
 check('rejections left the edited file unchanged', sha(editedPath) === before);
 
 // --- 5. program resources: Fundraising + recruiter hours ---
@@ -362,6 +426,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const before = await boardRows(fr);
   check('board: resolves', before.size > 0, `${before.size} targets`);
   const removeTarget = [...before][0];
+  removedTargetGlobal = removeTarget;
 
   // an uncommitted recruit who is NOT on this board
   const recruitsT = mainTable(fr, 'Recruit');
@@ -377,6 +442,7 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     if (addTarget >= 0 && committedRecruit >= 0) break;
   }
   check('board: found an addable recruit', addTarget >= 0, `recruit row ${addTarget}`);
+  addTargetGlobal = addTarget;
 
   const res = await applyBoardEdit(
     fr, editedPath,
@@ -403,6 +469,269 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
       { recruitRow: addTarget, action: 'remove' }, { recruitRow: addTarget, action: 'add' }
     ] }, dir));
   check('source still untouched after board edits', sha(work) === sourceHash);
+}
+
+// --- 9. weekly target actions on the freshly added recruit ---
+{
+  const fr = await loadFranchise(editedPath);
+  const teams = mainTable(fr, 'Team');
+  await teams.readRecords();
+  let teamRow = -1;
+  for (let i = 0; i < teams.records.length; i++) {
+    const r = teams.records[i];
+    if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) {
+      teamRow = i;
+      break;
+    }
+  }
+  // the recruit added in section 8 sits on this board with a fresh row
+  const form = await buildTargetForm(fr, teamRow, addTargetGlobal, editedPath);
+  check('actions form: caps from the schema',
+    form.hoursCap === 127 && form.nilCap === 1023 && form.intelMax === 16383,
+    `${form.hoursCap}/${form.nilCap}/${form.intelMax}`);
+  check('actions form: fresh state', form.hours === 0 && form.intel === 0 && form.scholarship === 'None');
+  check('actions form: sway options carry pitch names',
+    form.swayOptions.length >= 15 && form.swayOptions.every((o) => o.name), `${form.swayOptions.length}`);
+
+  const poolBefore = form.poolAssigned;
+  await applyTargetActions(fr, editedPath, {
+    teamRow,
+    recruitRow: addTargetGlobal,
+    hours: 40,
+    actions: { sendHouse: true, socialMedia: true },
+    scholarship: 'Offered',
+    nilOffer: 300,
+    swayPitch: 'HometownHero',
+    scoutFull: true
+  }, dir);
+  const form2 = await buildTargetForm(await loadFranchise(editedPath), teamRow, addTargetGlobal, editedPath);
+  check('actions: everything persisted through cold reload',
+    form2.hours === 40 && form2.actions.sendHouse && form2.actions.socialMedia &&
+    form2.scholarship === 'Offered' && form2.nilOffer === 300 &&
+    form2.swayPitch === 'HometownHero' && form2.intel === 16383,
+    JSON.stringify({ h: form2.hours, s: form2.scholarship, n: form2.nilOffer, p: form2.swayPitch, i: form2.intel }));
+  check('actions: pool assigned moved with the hours', form2.poolAssigned === poolBefore + 40,
+    `${poolBefore} -> ${form2.poolAssigned}`);
+
+  const fr3 = await loadFranchise(editedPath);
+  await rejects('actions reject: hours past the 7-bit cap', () =>
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, hours: 200 }, dir));
+  await rejects('actions reject: NIL past the 10-bit cap', () =>
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, nilOffer: 2000 }, dir));
+  await rejects('actions reject: unknown pitch', () =>
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, swayPitch: 'MoxiePitch' }, dir));
+  await rejects('actions reject: recruit not on the board', () =>
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: removedTargetGlobal, hours: 5 }, dir));
+  check('source still untouched after action edits', sha(work) === sourceHash);
+}
+
+// --- 10. create a recruit: clone-with-overrides round-trip + rejections ---
+{
+  const fr = await loadFranchise(editedPath);
+  const cform = await buildCreateForm(fr, editedPath);
+  const positions = Object.keys(cform.archetypesByPosition);
+  check('create form: archetypes per position from the class', positions.length >= 15,
+    `${positions.length} positions`);
+  check('create form: states + dev traits from the schema',
+    cform.states.length >= 40 && cform.devTraits.length >= 3,
+    `${cform.states.length} states, ${cform.devTraits.length} traits`);
+  check('create form: row supply reported', cform.playerRowsFree > 0 && cform.recruitRowsFree > 0,
+    `${cform.playerRowsFree} player / ${cform.recruitRowsFree} recruit rows`);
+
+  const pos = positions.includes('QB') ? 'QB' : positions[0];
+  const archetype = cform.archetypesByPosition[pos][0];
+  const state = cform.states.includes('Ohio') ? 'Ohio' : cform.states[0];
+  const homeCity = cform.cities[state]?.[0];
+  check('create form: hometowns per state with pipelines',
+    Object.keys(cform.cities).length >= 40 && !!homeCity?.town && !!homeCity?.pipeline,
+    `${Object.keys(cform.cities).length} states; ${state} first: ${homeCity?.town} (${homeCity?.pipeline})`);
+  const res = await applyCreateRecruit(fr, editedPath, {
+    firstName: 'Custom',
+    lastName: 'Prospect',
+    position: pos,
+    archetype,
+    stars: 5,
+    devTrait: cform.devTraits[cform.devTraits.length - 1],
+    heightIn: 76,
+    weightLb: 215,
+    homeState: state,
+    homeTown: homeCity.town
+  }, dir);
+  check('create: wrote in place', res.editedPath === editedPath, `recruit row ${res.recruitRow}`);
+
+  const fr2 = await loadFranchise(editedPath);
+  const rT = mainTable(fr2, 'Recruit');
+  await rT.readRecords();
+  const pT = mainTable(fr2, 'Player');
+  await pT.readRecords();
+  const nr = rT.records[res.recruitRow];
+  const npRef = refFromRecord(nr, 'Player');
+  const np = pT.records[npRef!.row];
+  check('create: player row reads back',
+    String(val(np, 'FirstName')) === 'Custom' && String(val(np, 'LastName')) === 'Prospect' &&
+    String(val(np, 'Position')) === pos && String(val(np, 'PlayerType')) === archetype,
+    `${val(np, 'FirstName')} ${val(np, 'LastName')} ${val(np, 'Position')}/${val(np, 'PlayerType')}`);
+  check('create: measurables + identity overrides',
+    Number(val(np, 'Height')) === 76 && Number(val(np, 'Weight')) === 55 &&
+    String(val(np, 'ProspectStarRating')) === 'FIVE_STAR' &&
+    String(val(np, 'PLYR_HOME_STATE')) === state,
+    `H${val(np, 'Height')} W${val(np, 'Weight')} ${val(np, 'ProspectStarRating')}`);
+  check('create: ratings inherited from the template (non-zero sheet)',
+    Number(val(np, 'SpeedRating')) > 0 && Number(val(np, 'AwarenessRating')) > 0);
+  check('create: takes over the lowest filler slot',
+    res.nationalRank > 0 && Number(val(nr, 'NationalRank')) === res.nationalRank &&
+    !String(val(nr, 'RecruitStage')).includes('Committed') && res.replaced.length > 0,
+    `#${res.nationalRank}, replaced ${res.replaced} (${res.replacedPosition})`);
+  const raceRef = refFromRecord(nr, 'TopSchoolsList');
+  check("create: inherits the slot's real race list", !!raceRef && raceRef.tableId !== 0,
+    JSON.stringify(raceRef));
+  check('create: hometown pipeline follows the city',
+    String(val(np, 'PLYR_HOME_TOWN')) === homeCity.town &&
+    String(val(np, 'HomePipeline')) === homeCity.pipeline,
+    `${val(np, 'PLYR_HOME_TOWN')} -> ${val(np, 'HomePipeline')}`);
+  await rejects('create reject: hometown not in the state list', () =>
+    applyCreateRecruit(fr2, editedPath, {
+      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200,
+      homeState: state, homeTown: 'Made Up Ville'
+    }, dir));
+
+  // The created recruit can immediately ride the other write families.
+  const boardRes = await applyBoardEdit(
+    fr2, editedPath, { teamRow: 0, changes: [{ recruitRow: res.recruitRow, action: 'add' }] }, dir
+  );
+  check('create: new recruit can join the board', boardRes.added === 1);
+
+  const fr3 = await loadFranchise(editedPath);
+  await rejects('create reject: empty name', () =>
+    applyCreateRecruit(fr3, editedPath, {
+      firstName: ' ', lastName: 'X', position: pos, archetype, stars: 3,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: homeCity.town
+    }, dir));
+  await rejects('create reject: bad stars', () =>
+    applyCreateRecruit(fr3, editedPath, {
+      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 7,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: homeCity.town
+    }, dir));
+  await rejects('create reject: unknown archetype/position template', () =>
+    applyCreateRecruit(fr3, editedPath, {
+      firstName: 'A', lastName: 'B', position: 'QQ', archetype: 'QQ_Wizard', stars: 3,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: homeCity.town
+    }, dir));
+  await rejects('create reject: unknown state', () =>
+    applyCreateRecruit(fr3, editedPath, {
+      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
+      devTrait: cform.devTraits[0], heightIn: 74, weightLb: 200, homeState: 'Narnia', homeTown: homeCity.town
+    }, dir));
+  check('source still untouched after creation', sha(work) === sourceHash);
+
+  // --- 10b. creations are face-only: the game dresses recruits at enrollment
+  //     (in-game verified 2026-08-30 — a pre-provisioned visuals row blanks
+  //     the dynasty UI). The gear catalogs still power the roster edit dialog.
+  const cform2 = await buildCreateForm(await loadFranchise(editedPath), editedPath);
+  check('create form: gear catalog from dressed players',
+    cform2.gearSlots.length >= 6 && cform2.gearSlots.every((g) => g.options.length > 1),
+    cform2.gearSlots.map((g) => `${g.slot}×${g.options.length}`).join(' '));
+  check('create form: observed skin tones', cform2.skinTones.length >= 4, cform2.skinTones.join(','));
+  const mask = cform2.gearSlots.find((g) => g.slot === 'FaceMask');
+  await rejects('create reject: any look request (game dresses recruits)', async () =>
+    applyCreateRecruit(await loadFranchise(editedPath), editedPath, {
+      firstName: 'Styled', lastName: 'Prospect', position: pos, archetype, stars: 4,
+      devTrait: cform2.devTraits[0], heightIn: 75, weightLb: 220, homeState: state, homeTown: homeCity.town,
+      skinTone: cform2.skinTones[0], bodyType: 4,
+      gear: mask ? { FaceMask: mask.options[0] } : undefined
+    }, dir));
+  // helmet↔mask compatibility: the game's loadout pairings + this save's
+  const helmets = Object.keys(cform2.helmetMasks);
+  check('create form: helmet-mask compatibility map', helmets.length >= 15 &&
+    helmets.every((h) => cform2.helmetMasks[h].length > 0),
+    `${helmets.length} helmets, Speed_Flex×${cform2.helmetMasks['GearHelmet_Speed_Flex']?.length}`);
+  // the merged vocabulary carries game items no one in this save wears
+  const helmetOpts = cform2.gearSlots.find((g) => g.slot === 'HeadWear')?.options ?? [];
+  check('create form: game vocabulary merged into options',
+    helmetOpts.includes('GearHelmet_RevolutionSpeed') && helmetOpts.length >= 15 &&
+    (cform2.gearSlots.find((g) => g.slot === 'FaceMask')?.options.length ?? 0) >= 100,
+    `${helmetOpts.length} helmets, ${cform2.gearSlots.find((g) => g.slot === 'FaceMask')?.options.length} masks`);
+  check('create form: base look named per position',
+    !!cform2.baseLook[pos]?.HeadWear && Object.keys(cform2.baseLook).length >= 5,
+    `${pos}: ${cform2.baseLook[pos]?.HeadWear}, tone ${cform2.baseTones[pos]}`);
+  // helmet↔mask coupling now exercises through the rostered edit path: a
+  // game-vocabulary mask this save never dressed, on the rostered player.
+  const soloHelmet = 'GearHelmet_RevolutionSpeed';
+  const soloMask = cform2.helmetMasks[soloHelmet][0];
+  const frM = await loadFranchise(editedPath);
+  const pTM0 = mainTable(frM, 'Player');
+  await pTM0.readRecords();
+  const ownRef = refFromRecord(pTM0.records[rosterRow], 'CharacterVisuals')!;
+  const vTM0 = frM.getTableById(ownRef.tableId);
+  await vTM0.readRecords();
+  const ownItems: Record<string, string> = {};
+  for (const lo of JSON.parse(String(vTM0.records[ownRef.row]._fields.RawData.value)).loadouts ?? []) {
+    for (const el of lo?.loadoutElements ?? []) {
+      if (el?.slotType && el?.itemAssetName && ownItems[el.slotType] === undefined) {
+        ownItems[el.slotType] = el.itemAssetName;
+      }
+    }
+  }
+  const ownHelmet = ownItems['HeadWear'];
+  const expectHelmet = ownHelmet && cform2.helmetMasks[ownHelmet]?.includes(soloMask)
+    ? ownHelmet
+    : Object.keys(cform2.helmetMasks).find((h) => cform2.helmetMasks[h].includes(soloMask));
+  await applyPlayerEdit(frM, editedPath, { playerRow: rosterRow, gear: { FaceMask: soloMask } }, dir);
+  const frM2 = await loadFranchise(editedPath);
+  const pTM = mainTable(frM2, 'Player');
+  await pTM.readRecords();
+  const vRefM = refFromRecord(pTM.records[rosterRow], 'CharacterVisuals')!;
+  const vTM = frM2.getTableById(vRefM.tableId);
+  await vTM.readRecords();
+  const vjM = JSON.parse(String(vTM.records[vRefM.row]._fields.RawData.value));
+  const els = vjM.loadouts.flatMap((l: any) => l.loadoutElements ?? []);
+  const gotHelmet = els.find((e: any) => e.slotType === 'HeadWear')?.itemAssetName;
+  const gotMask = els.find((e: any) => e.slotType === 'FaceMask')?.itemAssetName;
+  check('edit: game-vocab mask lands, helmet resolves per the rules',
+    gotMask === soloMask && gotHelmet === expectHelmet,
+    `${gotHelmet} :: ${gotMask} (own ${ownHelmet}, expected ${expectHelmet})`);
+  check('source still untouched after look edits', sha(work) === sourceHash);
+
+  // --- 10c. creation with a chosen face (head + portrait + tone triple) ---
+  check('create form: face catalog from real players',
+    cform2.faces.length >= 200 &&
+    cform2.faces.every((f) => f.portraitId > 0 && f.tone >= 1 && f.tone <= 8 && !!f.headId && !!f.assetName),
+    `${cform2.faces.length} faces, tones ${[...new Set(cform2.faces.map((f) => f.tone))].sort().join(',')}`);
+  // Prefer a tone-8 face: it exercises the full 1-8 skin-tone range.
+  const face = cform2.faces.find((f) => f.tone === 8) ?? cform2.faces[Math.floor(cform2.faces.length / 2)];
+  check('create form: faces are generic art with embedded portrait ids',
+    cform2.faces.every((f) => f.assetName.startsWith('Generic_') && Number(f.assetName.split('_')[1]) === f.portraitId),
+    face.assetName);
+  // frM2 already reflects the current on-disk state — reuse it for the write.
+  const resF = await applyCreateRecruit(frM2, editedPath, {
+    firstName: 'Chosen', lastName: 'Face', position: pos, archetype, stars: 3,
+    devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 210, homeState: state, homeTown: homeCity.town,
+    face
+  }, dir);
+  const frF2 = await loadFranchise(editedPath);
+  const pTF = mainTable(frF2, 'Player');
+  await pTF.readRecords();
+  const npF = pTF.records[resF.playerRow];
+  check('create: chosen face lands, enum stays NoHead (recruit convention)',
+    String(val(npF, 'PLYR_GENERICHEAD')) === 'NoHead' &&
+    String(val(npF, 'GenericHeadAssetName')) === face.assetName &&
+    Number(val(npF, 'PLYR_PORTRAIT')) === face.portraitId,
+    `${val(npF, 'PLYR_GENERICHEAD')} / ${val(npF, 'GenericHeadAssetName')} / ${val(npF, 'PLYR_PORTRAIT')}`);
+  check('create: star gate picks a fresh slot (no cannibalizing)',
+    resF.recruitRow !== res.recruitRow && resF.nationalRank !== res.nationalRank,
+    `first #${res.nationalRank} (5-star), second #${resF.nationalRank}`);
+  const vRefF = refFromRecord(npF, 'CharacterVisuals');
+  check('create: created recruit stays undressed (game dresses at enrollment)',
+    !vRefF || vRefF.tableId === 0, JSON.stringify(vRefF));
+  // Validation rejects before any mutation, so frF2 can host the refusal.
+  await rejects('create reject: face not in the catalog', async () =>
+    applyCreateRecruit(frF2, editedPath, {
+      firstName: 'A', lastName: 'B', position: pos, archetype, stars: 3,
+      devTrait: cform2.devTraits[0], heightIn: 74, weightLb: 200, homeState: state, homeTown: homeCity.town,
+      face: { headId: face.headId, assetName: 'gen_head_madeup_001', portraitId: 99999, tone: face.tone }
+    }, dir));
+  check('source still untouched after face creation', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

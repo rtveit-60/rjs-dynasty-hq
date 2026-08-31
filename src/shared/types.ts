@@ -689,6 +689,22 @@ export interface PlayerEditForm {
   /** Tier member names, None first. */
   rankOptions: string[];
   physical: EditPhysicalSlot[];
+  homeState: string;
+  homeTown: string;
+  /** state -> the game's own hometowns there, each with its pipeline. */
+  cities: Record<string, { town: string; pipeline: string }[]>;
+  /** slot -> the item the player's own visuals blob wears; null = undressed. */
+  look: Record<string, string> | null;
+  /** The blob's skin tone, when it carries one. */
+  lookTone: number | null;
+  /** The blob's body type (0 = Standard when absent); null = undressed. */
+  lookBody: number | null;
+  gearSlots: GearSlotOptions[];
+  skinTones: number[];
+  helmetMasks: Record<string, string[]>;
+  faces: FaceOption[];
+  /** The player's current head: portrait id + whether it is a unique scan. */
+  currentFace: { portraitId: number; unique: boolean };
   /** File name an edit would write ("…_RJsEdited") and whether it already exists. */
   targetFileName: string;
   targetExists: boolean;
@@ -704,6 +720,15 @@ export interface PlayerEditChanges {
   ratings?: Record<string, number>;
   mental?: EditMentalSlot[];
   physical?: { slot: number; rank: string }[];
+  /** A catalog face to put on the player (replaces a unique scan if present). */
+  face?: FaceOption;
+  /** Hometown moves as a pair; the pipeline follows the town. */
+  homeState?: string;
+  homeTown?: string;
+  skinTone?: number;
+  bodyType?: number;
+  /** slot -> item; '' removes the slot from the player's blob. */
+  gear?: Record<string, string>;
 }
 
 export interface PlayerEditResult {
@@ -744,9 +769,139 @@ export interface ResourceEditRequest {
   amount: number;
 }
 
+/** Options + caps for the Create Recruit dialog, all from the save itself. */
+export interface CreateRecruitForm {
+  maxFirstLen: number;
+  maxLastLen: number;
+  maxTownLen: number;
+  /** position -> archetype ids that exist in this class (template availability). */
+  archetypesByPosition: Record<string, string[]>;
+  /** PLYR_HOME_STATE enum member ids. */
+  states: string[];
+  /** state -> the game's own hometowns there, each with its pipeline. */
+  cities: Record<string, { town: string; pipeline: string }[]>;
+  /** TraitDevelopment enum member ids. */
+  devTraits: string[];
+  /** Raw Height field range (inches). */
+  heightMin: number;
+  heightMax: number;
+  /** Displayed pounds range (raw field + 160). */
+  weightMin: number;
+  weightMax: number;
+  playerRowsFree: number;
+  recruitRowsFree: number;
+  /** Gear pickers: the game's loadout vocabulary plus this save's extras. */
+  gearSlots: GearSlotOptions[];
+  /** Observed skin tones (1–8 in practice). */
+  skinTones: number[];
+  /** helmet itemAssetName -> facemasks real loadouts wear with it. */
+  helmetMasks: Record<string, string[]>;
+  /** position -> slot -> the item an unset choice actually keeps. */
+  baseLook: Record<string, Record<string, string>>;
+  /** position -> the base look's skin tone. */
+  baseTones: Record<string, number>;
+  /** position -> the base look's body type (0 = Standard when absent). */
+  baseBodies: Record<string, number>;
+  /** The face catalog: every observed head, each with a portrait and a tone. */
+  faces: FaceOption[];
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+/** One selectable face: an observed (head id, asset, portrait) triple + its tone. */
+export interface FaceOption {
+  /** PLYR_GENERICHEAD enum member. */
+  headId: string;
+  /** GenericHeadAssetName string, paired as seen on a real player. */
+  assetName: string;
+  /** PLYR_PORTRAIT id — the headshot the portrait pack serves. */
+  portraitId: number;
+  /** Skin tone this head is modeled for (1–8), encoded in its asset name. */
+  tone: number;
+  /** A headshot for portraitId exists in the user's portrait pack. */
+  hasShot?: boolean;
+}
+
+/** One gear slot's choices, learned from every dressed player in the save. */
+export interface GearSlotOptions {
+  slot: string;
+  label: string;
+  options: string[];
+}
+
+export interface CreateRecruitRequest {
+  firstName: string;
+  lastName: string;
+  position: string;
+  /** PlayerType id — must exist in the class at this position (the template). */
+  archetype: string;
+  stars: number;
+  devTrait: string;
+  heightIn: number;
+  /** Pounds (the save stores lbs − 160). */
+  weightLb: number;
+  homeState: string;
+  homeTown: string;
+  /** 1–7, or 0 to keep the base look's tone. */
+  skinTone?: number;
+  bodyType?: number;
+  /** slot -> itemAssetName overrides; unset slots keep the base loadout. */
+  gear?: Record<string, string>;
+  /** A face from the catalog; unset keeps the template's head and the generated avatar. */
+  face?: FaceOption;
+}
+
 /** Stage recruits onto or off the user's target board. */
 export interface BoardEditRequest {
   changes: { recruitRow: number; action: 'add' | 'remove' }[];
+}
+
+/** The five weekly contact/visit actions the game offers per target. */
+export interface TargetActionFlags {
+  contactFamily: boolean;
+  contactCoaches: boolean;
+  socialMedia: boolean;
+  sendHouse: boolean;
+  visitSchool: boolean;
+}
+
+/** Current weekly-action state for one board target, plus caps and options. */
+export interface TargetActionForm {
+  recruitRow: number;
+  name: string;
+  position: string;
+  stars: number;
+  /** Hours assigned to this recruit this week. */
+  hours: number;
+  /** Per-recruit field cap (7-bit). */
+  hoursCap: number;
+  poolTotal: number;
+  poolAssigned: number;
+  actions: TargetActionFlags;
+  /** Normalized: None | Revoked | New | Offered | Committed. */
+  scholarship: string;
+  nilOffer: number;
+  /** Field cap (10-bit). */
+  nilCap: number;
+  nilExpectation: number;
+  /** RecruitingPitchType member id; 'Invalid' = none selected. */
+  swayPitch: string;
+  swayOptions: { id: string; name: string }[];
+  intel: number;
+  intelMax: number;
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+/** Changed values only; absent fields stay untouched in the save. */
+export interface TargetActionChanges {
+  recruitRow: number;
+  hours?: number;
+  actions?: Partial<TargetActionFlags>;
+  scholarship?: 'Offered' | 'Revoked' | 'None';
+  nilOffer?: number;
+  swayPitch?: string;
+  scoutFull?: boolean;
 }
 
 /** Fire (or un-fire) a CPU coach: flips the game's own PendingFire contract state. */

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { EditMentalSlot, PlayerEditChanges, PlayerEditForm } from '../../../shared/types.ts';
+import type { EditMentalSlot, FaceOption, PlayerEditChanges, PlayerEditForm } from '../../../shared/types.ts';
 import InfoDot from './InfoDot.tsx';
+import LookSection, { effectiveLook } from './LookSection.tsx';
 
 /**
  * Broadcast-style number stepper: a segmented − / value / + plate replacing
  * the browser's native spinners. Typing still works (digits only), arrow keys
  * step, and holding a stepper button repeats.
  */
-function Stepper({
+export function Stepper({
   value,
   min,
   max,
@@ -116,9 +117,15 @@ export default function EditPlayerModal({
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [jersey, setJersey] = useState('0');
+  const [homeState, setHomeState] = useState('');
+  const [homeTown, setHomeTown] = useState('');
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [mental, setMental] = useState<EditMentalSlot[]>([]);
   const [physical, setPhysical] = useState<Record<number, string>>({});
+  const [gear, setGear] = useState<Record<string, string>>({});
+  const [skinTone, setSkinTone] = useState(0);
+  const [bodyType, setBodyType] = useState(0);
+  const [face, setFace] = useState<FaceOption | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -134,9 +141,14 @@ export default function EditPlayerModal({
         setFirstName(f.firstName);
         setLastName(f.lastName);
         setJersey(String(f.jersey ?? 0));
+        setHomeState(f.homeState);
+        setHomeTown(f.homeTown);
         setRatings(Object.fromEntries(f.ratings.map((r) => [r.field, r.value])));
         setMental(f.mental.map((m) => ({ ...m })));
         setPhysical(Object.fromEntries(f.physical.map((p) => [p.slot, p.rank])));
+        setGear(effectiveLook(f.look ?? {}));
+        setSkinTone(f.lookTone ?? 0);
+        setBodyType(f.lookBody ?? 0);
         setState('ready');
       })
       .catch(() => alive && setState('missing'));
@@ -175,6 +187,11 @@ export default function EditPlayerModal({
       out.jersey = Number(jersey);
       any = true;
     }
+    if (homeState !== form.homeState || homeTown !== form.homeTown) {
+      out.homeState = homeState;
+      out.homeTown = homeTown;
+      any = true;
+    }
     const changedRatings: Record<string, number> = {};
     for (const r of form.ratings) {
       const v = ratings[r.field];
@@ -199,8 +216,35 @@ export default function EditPlayerModal({
       out.physical = changedPhysical;
       any = true;
     }
+    if (face) {
+      out.face = face;
+      any = true;
+    }
+    // Appearance diffs against the shown look, so untouched dropdowns write
+    // nothing and '' drops a slot from the player's blob. Undressed prospects
+    // are face-only: the game dresses them at enrollment.
+    if (form.look !== null) {
+      const baseLook = effectiveLook(form.look);
+      const changedGear: Record<string, string> = {};
+      for (const g of form.gearSlots) {
+        const shown = gear[g.slot] ?? '';
+        if (shown !== (baseLook[g.slot] ?? '')) changedGear[g.slot] = shown;
+      }
+      if (Object.keys(changedGear).length) {
+        out.gear = changedGear;
+        any = true;
+      }
+      if (skinTone !== (form.lookTone ?? 0) && skinTone !== 0) {
+        out.skinTone = skinTone;
+        any = true;
+      }
+      if (bodyType !== (form.lookBody ?? 0)) {
+        out.bodyType = bodyType;
+        any = true;
+      }
+    }
     return any ? out : null;
-  }, [form, firstName, lastName, jersey, ratings, mental, physical]);
+  }, [form, firstName, lastName, jersey, ratings, mental, physical, face, gear, skinTone, bodyType]);
 
   const nameProblem =
     !firstName.trim() || !lastName.trim()
@@ -301,6 +345,38 @@ export default function EditPlayerModal({
                   />
                 </label>
               )}
+              <label>
+                <span>Home state</span>
+                <select
+                  value={homeState}
+                  onChange={(e) => {
+                    const st = e.target.value;
+                    setHomeState(st);
+                    setHomeTown(form.cities[st]?.[0]?.town ?? '');
+                  }}
+                >
+                  {Object.keys(form.cities)
+                    .sort()
+                    .map((st) => (
+                      <option key={st} value={st}>
+                        {st.replace(/([a-z])([A-Z])/g, '$1 $2')}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                <span>Hometown</span>
+                <select value={homeTown} onChange={(e) => setHomeTown(e.target.value)}>
+                  {homeTown && !(form.cities[homeState] ?? []).some((c) => c.town === homeTown) && (
+                    <option value={homeTown}>{homeTown}</option>
+                  )}
+                  {(form.cities[homeState] ?? []).map((c) => (
+                    <option key={c.town} value={c.town}>
+                      {c.town}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <div className="ed-sec">Ratings</div>
@@ -390,6 +466,37 @@ export default function EditPlayerModal({
                 </div>
               </>
             )}
+
+            <div className="ed-sec">Appearance</div>
+            {form.look === null && (
+              <p className="cr-note">
+                The game dresses this prospect at enrollment — until then only the face
+                can be set. Gear, body type and skin tone unlock once they're rostered.
+              </p>
+            )}
+            {form.currentFace.unique && (
+              <p className="cr-note">
+                This player has an individually scanned face. Picking a catalog face
+                replaces it in the edited copy; the original save keeps the scan.
+              </p>
+            )}
+            <LookSection
+              gearSlots={form.gearSlots}
+              helmetMasks={form.helmetMasks}
+              skinTones={form.skinTones}
+              faces={form.faces}
+              base={effectiveLook(form.look ?? {})}
+              gear={gear}
+              setGear={setGear}
+              skinTone={skinTone}
+              setSkinTone={setSkinTone}
+              face={face}
+              setFace={setFace}
+              bodyType={bodyType}
+              setBodyType={setBodyType}
+              currentPortraitId={form.currentFace.portraitId || undefined}
+              faceOnly={form.look === null}
+            />
 
             {(error || nameProblem) && <div className="ed-error">{error ?? nameProblem}</div>}
 

@@ -20,6 +20,7 @@ import {
 import { useHQ } from '../store.ts';
 import BoardMark from './BoardMark.tsx';
 import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
+import CreateRecruitModal from './CreateRecruitModal.tsx';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
@@ -92,6 +93,7 @@ export default function RecruitingView() {
   const [asc, setAsc] = useState(true);
   const [page, setPage] = useState(0);
   const [openRow, setOpenRow] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const pool = useMemo(
     () => (rc?.recruits ?? []).filter((r) => (board === 'portal' ? r.isTransfer : !r.isTransfer)),
@@ -370,6 +372,14 @@ export default function RecruitingView() {
         <button className={`filter ${boardOnly ? 'active' : ''}`} onClick={() => setBoardOnly(!boardOnly)}>
           On Board
         </button>
+        <button
+          className="filter"
+          style={{ marginLeft: 'auto' }}
+          onClick={() => setCreating(true)}
+          title="Create a brand-new recruit in this class (writes a _RJsEdited copy)"
+        >
+          Create Recruit
+        </button>
       </div>
 
       {board === 'portal' && portalCount === 0 ? (
@@ -379,6 +389,7 @@ export default function RecruitingView() {
         </div>
       ) : (
         <>
+          {creating && <CreateRecruitModal onClose={() => setCreating(false)} />}
           <BoardSaveBar />
           <div className="tbl-wrap tbl-scroll">
             <table className="tbl tbl-wide">

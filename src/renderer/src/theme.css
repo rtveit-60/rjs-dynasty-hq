@@ -4524,3 +4524,210 @@ tr:hover .bd-btn,
   color: var(--bad);
   border-color: var(--bad);
 }
+
+/* --- Weekly plan dialog --------------------------------------------------- */
+
+.ta-hours {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ta-hours .ed-step {
+  width: 130px;
+}
+
+.ta-pool {
+  font: 500 11.5px var(--font-ui);
+  color: var(--ink-3);
+}
+
+.ta-pool.over {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.ta-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 18px;
+}
+
+.ta-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 12.5px var(--font-ui);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.ta-check input {
+  accent-color: var(--team, var(--hot));
+}
+
+.ta-check.changed span {
+  color: var(--hot);
+  font-weight: 600;
+}
+
+.ta-offers {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.ta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ta-field > span {
+  font: 600 10px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+}
+
+.ta-field em {
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-3);
+}
+
+.ta-field .ed-step {
+  width: 130px;
+}
+
+.ta-scout .ta-scouted {
+  font: 600 12px var(--font-ui);
+  color: var(--good);
+}
+
+/* --- Create Recruit dialog grid ------------------------------------------ */
+
+.cr-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.cr-grid .ta-field .ed-step {
+  width: 100%;
+}
+
+.cr-note {
+  margin: -2px 0 8px;
+  font: 500 11.5px var(--font-ui);
+  color: var(--ink-3);
+}
+
+/* --- Face picker ---------------------------------------------------------- */
+
+.fp-panel {
+  width: min(760px, 100%);
+}
+
+.fp-tones {
+  margin-top: 10px;
+}
+
+.fp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  max-height: 52vh;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.fp-tile {
+  appearance: none;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface);
+  aspect-ratio: 1;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.fp-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.fp-tile:hover {
+  border-color: var(--ink-3);
+}
+
+.fp-tile.selected {
+  outline: 2px solid var(--team, var(--hot));
+  outline-offset: -2px;
+}
+
+.fp-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 100%;
+  color: var(--ink-3);
+  font: 600 9px var(--font-ui);
+  word-break: break-all;
+  padding: 4px;
+  text-align: center;
+}
+
+.fp-fallback b {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.fp-choose {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 12.5px var(--font-ui);
+  padding: 4px 8px;
+  cursor: pointer;
+  min-height: 30px;
+}
+
+.fp-choose:hover {
+  border-color: var(--ink-3);
+}
+
+.fp-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 2px;
+  object-fit: cover;
+}
+
+.fp-thumb-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--line-soft);
+  color: var(--ink-2);
+  font: 700 10px var(--font-ui);
+}
+
+.fp-choose-label {
+  color: var(--ink-2);
+}

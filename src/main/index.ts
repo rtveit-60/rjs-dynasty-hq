@@ -244,7 +244,7 @@ function registerIpc(): void {
   ipcMain.handle('player:editform', (_e, playerRow: number) => {
     const { savePath } = getSettings();
     if (!Number.isInteger(playerRow) || playerRow < 0 || !savePath) return null;
-    return pipeline.editForm(playerRow, savePath);
+    return pipeline.editForm(playerRow, savePath, getSettings().portraitsDir);
   });
 
   // The app's only write path: lands in <save>_RJsEdited (never the original),
@@ -278,6 +278,45 @@ function registerIpc(): void {
       return { ok: false, message: 'Nothing to apply.' };
     }
     const result = await pipeline.editResource({ kind: r.kind, amount: r.amount as number }, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
+  // Create-a-recruit: dialog options + the creation write.
+  ipcMain.handle('create:form', () => {
+    const { savePath } = getSettings();
+    return savePath ? pipeline.createForm(savePath, getSettings().portraitsDir) : null;
+  });
+  ipcMain.handle('create:recruit', async (_e, req: unknown) => {
+    const r = req as { firstName?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || typeof r?.firstName !== 'string') {
+      return { ok: false, message: 'Nothing to create.' };
+    }
+    const result = await pipeline.createRecruit(r as never, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
+  // Weekly recruiting plan for one board target: current state + the write.
+  ipcMain.handle('target:form', (_e, recruitRow: number) => {
+    const { savePath } = getSettings();
+    if (!Number.isInteger(recruitRow) || recruitRow < 0 || !savePath) return null;
+    return pipeline.targetForm(recruitRow, savePath);
+  });
+  ipcMain.handle('target:edit', async (_e, req: unknown) => {
+    const r = req as { recruitRow?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !Number.isInteger(r?.recruitRow) || (r.recruitRow as number) < 0) {
+      return { ok: false, message: 'Nothing to save.' };
+    }
+    const result = await pipeline.editTarget(r as never, savePath);
     if (result.ok && result.editedPath) {
       if (result.editedPath !== savePath) followEditedSave(result.editedPath);
       else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
@@ -605,9 +644,14 @@ function createWindow(): void {
               await new Promise((r) => setTimeout(r, 2600));
             }
             for (const label of (process.env['HQ_CAPTURE_CLICK'] ?? '').split(',').filter(Boolean)) {
+              // "~8000" between labels sleeps instead of clicking (form loads).
+              if (label.trim().startsWith('~')) {
+                await new Promise((r) => setTimeout(r, Number(label.trim().slice(1)) || 1000));
+                continue;
+              }
               // Prefix match tolerates count badges inside the control ("THE WIRE 133").
               await win!.webContents.executeJavaScript(
-                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button,.bd-btn')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
+                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button,.bd-btn,.fp-choose')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
               );
               await new Promise((r) => setTimeout(r, 700));
             }
@@ -667,6 +711,11 @@ function createWindow(): void {
             }
             // HQ_CAPTURE_PFCLICK="‹,‹" clicks pop-up buttons by text, in order.
             for (const label of (process.env['HQ_CAPTURE_PFCLICK'] ?? '').split(',').filter(Boolean)) {
+              // "~8000" between labels sleeps instead of clicking (form loads).
+              if (label.trim().startsWith('~')) {
+                await new Promise((r) => setTimeout(r, Number(label.trim().slice(1)) || 1000));
+                continue;
+              }
               await win!.webContents.executeJavaScript(
                 `[...document.querySelectorAll('.pf-panel button')].find((b) => b.textContent.trim() === ${JSON.stringify(label.trim())})?.click()`
               );
