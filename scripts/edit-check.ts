@@ -365,10 +365,14 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const fr2 = await loadFranchise(editedPath);
   const c2 = mainTable(fr2, 'Coach');
   await ensureCoachSchema(fr2, c2);
-  await c2.readRecords(['ContractStatus']);
+  await c2.readRecords(['ContractStatus', 'CurrentJobSecurityStatus', 'CurrentJobSecurityPercentage']);
   const readBackStatus = String(val(c2.records[cpuHC], 'ContractStatus'));
   check('fire: persisted through cold reload (alias-tolerant)',
     readBackStatus === 'PendingFire' || readBackStatus === 'First_Pending', readBackStatus);
+  check('fire: hot seat written (the carousel’s real input)',
+    String(val(c2.records[cpuHC], 'CurrentJobSecurityStatus')) === 'HotSeat' &&
+    Number(val(c2.records[cpuHC], 'CurrentJobSecurityPercentage')) <= 49,
+    `HotSeat ${val(c2.records[cpuHC], 'CurrentJobSecurityPercentage')}%`);
 
   await rejects('fire reject: already marked', () =>
     applyCoachFire(fr2, editedPath, { coachRow: cpuHC, undo: false }, dir));
@@ -382,9 +386,11 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
   const fr3 = await loadFranchise(editedPath);
   const c3 = mainTable(fr3, 'Coach');
   await ensureCoachSchema(fr3, c3);
-  await c3.readRecords(['ContractStatus']);
+  await c3.readRecords(['ContractStatus', 'CurrentJobSecurityStatus']);
   const restored = String(val(c3.records[cpuHC], 'ContractStatus'));
   check('fire: undo persisted', restored === 'Signed' || restored === 'First_Active', restored);
+  check('fire: undo restores Safe security',
+    String(val(c3.records[cpuHC], 'CurrentJobSecurityStatus')) === 'Safe');
   check('source still untouched after fire edits', sha(work) === sourceHash);
 }
 
@@ -494,34 +500,77 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     form.swayOptions.length >= 15 && form.swayOptions.every((o) => o.name), `${form.swayOptions.length}`);
 
   const poolBefore = form.poolAssigned;
+  check('actions form: prospect budget from tuning + perks',
+    form.budgetBase === 50 && form.budgetBonus >= 0,
+    `${form.budgetBase} + ${form.budgetBonus} perk bound`);
+  // write 1: visit 40 + social 5 + scholarship offer 5 = 50 (always legal)
   await applyTargetActions(fr, editedPath, {
     teamRow,
     recruitRow: addTargetGlobal,
-    hours: 40,
-    actions: { sendHouse: true, socialMedia: true },
+    actions: { visitSchool: true, socialMedia: true },
     scholarship: 'Offered',
-    nilOffer: 300,
-    swayPitch: 'HometownHero',
-    scoutFull: true
+    nilOffer: 300
   }, dir);
+  // write 2: drop the visit, add sway + two scouting passes = 5 + 30 + 20 = 55
+  // ...which busts the 50 budget, so prove the multi-pass reject first
+  await rejects('actions reject: too many passes for the budget', () =>
+    applyTargetActions(fr, editedPath, {
+      teamRow,
+      recruitRow: addTargetGlobal,
+      actions: { visitSchool: false },
+      swayPitch: 'HometownHero',
+      scoutPasses: 2
+    }, dir));
+  await rejects('actions reject: more passes than the prospect has left', () =>
+    applyTargetActions(fr, editedPath, {
+      teamRow,
+      recruitRow: addTargetGlobal,
+      scoutPasses: 6
+    }, dir));
+  // legal: sway + one pass = 5 + 30 + 10 = 45
+  await applyTargetActions(fr, editedPath, {
+    teamRow,
+    recruitRow: addTargetGlobal,
+    actions: { visitSchool: false },
+    swayPitch: 'HometownHero',
+    scoutPasses: 1
+  }, dir);
+  // then scout to completion in the same week model: the remaining 4 passes
+  // alone are 40 hours (plus the standing 35 from social+sway = 75) — over
+  // budget, so drop the sway first and run all four (5 + 40 = 45)
+  await applyTargetActions(fr, editedPath, {
+    teamRow,
+    recruitRow: addTargetGlobal,
+    swayPitch: 'Invalid',
+    scoutPasses: 4
+  }, dir);
+  const expectHours = 45; // social 5 + 4 passes at 10
   const form2 = await buildTargetForm(await loadFranchise(editedPath), teamRow, addTargetGlobal, editedPath);
-  check('actions: everything persisted through cold reload',
-    form2.hours === 40 && form2.actions.sendHouse && form2.actions.socialMedia &&
+  check('actions: hours derive from the game\u2019s action prices',
+    form2.hours === expectHours && !form2.actions.visitSchool && form2.actions.socialMedia &&
     form2.scholarship === 'Offered' && form2.nilOffer === 300 &&
-    form2.swayPitch === 'HometownHero' && form2.intel === 16383,
-    JSON.stringify({ h: form2.hours, s: form2.scholarship, n: form2.nilOffer, p: form2.swayPitch, i: form2.intel }));
-  check('actions: pool assigned moved with the hours', form2.poolAssigned === poolBefore + 40,
+    form2.swayPitch === 'Invalid',
+    JSON.stringify({ h: form2.hours, s: form2.scholarship, n: form2.nilOffer, p: form2.swayPitch }));
+  check('actions: five passes in a week reach full intel',
+    form2.intel === form2.intelMax && form2.scoutsDone === form2.scoutsMax && form2.scoutBoost >= 0,
+    `intel ${form2.intel} (${form2.scoutsDone}/${form2.scoutsMax} passes, boost ${form2.scoutBoost})`);
+  check('actions: pool assigned moved with the derived hours', form2.poolAssigned === poolBefore + expectHours,
     `${poolBefore} -> ${form2.poolAssigned}`);
 
   const fr3 = await loadFranchise(editedPath);
-  await rejects('actions reject: hours past the 7-bit cap', () =>
-    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, hours: 200 }, dir));
+  if (130 > form.budgetBase + form.budgetBonus) {
+    await rejects('actions reject: totals past the prospect budget', () =>
+      applyTargetActions(fr3, editedPath, {
+        teamRow, recruitRow: addTargetGlobal,
+        actions: { contactFamily: true, contactCoaches: true, socialMedia: true, sendHouse: true, visitSchool: true }
+      }, dir));
+  }
   await rejects('actions reject: NIL past the 10-bit cap', () =>
     applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, nilOffer: 2000 }, dir));
   await rejects('actions reject: unknown pitch', () =>
     applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, swayPitch: 'MoxiePitch' }, dir));
   await rejects('actions reject: recruit not on the board', () =>
-    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: removedTargetGlobal, hours: 5 }, dir));
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: removedTargetGlobal, nilOffer: 5 }, dir));
   check('source still untouched after action edits', sha(work) === sourceHash);
 }
 

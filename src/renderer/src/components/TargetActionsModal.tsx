@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { TargetActionChanges, TargetActionFlags, TargetActionForm } from '../../../shared/types.ts';
 import { stars } from '../lib/format.ts';
+import { ACTION_HOURS, ACTION_LABELS as GAME_ACTION_LABELS } from '../../../shared/recruiting-actions.ts';
 import { Stepper } from './EditPlayerModal.tsx';
 import InfoDot from './InfoDot.tsx';
 
-const ACTION_LABELS: { key: keyof TargetActionFlags; label: string }[] = [
-  { key: 'contactFamily', label: 'Contact Friends & Family' },
-  { key: 'contactCoaches', label: 'Contact High School Coaches' },
-  { key: 'socialMedia', label: 'Search Social Media' },
-  { key: 'sendHouse', label: 'Send the House' },
-  { key: 'visitSchool', label: "Visit Recruit's School" }
+/** The game's own action names and hour prices (the save's field for
+ *  contactCoaches has drifted — in-game it is "DM the Player"). */
+const ACTION_LABELS: { key: keyof TargetActionFlags; label: string; cost: number }[] = [
+  { key: 'contactFamily', label: GAME_ACTION_LABELS.contactFamily, cost: ACTION_HOURS.contactFamily },
+  { key: 'contactCoaches', label: GAME_ACTION_LABELS.contactCoaches, cost: ACTION_HOURS.contactCoaches },
+  { key: 'socialMedia', label: GAME_ACTION_LABELS.socialMedia, cost: ACTION_HOURS.socialMedia },
+  { key: 'sendHouse', label: GAME_ACTION_LABELS.sendHouse, cost: ACTION_HOURS.sendHouse },
+  { key: 'visitSchool', label: GAME_ACTION_LABELS.visitSchool, cost: ACTION_HOURS.visitSchool }
 ];
 
 /**
@@ -30,7 +33,6 @@ export default function TargetActionsModal({
   const [error, setError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState('');
 
-  const [hours, setHours] = useState(0);
   const [actions, setActions] = useState<TargetActionFlags>({
     contactFamily: false,
     contactCoaches: false,
@@ -41,7 +43,7 @@ export default function TargetActionsModal({
   const [scholarship, setScholarship] = useState('None');
   const [nilOffer, setNilOffer] = useState(0);
   const [swayPitch, setSwayPitch] = useState('Invalid');
-  const [scoutFull, setScoutFull] = useState(false);
+  const [scoutPasses, setScoutPasses] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -54,7 +56,6 @@ export default function TargetActionsModal({
           return;
         }
         setForm(f);
-        setHours(f.hours);
         setActions({ ...f.actions });
         setScholarship(f.scholarship);
         setNilOffer(f.nilOffer);
@@ -78,21 +79,43 @@ export default function TargetActionsModal({
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  const poolAfter = form ? form.poolAssigned - form.hours + hours : 0;
-  const overPool = form ? poolAfter > form.poolTotal : false;
-  /** Hours cap for the stepper: field cap, then whatever the pool leaves. */
-  const hoursMax = form
-    ? Math.min(form.hoursCap, form.hours + Math.max(0, form.poolTotal - form.poolAssigned))
+  // Hours are the sum of the game's fixed action prices, not a free number.
+  const derivedHours = form
+    ? ACTION_LABELS.reduce((sum, a) => sum + (actions[a.key] ? a.cost : 0), 0) +
+      (swayPitch !== 'Invalid' ? ACTION_HOURS.sway : 0) +
+      (form.intel < form.intelMax ? ACTION_HOURS.scoutFull * scoutPasses : 0) +
+      (scholarship === 'Offered' && form.scholarship !== 'Offered' ? ACTION_HOURS.scholarship : 0)
     : 0;
+  const poolAfter = form ? form.poolAssigned - form.hours + derivedHours : 0;
+  const budgetCeiling = form ? form.budgetBase + form.budgetBonus : 0;
+  const overBudget = form ? derivedHours > budgetCeiling : false;
+  const overPool = form ? poolAfter > form.poolTotal || overBudget : false;
+  // The blocker: options that would push the plan past the prospect's weekly
+  // allotment — or past the board pool's remaining headroom — lock instead of
+  // arming a rejected save. Deselecting is always allowed.
+  const maxSpend = form
+    ? Math.min(budgetCeiling, form.poolTotal - (form.poolAssigned - form.hours))
+    : 0;
+  const hoursLeft = maxSpend - derivedHours;
+  const offerLocked = form
+    ? scholarship !== 'Offered' && form.scholarship !== 'Offered' && ACTION_HOURS.scholarship > hoursLeft
+    : false;
+  const swayLocked = swayPitch === 'Invalid' && ACTION_HOURS.sway > hoursLeft;
+  const scoutMax = form
+    ? Math.min(
+        form.scoutsMax - form.scoutsDone,
+        scoutPasses + Math.max(0, Math.floor(hoursLeft / ACTION_HOURS.scoutFull))
+      )
+    : 0;
+  const anyLocked =
+    ACTION_LABELS.some(({ key, cost }) => !actions[key] && cost > hoursLeft) ||
+    offerLocked ||
+    swayLocked;
 
   const changes: TargetActionChanges | null = useMemo(() => {
     if (!form) return null;
     const out: TargetActionChanges = { recruitRow: form.recruitRow };
     let any = false;
-    if (hours !== form.hours) {
-      out.hours = hours;
-      any = true;
-    }
     const changedActions: Partial<TargetActionFlags> = {};
     for (const { key } of ACTION_LABELS) {
       if (actions[key] !== form.actions[key]) changedActions[key] = actions[key];
@@ -113,12 +136,12 @@ export default function TargetActionsModal({
       out.swayPitch = swayPitch;
       any = true;
     }
-    if (scoutFull && form.intel < form.intelMax) {
-      out.scoutFull = true;
+    if (scoutPasses > 0 && form.intel < form.intelMax) {
+      out.scoutPasses = scoutPasses;
       any = true;
     }
     return any ? out : null;
-  }, [form, hours, actions, scholarship, nilOffer, swayPitch, scoutFull]);
+  }, [form, actions, scholarship, nilOffer, swayPitch, scoutPasses]);
 
   const save = async (): Promise<void> => {
     if (!changes || overPool) return;
@@ -155,14 +178,27 @@ export default function TargetActionsModal({
           <InfoDot title="Weekly plan">
             <p>
               These are the game's own weekly recruiting controls, written straight to your
-              board: assigned hours, the five contact and visit actions, scholarship and NIL
-              offers, and the pitch to sway toward. The game consumes them when it processes
-              the next week.
+              board. Hours are not assigned freely — each action carries the game's fixed
+              price (shown beside it), a sway pitch costs {ACTION_HOURS.sway}, full scouting{' '}
+              {ACTION_HOURS.scoutFull}, a new scholarship offer {ACTION_HOURS.scholarship} —
+              and the prospect's week is the sum of what you select. The game consumes it all
+              when it processes the next week.
             </p>
             <p>
-              Scout fully unlocks every piece of the recruit's intel at once — the same state
-              the game reaches after full scouting. Changes land in a{' '}
-              <strong>…_RJsEdited</strong> copy; the original save is never touched.
+              You cannot select past the allotment: an option that would push the week over
+              this prospect's hours — or over the board pool's remaining headroom — locks
+              until you free hours by deselecting something else.
+            </p>
+            <p>
+              One label differs from the save's internals: the action the save calls
+              "contact high school coaches" is <strong>DM the Player</strong> in the game
+              itself, so that is the name shown here.
+            </p>
+            <p>
+              Scouting is metered: each pass reveals another slice of the recruit's intel and
+              five passes reach full knowledge. You can run several in one week if the hours
+              fit. Changes land in a <strong>…_RJsEdited</strong> copy; the original save is
+              never touched.
             </p>
           </InfoDot>
           <button type="button" className="pf-btn ed-close" onClick={onClose} aria-label="Close">
@@ -176,44 +212,88 @@ export default function TargetActionsModal({
 
         {form && (state === 'ready' || state === 'writing') && (
           <>
-            <div className="ed-sec">Hours this week</div>
-            <div className="ta-hours">
-              <Stepper
-                value={hours}
-                min={0}
-                max={hoursMax}
-                changed={hours !== form.hours}
-                label="Assigned hours"
-                onChange={setHours}
-              />
-              <span className={`ta-pool ${overPool ? 'over' : ''}`}>
-                pool {poolAfter}/{form.poolTotal} assigned
-              </span>
+            <div className="wp-meter">
+              <div className="wp-meter-top">
+                <span className={`wp-big ${overBudget ? 'over' : ''}`}>
+                  {derivedHours}
+                  <em>/{budgetCeiling}</em>
+                </span>
+                <span className="wp-cap">Hours committed · {Math.max(0, hoursLeft)} left</span>
+                <span className={`wp-pool ${overPool ? 'over' : ''}`}>
+                  Team pool {poolAfter}/{form.poolTotal}
+                </span>
+              </div>
+              <div className="wp-bar">
+                <div
+                  className={`wp-fill ${overBudget ? 'over' : ''}`}
+                  style={{ width: `${Math.min(100, (derivedHours / Math.max(1, budgetCeiling)) * 100)}%` }}
+                />
+                {form.budgetBonus > 0 && (
+                  <div
+                    className="wp-tick"
+                    title={`${form.budgetBase} base; +${form.budgetBonus} position-group perk`}
+                    style={{ left: `${(form.budgetBase / Math.max(1, budgetCeiling)) * 100}%` }}
+                  />
+                )}
+              </div>
             </div>
+            {overBudget && (
+              <p className="cr-note over">
+                {form.budgetBonus > 0
+                  ? `This prospect allows ${budgetCeiling} hours (${form.budgetBase} base + ${form.budgetBonus} position-group perk).`
+                  : `A prospect allows ${form.budgetBase} hours per week — recruiter perks can raise it.`}
+              </p>
+            )}
+            {anyLocked && (
+              <p className="cr-note">
+                {hoursLeft <= 0
+                  ? 'The budget for this week has been reached — deselect something to free hours.'
+                  : `Greyed-out options need more hours than the ${hoursLeft} left this week.`}
+              </p>
+            )}
 
             <div className="ed-sec">Actions</div>
-            <div className="ta-actions">
-              {ACTION_LABELS.map(({ key, label }) => (
-                <label key={key} className={`ta-check ${actions[key] !== form.actions[key] ? 'changed' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={actions[key]}
-                    onChange={(e) => setActions((prev) => ({ ...prev, [key]: e.target.checked }))}
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
+            <div className="wp-rows">
+              {ACTION_LABELS.map(({ key, label, cost }) => {
+                const locked = !actions[key] && cost > hoursLeft;
+                return (
+                  <label
+                    key={key}
+                    className={`wp-row ${actions[key] ? 'on' : ''} ${locked ? 'locked' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={actions[key]}
+                      disabled={locked}
+                      onChange={(e) => setActions((prev) => ({ ...prev, [key]: e.target.checked }))}
+                    />
+                    <span className="wp-box" aria-hidden="true" />
+                    <span className="wp-name">{label}</span>
+                    {actions[key] !== form.actions[key] && <span className="wp-changed" title="changed this visit" />}
+                    <span className="wp-price">{cost} hrs</span>
+                  </label>
+                );
+              })}
             </div>
 
             <div className="ed-sec">Offers</div>
             <div className="ta-offers">
-              <label className="ta-field">
-                <span>Scholarship</span>
+              <label className={`ta-field ${offerLocked ? 'locked' : ''}`}>
+                <span>
+                  Scholarship <em>(new offer {ACTION_HOURS.scholarship} hrs)</em>
+                </span>
                 <select value={scholarship} onChange={(e) => setScholarship(e.target.value)}>
                   {[form.scholarship, 'None', 'Offered', 'Revoked']
                     .filter((v, i, a) => a.indexOf(v) === i)
                     .map((v) => (
-                      <option key={v} value={v} disabled={!['None', 'Offered', 'Revoked', form.scholarship].includes(v)}>
+                      <option
+                        key={v}
+                        value={v}
+                        disabled={
+                          (v === 'Offered' && offerLocked) ||
+                          !['None', 'Offered', 'Revoked', form.scholarship].includes(v)
+                        }
+                      >
                         {v}
                       </option>
                     ))}
@@ -232,12 +312,14 @@ export default function TargetActionsModal({
                   onChange={setNilOffer}
                 />
               </label>
-              <label className="ta-field">
-                <span>Sway pitch</span>
+              <label className={`ta-field ${swayLocked ? 'locked' : ''}`}>
+                <span>
+                  Sway pitch <em>({ACTION_HOURS.sway} hrs when set)</em>
+                </span>
                 <select value={swayPitch} onChange={(e) => setSwayPitch(e.target.value)}>
                   <option value="Invalid">—</option>
                   {form.swayOptions.map((o) => (
-                    <option key={o.id} value={o.id}>
+                    <option key={o.id} value={o.id} disabled={swayLocked}>
                       {o.name}
                     </option>
                   ))}
@@ -248,16 +330,35 @@ export default function TargetActionsModal({
             <div className="ed-sec">Scouting</div>
             <div className="ta-scout">
               {scouted ? (
-                <span className="ta-scouted">Fully scouted</span>
+                <span className="ta-scouted">Fully scouted ({form.scoutsMax} of {form.scoutsMax} passes)</span>
               ) : (
-                <label className={`ta-check ${scoutFull ? 'changed' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={scoutFull}
-                    onChange={(e) => setScoutFull(e.target.checked)}
+                <div className={`wp-row wp-scout ${scoutPasses > 0 ? 'on' : ''}`}>
+                  <span className="wp-name">
+                    Scout passes this week{' '}
+                    <em>
+                      ({form.scoutsDone} of {form.scoutsMax} done — each reveals another slice
+                      {scoutMax >= form.scoutsMax - form.scoutsDone
+                        ? `; run all ${form.scoutsMax - form.scoutsDone} to finish now`
+                        : `; hours left allow ${scoutMax} this week`})
+                    </em>
+                  </span>
+                  {scoutPasses > 0 && <span className="wp-changed" title="changed this visit" />}
+                  <Stepper
+                    value={scoutPasses}
+                    min={0}
+                    max={scoutMax}
+                    changed={scoutPasses > 0}
+                    label="Scouting passes"
+                    onChange={setScoutPasses}
                   />
-                  <span>Scout fully ({form.intel} of {form.intelMax} intel unlocked now)</span>
-                </label>
+                  <span className="wp-price">{ACTION_HOURS.scoutFull * scoutPasses} hrs</span>
+                </div>
+              )}
+              {form.scoutBoost > 0 && (
+                <p className="cr-note">
+                  Your staff's scouting perk adds +{form.scoutBoost} on this prospect's
+                  position group — the game applies it on top when it scouts.
+                </p>
               )}
             </div>
 

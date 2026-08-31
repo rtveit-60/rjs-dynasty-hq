@@ -289,7 +289,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
                   <NameLink req={{ kind: 'player', row: t.playerRow }}>{t.name}</NameLink>
                   <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}> · {spaceOut(t.homeState)}</span>
                   {!browsing && !t.stage.includes('Committed') && (
-                    <>
+                    <span className="bd-actions">
                       <button
                         type="button"
                         className="bd-btn plan"
@@ -302,7 +302,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
                         »
                       </button>
                       <BoardToggle recruitRow={t.recruitRow} onBoard={true} />
-                    </>
+                    </span>
                   )}
                 </td>
                 <td>

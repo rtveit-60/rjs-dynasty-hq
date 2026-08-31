@@ -4485,44 +4485,59 @@ table.tbl.tbl-wide {
 
 /* --- Board membership stage buttons (+ add / x remove) ------------------- */
 
+.bd-actions {
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
 .bd-btn {
   appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-left: 6px;
+  width: 19px;
+  height: 19px;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 2px;
-  background: transparent;
-  color: var(--ink-3);
-  font: 700 11px/1 var(--font-ui);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 700 12px/1 var(--font-ui);
   cursor: pointer;
   vertical-align: middle;
-  opacity: 0;
-  transition: opacity 80ms;
-}
-
-tr:hover .bd-btn,
-.bd-btn.staged {
-  opacity: 1;
+  transition: color 80ms, border-color 80ms, background 80ms;
 }
 
 .bd-btn:hover {
   color: var(--ink);
   border-color: var(--ink-3);
+  background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+}
+
+.bd-btn.plan {
+  letter-spacing: -0.05em;
+  padding-bottom: 2px;
+}
+
+.bd-btn.plan:hover {
+  color: var(--team);
+  border-color: color-mix(in srgb, var(--team) 60%, var(--line));
+  background: color-mix(in srgb, var(--team) 10%, var(--surface));
 }
 
 .bd-btn.staged.add {
   color: var(--good);
-  border-color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 60%, var(--line));
+  background: color-mix(in srgb, var(--good) 12%, var(--surface));
 }
 
 .bd-btn.staged.remove {
   color: var(--bad);
-  border-color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 60%, var(--line));
+  background: color-mix(in srgb, var(--bad) 12%, var(--surface));
 }
 
 /* --- Weekly plan dialog --------------------------------------------------- */
@@ -4730,4 +4745,224 @@ tr:hover .bd-btn,
 
 .fp-choose-label {
   color: var(--ink-2);
+}
+
+/* --- Weekly plan: derived hour costs -------------------------------------- */
+
+.ta-check .ta-cost {
+  margin-left: auto;
+  color: var(--ink-3);
+  font: 600 11px var(--font-ui);
+  white-space: nowrap;
+}
+
+.ta-total {
+  font: 700 13px var(--font-ui);
+  color: var(--ink);
+}
+
+.ta-total.warn {
+  color: var(--hot);
+}
+
+.ta-total.over,
+.cr-note.over {
+  color: #d9534f;
+}
+
+/* --- Weekly Plan: broadcast pass ------------------------------------------ */
+
+.wp-meter {
+  margin: 14px 0 4px;
+  padding: 10px 12px 12px;
+  background: color-mix(in srgb, var(--team) 7%, var(--surface));
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--team);
+  border-radius: 3px;
+}
+
+.wp-meter-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.wp-big {
+  font-family: var(--font-score);
+  font-size: 26px;
+  line-height: 1;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+
+.wp-big em {
+  font-style: normal;
+  font-size: 15px;
+  color: var(--ink-3);
+}
+
+.wp-big.warn {
+  color: var(--hot);
+}
+
+.wp-big.over {
+  color: #d9534f;
+}
+
+.wp-cap {
+  font: 700 10px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+
+.wp-pool {
+  margin-left: auto;
+  font: 600 10.5px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.wp-pool.over {
+  color: #d9534f;
+}
+
+.wp-bar {
+  position: relative;
+  height: 6px;
+  margin-top: 9px;
+  background: var(--line-soft);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.wp-fill {
+  height: 100%;
+  background: var(--team);
+  border-radius: 2px;
+  transition: width 120ms ease;
+}
+
+.wp-fill.warn {
+  background: var(--hot);
+}
+
+.wp-fill.over {
+  background: #d9534f;
+}
+
+.wp-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--ink-3);
+}
+
+.wp-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wp-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 90ms ease, background 90ms ease;
+}
+
+.wp-row:hover {
+  border-color: var(--ink-3);
+}
+
+.wp-row.on {
+  background: color-mix(in srgb, var(--team) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--team) 55%, var(--line));
+}
+
+.wp-row input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wp-box {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--ink-3);
+  border-radius: 2px;
+  position: relative;
+}
+
+.wp-row.on .wp-box {
+  background: var(--team);
+  border-color: var(--team);
+}
+
+.wp-row.on .wp-box::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.wp-name {
+  font: 600 12.5px var(--font-ui);
+  color: var(--ink);
+}
+
+.wp-name em {
+  font-style: normal;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.wp-changed {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hot);
+  flex: 0 0 auto;
+}
+
+.wp-price {
+  margin-left: auto;
+  font: 700 11px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.wp-row.on .wp-price {
+  color: var(--ink);
+}
+
+.wp-row.locked {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.wp-row.locked:hover {
+  border-color: var(--line);
+}
+
+.ta-field.locked {
+  opacity: 0.45;
 }

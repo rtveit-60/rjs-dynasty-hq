@@ -883,12 +883,21 @@ export interface TargetActionForm {
   nilOffer: number;
   /** Field cap (10-bit). */
   nilCap: number;
+  /** The game's flat per-prospect weekly hour base (tuning). */
+  budgetBase: number;
+  /** This staff's recruiter-perk bonus total (condition-gated upper bound). */
+  budgetBonus: number;
   nilExpectation: number;
   /** RecruitingPitchType member id; 'Invalid' = none selected. */
   swayPitch: string;
   swayOptions: { id: string; name: string }[];
   intel: number;
   intelMax: number;
+  /** How many of the game's five scouting passes this intel represents. */
+  scoutsDone: number;
+  scoutsMax: number;
+  /** This staff's scouting-perk bonus total (condition-gated, from the save). */
+  scoutBoost: number;
   targetFileName: string;
   targetExists: boolean;
 }
@@ -896,12 +905,13 @@ export interface TargetActionForm {
 /** Changed values only; absent fields stay untouched in the save. */
 export interface TargetActionChanges {
   recruitRow: number;
-  hours?: number;
   actions?: Partial<TargetActionFlags>;
   scholarship?: 'Offered' | 'Revoked' | 'None';
   nilOffer?: number;
   swayPitch?: string;
-  scoutFull?: boolean;
+  /** Scouting passes to run this week (each at the game's per-pass price;
+   *  multiple passes in one week are legal, up to full intel). */
+  scoutPasses?: number;
 }
 
 /** Fire (or un-fire) a CPU coach: flips the game's own PendingFire contract state. */

@@ -430,7 +430,11 @@ export default function RecruitingView() {
                           {board === 'portal' && r.classType !== 'HS' ? ` · ${r.classType}` : ''}
                         </span>
                         {r.onBoard && <BoardMark />}
-                        {!r.committedTo && <BoardToggle recruitRow={r.row} onBoard={r.onBoard} />}
+                        {!r.committedTo && (
+                          <span className="bd-actions">
+                            <BoardToggle recruitRow={r.row} onBoard={r.onBoard} />
+                          </span>
+                        )}
                         {r.quality === 'GEM' && <span className="btag gem">Gem</span>}
                         {r.quality === 'BUST' && <span className="btag bust">Bust</span>}
                       </td>

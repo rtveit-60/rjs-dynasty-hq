@@ -448,9 +448,10 @@ export default function CarouselView() {
 }
 
 /**
- * Confirm firing (or unfiring) a CPU coach. Flips the game's own PendingFire
- * contract state through the guarded _RJsEdited write path — the offseason
- * carousel is what actually processes the firing.
+ * Confirm firing (or unfiring) a CPU coach. Writes the carousel's real input
+ * — the AD's hot seat (in-game verified: every fired coach entered the
+ * offseason at HotSeat; PendingFire alone is inert) — plus the PendingFire
+ * marker this dialog reads, through the guarded edited-copy write path.
  */
 function FireDialog({
   entry,
@@ -504,16 +505,17 @@ function FireDialog({
             <p className="fire-copy">
               {undo ? (
                 <>
-                  Restores <strong>{entry.name}</strong> to a normal signed contract, taking them
-                  off the offseason chopping block.
+                  Restores <strong>{entry.name}</strong> to a normal signed contract and Safe
+                  security, taking them off the offseason chopping block.
                 </>
               ) : (
                 <>
-                  Sets the game's own <strong>PendingFire</strong> contract state on{' '}
-                  <strong>{entry.name}</strong> — the state the offseason coaching carousel
-                  processes as a firing, opening the {teamName} {entry.role} job. If the game's
-                  own mid-season AD evaluation clears the mark, the row here will show it, so
-                  check back after your next played week.
+                  Puts <strong>{entry.name}</strong> on the AD's <strong>hot seat</strong> — the
+                  input the offseason carousel actually fires from — at the bottom of this
+                  save's own hot-seat security band. The AD re-evaluates security as weeks are
+                  played, so a winning coach can climb off the seat before the carousel;
+                  marking them close to season's end is the most reliable. The row here shows
+                  the live state, so check back after your next played week.
                 </>
               )}
             </p>

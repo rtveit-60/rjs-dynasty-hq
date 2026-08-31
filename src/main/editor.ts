@@ -26,6 +26,9 @@ import type {
   TargetActionForm
 } from '../shared/types.ts';
 import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
+import { ACTION_HOURS } from '../shared/recruiting-actions.ts';
+import { RECRUITING_TUNABLES } from '../shared/recruiting-tunables.ts';
+import { POSITION_TO_GROUP, POS_GROUP_NAMES } from '../shared/talent-groups.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
@@ -1402,6 +1405,8 @@ export async function buildTargetForm(
   const { PITCHES } = await import('../shared/pitches.ts');
 
   const targetPath = editedPathFor(savePath);
+  const targetPosition = pRec ? String(val(pRec, 'Position') ?? '') : '';
+  const budget = await prospectHourBudget(franchise, teamRow, targetPosition);
   return {
     recruitRow,
     name: pRec
@@ -1413,6 +1418,8 @@ export async function buildTargetForm(
     hoursCap: fieldMax(target, 'ProspectHoursSpentCurrent', 127),
     poolTotal: Number(val(h.board, 'RecruitingHoursTotal') ?? 0),
     poolAssigned: Number(val(h.board, 'RecruitingHoursAssigned') ?? 0),
+    budgetBase: budget.base,
+    budgetBonus: budget.bonusTotal,
     actions: {
       contactFamily: val(target, 'ContactFriendsAndFamily') === true,
       contactCoaches: val(target, 'ContactHighSchoolCoaches') === true,
@@ -1431,6 +1438,9 @@ export async function buildTargetForm(
     })),
     intel: Number(val(target, 'UnlockedIntelBitfield') ?? 0),
     intelMax: fieldMax(target, 'UnlockedIntelBitfield', 16383),
+    scoutsDone: scoutsDoneFor(Number(val(target, 'UnlockedIntelBitfield') ?? 0)),
+    scoutsMax: RECRUITING_TUNABLES.maxTimesScouted,
+    scoutBoost: await scoutingBoost(franchise, teamRow, targetPosition),
     targetFileName: basename(targetPath),
     targetExists: existsSync(targetPath)
   };
@@ -1442,6 +1452,128 @@ export async function buildTargetForm(
  * assignments move the board's assigned total with them and must fit the
  * weekly pool.
  */
+/**
+ * A prospect's weekly hour budget for this team: the game's flat tuning base
+ * plus the coach staff's recruiter-perk bonuses, read from the save's
+ * CoachTalentEffects row (row index = TeamIndex; Recruiting_BonusHours →
+ * an 8-slot condition array — slot conditions live in the coach talent trees
+ * and are not yet decoded, so the bonus total is an upper bound that applies
+ * only to prospects matching the perk conditions).
+ */
+/**
+ * A staff's aggregated talent-effect slot array (8 ints indexed by
+ * CoachTalentPosGroup: QB/RB/WR_TE/OL/DB/LB/KP_ATH/LE_RE_DT) for one effect
+ * field on the save's CoachTalentEffects row (row index = TeamIndex).
+ */
+async function talentSlots(franchise: any, teamRow: number, field: string): Promise<number[]> {
+  const zero = [0, 0, 0, 0, 0, 0, 0, 0];
+  try {
+    const teams = mainTable(franchise, 'Team');
+    if (!teams.recordsRead) await teams.readRecords();
+    const teamIndex = Number(val(teams.records[teamRow], 'TeamIndex'));
+    if (!Number.isFinite(teamIndex)) return zero;
+    let eff: any = null;
+    for (const t of (franchise.tables as any[])) {
+      if (t?.name !== 'CoachTalentEffects') continue;
+      if (!eff || (t.header?.recordCapacity ?? 0) > (eff.header?.recordCapacity ?? 0)) eff = t;
+    }
+    if (!eff) return zero;
+    if (!eff.recordsRead) await eff.readRecords();
+    const row = eff.records?.[teamIndex];
+    if (!row || row.isEmpty) return zero;
+    const ref = refFromRecord(row, field);
+    if (!ref || ref.tableId === 0) return zero;
+    const arr = franchise.getTableById(ref.tableId);
+    if (!arr) return zero;
+    if (!arr.recordsRead) await arr.readRecords();
+    const slots = arr.records?.[ref.row];
+    if (!slots) return zero;
+    return zero.map((_, i) => Number(val(slots, `int${i}`) ?? 0) || 0);
+  } catch {
+    return zero;
+  }
+}
+
+/**
+ * The prospect's weekly hour budget: the game's flat tuning base plus this
+ * staff's recruiter-perk bonus for the prospect's position group (the 8-slot
+ * arrays are indexed by CoachTalentPosGroup, so the "condition" on a perk is
+ * simply which positions it covers).
+ */
+export async function prospectHourBudget(
+  franchise: any,
+  teamRow: number,
+  position?: string
+): Promise<{ base: number; bonusTotal: number; groupName: string }> {
+  const base = RECRUITING_TUNABLES.maxHoursPerRecruitPerWeek;
+  const slots = await talentSlots(franchise, teamRow, 'Recruiting_BonusHours');
+  const group = position !== undefined ? POSITION_TO_GROUP[position] : undefined;
+  if (group === undefined) {
+    return { base, bonusTotal: Math.max(...slots), groupName: '' };
+  }
+  return { base, bonusTotal: slots[group] ?? 0, groupName: POS_GROUP_NAMES[group] ?? '' };
+}
+
+const INTEL_BITS = 14;
+const SCOUTS_MAX = RECRUITING_TUNABLES.maxTimesScouted;
+
+const popcount = (n: number): number => {
+  let c = 0;
+  while (n) {
+    c += n & 1;
+    n >>>= 1;
+  }
+  return c;
+};
+
+/** How many of the game's scouting passes this intel level represents. */
+export function scoutsDoneFor(intel: number): number {
+  const unlocked = popcount(intel & 0x3fff);
+  if (unlocked >= INTEL_BITS) return SCOUTS_MAX;
+  return Math.min(SCOUTS_MAX - 1, Math.floor((unlocked * SCOUTS_MAX) / INTEL_BITS));
+}
+
+/** Deterministic per-target PRNG so scout reveals verify on reload. */
+const mulberry32 = (seed: number) => (): number => {
+  seed |= 0;
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+/**
+ * One scouting pass, the way the game meters it: five passes to full intel
+ * (RecruitingTunables.MaxTimesScouted; ~10% of attributes and 20% of physical
+ * abilities per pass), so each pass reveals its share of the still-locked
+ * intel bits. Which attribute a bit uncovers is the game's own random roll —
+ * mirrored here with a per-target deterministic pick.
+ */
+export function scoutOnce(intel: number, recruitRow: number): number {
+  const current = intel & 0x3fff;
+  const unlockedNow = popcount(current);
+  if (unlockedNow >= INTEL_BITS) return current;
+  const done = scoutsDoneFor(current);
+  const passesLeft = Math.max(1, SCOUTS_MAX - done);
+  const toUnlock = Math.ceil((INTEL_BITS - unlockedNow) / passesLeft);
+  const locked: number[] = [];
+  for (let b = 0; b < INTEL_BITS; b++) if (!(current & (1 << b))) locked.push(b);
+  const rand = mulberry32(recruitRow * 31 + unlockedNow * 7 + 5);
+  let next = current;
+  for (let i = 0; i < toUnlock && locked.length; i++) {
+    const pick = Math.floor(rand() * locked.length);
+    next |= 1 << locked.splice(pick, 1)[0];
+  }
+  return next;
+}
+
+/** This staff's scouting-perk bonus for one prospect's position group. */
+async function scoutingBoost(franchise: any, teamRow: number, position?: string): Promise<number> {
+  const slots = await talentSlots(franchise, teamRow, 'Recruiting_ScoutingBoost_Start');
+  const group = position !== undefined ? POSITION_TO_GROUP[position] : undefined;
+  return group === undefined ? Math.max(...slots) : (slots[group] ?? 0);
+}
+
 export async function applyTargetActions(
   franchise: any,
   savePath: string,
@@ -1459,16 +1591,59 @@ export async function applyTargetActions(
   const poolAssigned = Number(val(h.board, 'RecruitingHoursAssigned') ?? 0);
 
   // ---- validate everything first ----
-  if (req.hours !== undefined) {
-    const cap = fieldMax(target, 'ProspectHoursSpentCurrent', 127);
-    if (!Number.isInteger(req.hours) || req.hours < 0 || req.hours > cap) {
-      throw new Error(`Hours must be 0–${cap}.`);
-    }
-    if (poolAssigned - oldHours + req.hours > poolTotal) {
-      throw new Error(
-        `That leaves the weekly pool over-assigned (${poolAssigned - oldHours + req.hours} of ${poolTotal}).`
-      );
-    }
+  // Hours are not freeform: each action carries the game's own fixed price
+  // (generated recruiting-actions.ts) and the prospect's week is the sum of
+  // what ends up selected.
+  const flagAfter = (key: keyof TargetActionFlags, field: string): boolean => {
+    const want = req.actions?.[key];
+    return want !== undefined ? want === true : val(target, field) === true;
+  };
+  let derivedHours = 0;
+  if (flagAfter('contactFamily', 'ContactFriendsAndFamily')) derivedHours += ACTION_HOURS.contactFamily;
+  if (flagAfter('contactCoaches', 'ContactHighSchoolCoaches')) derivedHours += ACTION_HOURS.contactCoaches;
+  if (flagAfter('socialMedia', 'SearchSocialMedia')) derivedHours += ACTION_HOURS.socialMedia;
+  if (flagAfter('sendHouse', 'SendTheHouse')) derivedHours += ACTION_HOURS.sendHouse;
+  if (flagAfter('visitSchool', 'VisitRecruitsSchool')) derivedHours += ACTION_HOURS.visitSchool;
+  const swayAfter = req.swayPitch !== undefined ? req.swayPitch : String(val(target, 'SwayPitch') ?? 'Invalid');
+  if (swayAfter !== 'Invalid') derivedHours += ACTION_HOURS.sway;
+  const intelCap = fieldMax(target, 'UnlockedIntelBitfield', 16383);
+  const intelNow = Number(val(target, 'UnlockedIntelBitfield') ?? 0);
+  const passesLeftNow = SCOUTS_MAX - scoutsDoneFor(intelNow);
+  const scoutPasses = req.scoutPasses ?? 0;
+  if (scoutPasses < 0 || !Number.isInteger(scoutPasses)) {
+    throw new Error('Scouting passes must be a whole number.');
+  }
+  if (scoutPasses > passesLeftNow) {
+    throw new Error(`Only ${passesLeftNow} scouting pass${passesLeftNow === 1 ? '' : 'es'} left on this prospect.`);
+  }
+  if (scoutPasses > 0 && intelNow < intelCap) {
+    derivedHours += ACTION_HOURS.scoutFull * scoutPasses;
+  }
+  if (req.scholarship === 'Offered' && String(val(target, 'ScholarshipStatus') ?? '') !== 'Offered') {
+    derivedHours += ACTION_HOURS.scholarship;
+  }
+  // The prospect budget, exact: the game's flat tuning base plus this staff's
+  // recruiter-perk bonus for the prospect's position group.
+  const targetPlayerRef = refFromRecord(rRec, 'Player');
+  let targetPosition = '';
+  if (targetPlayerRef && targetPlayerRef.tableId !== 0) {
+    const pTable = mainTable(franchise, 'Player');
+    if (!pTable.recordsRead) await pTable.readRecords();
+    targetPosition = String(val(pTable.records?.[targetPlayerRef.row], 'Position') ?? '');
+  }
+  const budget = await prospectHourBudget(franchise, req.teamRow, targetPosition);
+  const ceiling = budget.base + budget.bonusTotal;
+  if (derivedHours > ceiling) {
+    throw new Error(
+      budget.bonusTotal > 0
+        ? `Those actions total ${derivedHours} hours — this prospect allows ${ceiling} (${budget.base} base + ${budget.bonusTotal} ${budget.groupName} perk).`
+        : `Those actions total ${derivedHours} hours — a prospect allows ${budget.base} per week (recruiter perks can raise it).`
+    );
+  }
+  if (poolAssigned - oldHours + derivedHours > poolTotal) {
+    throw new Error(
+      `That leaves the weekly pool over-assigned (${poolAssigned - oldHours + derivedHours} of ${poolTotal}).`
+    );
   }
   if (req.nilOffer !== undefined) {
     const cap = fieldMax(target, 'CurrentNILOffer', 1023);
@@ -1485,9 +1660,9 @@ export async function applyTargetActions(
   }
 
   // ---- apply ----
-  if (req.hours !== undefined && req.hours !== oldHours) {
-    target.ProspectHoursSpentCurrent = req.hours;
-    h.board.RecruitingHoursAssigned = Math.max(0, poolAssigned - oldHours + req.hours);
+  if (derivedHours !== oldHours) {
+    target.ProspectHoursSpentCurrent = derivedHours;
+    h.board.RecruitingHoursAssigned = Math.max(0, poolAssigned - oldHours + derivedHours);
   }
   for (const [key, field] of Object.entries(ACTION_FIELDS)) {
     const want = req.actions?.[key as keyof TargetActionFlags];
@@ -1496,22 +1671,26 @@ export async function applyTargetActions(
   if (req.scholarship !== undefined) target.ScholarshipStatus = req.scholarship;
   if (req.nilOffer !== undefined) target.CurrentNILOffer = req.nilOffer;
   if (req.swayPitch !== undefined) target.SwayPitch = req.swayPitch;
-  if (req.scoutFull) target.UnlockedIntelBitfield = fieldMax(target, 'UnlockedIntelBitfield', 16383);
+  let intelAfter = intelNow;
+  if (scoutPasses > 0 && intelNow < intelCap) {
+    for (let i = 0; i < scoutPasses; i++) intelAfter = scoutOnce(intelAfter, req.recruitRow);
+    target.UnlockedIntelBitfield = intelAfter;
+  }
 
   return writeEditedSave(franchise, savePath, backupDir, async (check) => {
     const { target: written, h: h2 } = await targetRecordFor(check, req.teamRow, req.recruitRow);
-    if (req.hours !== undefined && Number(val(written, 'ProspectHoursSpentCurrent')) !== req.hours) {
-      throw new Error('The written save did not read back with the new hours.');
+    if (Number(val(written, 'ProspectHoursSpentCurrent')) !== derivedHours) {
+      throw new Error('The written save did not read back with the derived hours.');
     }
     if (req.nilOffer !== undefined && Number(val(written, 'CurrentNILOffer')) !== req.nilOffer) {
       throw new Error('The written save did not read back with the new NIL offer.');
     }
-    if (req.scoutFull && Number(val(written, 'UnlockedIntelBitfield')) !== fieldMax(written, 'UnlockedIntelBitfield', 16383)) {
-      throw new Error('The written save did not read back fully scouted.');
+    if (scoutPasses > 0 && Number(val(written, 'UnlockedIntelBitfield')) !== intelAfter) {
+      throw new Error('The written save did not read back with the scouting pass.');
     }
-    if (req.hours !== undefined) {
+    if (derivedHours !== oldHours) {
       const assigned = Number(val(h2.board, 'RecruitingHoursAssigned') ?? 0);
-      if (assigned !== Math.max(0, poolAssigned - oldHours + req.hours)) {
+      if (assigned !== Math.max(0, poolAssigned - oldHours + derivedHours)) {
         throw new Error('The board pool did not read back with the new assignment.');
       }
     }
@@ -1525,10 +1704,16 @@ const PENDING_FIRE_NAMES = new Set(['PendingFire', 'First_Pending']);
 const SIGNED_NAMES = new Set(['Signed', 'First_Active']);
 
 /**
- * Flip a CPU coach's ContractStatus to the game's own PendingFire state (or
- * back to Signed), and write the _RJsEdited sibling. The offseason carousel
- * is what processes PendingFire — this sets the flag the game itself uses;
- * whether a mid-season AD re-evaluation can clear it is verified in-game.
+ * Mark a CPU coach for firing, or unmark them. In-game verified 2026-08-31
+ * (full season simmed to the carousel): ContractStatus=PendingFire is the
+ * carousel's own OUTPUT bookkeeping, not an input — a Safe coach carrying it
+ * survives untouched, while every coach the carousel actually fired entered
+ * the offseason as Signed + CurrentJobSecurityStatus=HotSeat (41 of 41). So
+ * the real lever is the hot seat: firing writes HotSeat plus a percentage at
+ * the low end of the save's own observed HotSeat band, and keeps PendingFire
+ * as the app's visible marker/undo handle (harmless — proven inert). The AD
+ * re-evaluates security over played weeks, so a winning coach may climb off
+ * the seat; marking closest to season's end is the most reliable.
  */
 export async function applyCoachFire(
   franchise: any,
@@ -1546,7 +1731,9 @@ export async function applyCoachFire(
     'LastName',
     'Position',
     'IsUserControlled',
-    'ContractStatus'
+    'ContractStatus',
+    'CurrentJobSecurityStatus',
+    'CurrentJobSecurityPercentage'
   ]);
   const rec = table.records?.[req.coachRow];
   if (!rec || rec.isEmpty) throw new Error('No coach at that row in the save.');
@@ -1559,24 +1746,51 @@ export async function applyCoachFire(
   }
   const coachName = `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
   const current = String(val(rec, 'ContractStatus') ?? '');
+
+  // The save's own security bands calibrate the writes (fallbacks are the
+  // observed bands from a real dynasty: HotSeat 8-49, Safe 71-100).
+  let hotPct = 10;
+  let safePct = 95;
+  {
+    const hot: number[] = [];
+    const safe: number[] = [];
+    for (const c of table.records as any[]) {
+      if (c.isEmpty) continue;
+      const st = String(val(c, 'CurrentJobSecurityStatus') ?? '');
+      const pct = Number(val(c, 'CurrentJobSecurityPercentage'));
+      if (!Number.isFinite(pct)) continue;
+      if (st === 'HotSeat') hot.push(pct);
+      if (st === 'Safe') safe.push(pct);
+    }
+    if (hot.length) hotPct = Math.min(...hot);
+    if (safe.length) safePct = safe.sort((a, b) => a - b)[Math.floor(safe.length / 2)];
+  }
+
   if (req.undo) {
     if (!PENDING_FIRE_NAMES.has(current)) throw new Error(`${coachName} is not marked to be fired.`);
     rec.ContractStatus = 'Signed';
+    rec.CurrentJobSecurityStatus = 'Safe';
+    rec.CurrentJobSecurityPercentage = safePct;
   } else {
     if (PENDING_FIRE_NAMES.has(current)) throw new Error(`${coachName} is already marked to be fired.`);
     if (!SIGNED_NAMES.has(current) && current !== 'Expiring') {
       throw new Error(`${coachName} is in the ${current} state — only active coaches can be marked.`);
     }
+    // the carousel's real input, plus the app's own visible marker
+    rec.CurrentJobSecurityStatus = 'HotSeat';
+    rec.CurrentJobSecurityPercentage = hotPct;
     rec.ContractStatus = 'PendingFire';
   }
 
   const want = req.undo ? SIGNED_NAMES : PENDING_FIRE_NAMES;
+  const wantSecurity = req.undo ? 'Safe' : 'HotSeat';
   const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
     const t = mainTable(check, 'Coach');
     if (!(await ensureCoachSchema(check, t))) throw new Error('Verify reload failed.');
-    await t.readRecords(['ContractStatus']);
+    await t.readRecords(['ContractStatus', 'CurrentJobSecurityStatus']);
     const written = String(val(t.records?.[req.coachRow], 'ContractStatus') ?? '');
-    if (!want.has(written)) {
+    const security = String(val(t.records?.[req.coachRow], 'CurrentJobSecurityStatus') ?? '');
+    if (!want.has(written) || security !== wantSecurity) {
       throw new Error('The written save did not read back with the new contract state.');
     }
   });
