@@ -1,82 +1,159 @@
-import type { TeamNeed } from '../../../shared/types.ts';
+import type { RecruitTargetEntry, TeamNeed } from '../../../shared/types.ts';
+import { RECRUITING_TUNABLES } from '../../../shared/recruiting-tunables.ts';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 
 /**
- * The game's own needs strip: OFFENSIVE / DEFENSIVE / SPECIAL TEAMS TARGETS,
- * one `targeted/needed` cell per position, red while a need is unfilled —
- * except our `needed` is honest about departures, which the game ignores
- * until week 4 of the offseason. Shared by the Recruiting Office and the
- * Recruiting board (high school and portal alike).
+ * Team Needs as seats: the game's own 57-man minimum composition rendered as
+ * literal seats per position — filled (returning next season), green (committed
+ * recruit), dashed red (open, nobody fills it) — one compact tile per
+ * position. Departures (seniors + draft entries) leave the projection
+ * immediately; the game itself carries them until week 4 of the offseason.
  */
-function NeedCell({ n }: { n: TeamNeed }) {
-  const hot = n.needed > n.targeted;
+
+const MAIN_SIDES: { key: TeamNeed['side']; row: string }[] = [
+  { key: 'OFF', row: 'OFFENSIVE TARGETS' },
+  { key: 'DEF', row: 'DEFENSIVE TARGETS' }
+];
+
+/** Seats math: how the floor's seats split for one position. */
+function seats(n: TeamNeed) {
+  const returning = n.projected - n.committed;
+  return {
+    returning: Math.min(returning, n.floor),
+    committed: Math.min(n.committed, Math.max(0, n.floor - returning)),
+    open: n.needed,
+    surplus: Math.max(0, n.projected - n.floor)
+  };
+}
+
+function Pips({ n }: { n: TeamNeed }) {
+  const s = seats(n);
   return (
-    <span
-      className={`need-cell ${hot ? 'hot' : ''}`}
-      title={
-        `${n.group}: ${n.now} on the roster` +
-        (n.departing > 0 ? `, ${n.departing} leaving (seniors/drafted)` : '') +
-        (n.committed > 0 ? `, ${n.committed} committed` : '') +
-        ` → ${n.projected} next season. ` +
-        (n.needed > 0
-          ? `${n.needed} short of the game's minimum roster; ${n.targeted} still being chased.`
-          : `At the game's minimum roster; ${n.targeted} still being chased.`)
-      }
-    >
-      <b>
-        {n.targeted}/{n.needed}
-      </b>{' '}
-      <span className="pos">{n.group}</span>
-      {n.committed > 0 && <span className="plus">+{n.committed}</span>}
+    <span className="nd-pips" aria-hidden="true">
+      {Array.from({ length: s.returning }, (_, i) => (
+        <span key={`r${i}`} className="nd-pip ret" />
+      ))}
+      {Array.from({ length: s.committed }, (_, i) => (
+        <span key={`c${i}`} className="nd-pip commit" />
+      ))}
+      {Array.from({ length: s.open }, (_, i) => (
+        <span key={`o${i}`} className="nd-pip open" />
+      ))}
+      {s.surplus > 0 && <span className="nd-extra">+{s.surplus}</span>}
     </span>
   );
 }
 
-export default function TeamNeedsStrip({ needs }: { needs: TeamNeed[] }) {
+function Tile({ n }: { n: TeamNeed }) {
+  return (
+    <div className={`nd-cell ${n.needed > 0 ? 'short' : ''}`}>
+      <div className="nd-cell-top">
+        <span className="nd-pos">{n.group}</span>
+        <span className={`nd-open ${n.needed > 0 ? '' : 'set'}`}>
+          {n.needed > 0 ? `${n.needed} OPEN` : 'SET'}
+        </span>
+      </div>
+      <Pips n={n} />
+      <div className="nd-foot">
+        {`${n.departing} departing`} ·{' '}
+        <span className="nd-tgt">{`${n.targeted} targeted`}</span>
+        {n.committed > 0 && <span className="nd-in"> · {`+${n.committed} committed`}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** An offer is spent once made — Offered, Revoked, or the committed terminal state. */
+function offersOut(targets: RecruitTargetEntry[]): number {
+  return targets.filter((t) =>
+    ['Offered', 'Revoked', 'Committed', 'Last_'].includes(t.scholarship)
+  ).length;
+}
+
+export default function TeamNeedsStrip({
+  needs,
+  targets
+}: {
+  needs: TeamNeed[];
+  targets?: RecruitTargetEntry[];
+}) {
   if (!needs.length) return null;
-  const off = needs.filter((n) => n.side === 'OFF');
-  const def = needs.filter((n) => n.side === 'DEF');
-  const st = needs.filter((n) => n.side === 'ST');
+  const cap = RECRUITING_TUNABLES.maxTeamScholarshipOffers;
+  const used = targets ? offersOut(targets) : null;
   return (
     <div className="needs-strip">
-      <div className="needs-row">
-        <span className="needs-row-label">
-          OFFENSIVE TARGETS
+      <div className="needs-head">
+        <span className="needs-kicker">
+          TEAM NEEDS
           <InfoDot title="Team Needs">
             <p>
-              The game's own targets panel, copied: <b>targeted/needed</b> at every position, red
-              while a need is unfilled.
+              Every position shows the game's own minimum roster composition as seats.
+              Filled seats return next season, green seats are recruits committed to you,
+              dashed red seats are open — nobody on the projected roster fills them. +n
+              is depth beyond the minimum.
             </p>
-            <InfoRow term="Targeted">Board targets still being chased at the position.</InfoRow>
-            <InfoRow term="Needed">
-              How far next season's projected roster sits under the game's 57-man minimum
-              composition.
+            <InfoRow term="Departing">
+              Seniors and draft entries, counted out of the projection now.
             </InfoRow>
-            <InfoRow term="+n">Commits already inbound at the position.</InfoRow>
+            <InfoRow term="Targeted">Board targets still being chased at the position.</InfoRow>
+            <InfoRow term="Committed">Recruits already locked in to your class.</InfoRow>
+            <InfoRow term="Scholarships">
+              The game allows {RECRUITING_TUNABLES.maxTeamScholarshipOffers} offers per
+              season across high school and the portal; a pulled offer stays spent.
+            </InfoRow>
             <p>
-              One difference: seniors and draft entries leave the projection here immediately. The
-              game itself carries them until week 4 of the offseason.
+              One honesty note: departures leave the projection here immediately — the
+              game itself carries them on the roster until week 4 of the offseason.
             </p>
           </InfoDot>
         </span>
-        <div className="needs-cells">
-          {off.map((n) => (
-            <NeedCell key={n.group} n={n} />
-          ))}
-        </div>
+        <span className="needs-legend">
+          <span className="nd-pip ret" /> returning
+          <span className="nd-pip commit" /> committed
+          <span className="nd-pip open" /> open seat
+        </span>
+        {used !== null && (
+          <span
+            className={`needs-schol ${used >= cap ? 'full' : used >= cap - 3 ? 'near' : ''}`}
+          >
+            SCHOLARSHIPS{' '}
+            <b>
+              {used}/{cap}
+            </b>
+          </span>
+        )}
       </div>
-      <div className="needs-row">
-        <span className="needs-row-label">DEFENSIVE TARGETS</span>
-        <div className="needs-cells">
-          {def.map((n) => (
-            <NeedCell key={n.group} n={n} />
-          ))}
+      <div className="needs-body">
+        <div className="needs-main">
+          {(() => {
+            const cols = Math.max(
+              ...MAIN_SIDES.map(({ key }) => needs.filter((n) => n.side === key).length)
+            );
+            return MAIN_SIDES.map(({ key, row }) => {
+              const rows = needs.filter((n) => n.side === key);
+              return (
+                <div key={key} className="needs-row">
+                  <span className="needs-row-label">{row}</span>
+                  <div
+                    className="needs-cells"
+                    style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+                  >
+                    {rows.map((n) => (
+                      <Tile key={n.group} n={n} />
+                    ))}
+                  </div>
+                </div>
+              );
+            });
+          })()}
         </div>
-        <span className="needs-row-label st">SPECIAL TEAMS</span>
-        <div className="needs-cells">
-          {st.map((n) => (
-            <NeedCell key={n.group} n={n} />
-          ))}
+        <div className="needs-st">
+          <span className="needs-row-label">SPECIAL TEAMS</span>
+          {needs
+            .filter((n) => n.side === 'ST')
+            .map((n) => (
+              <Tile key={n.group} n={n} />
+            ))}
         </div>
       </div>
     </div>

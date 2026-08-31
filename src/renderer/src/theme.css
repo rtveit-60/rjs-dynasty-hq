@@ -2820,11 +2820,92 @@ table.tbl.tbl-wide {
   margin-bottom: 14px;
 }
 
+.needs-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.needs-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 700 11px var(--font-display);
+  letter-spacing: 0.14em;
+  color: var(--ink-2);
+}
+
+.needs-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 9.5px var(--font-ui);
+  color: var(--ink-3);
+}
+
+.needs-legend .nd-pip {
+  margin-left: 8px;
+}
+
+.needs-schol {
+  margin-left: auto;
+  font: 600 10px var(--font-display);
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+
+.needs-schol b {
+  font: 700 11px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.needs-schol.near b {
+  color: var(--warn);
+}
+
+.needs-schol.full b {
+  color: var(--bad);
+}
+
+.needs-body {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.needs-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .needs-row {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 14px;
-  padding: 3px 0;
+}
+
+.needs-row .needs-row-label {
+  padding-top: 5px;
+}
+
+.needs-st {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line-soft);
+}
+
+.needs-st .needs-row-label {
+  width: auto;
 }
 
 .needs-row + .needs-row {
@@ -2842,41 +2923,117 @@ table.tbl.tbl-wide {
   color: var(--ink-3);
 }
 
-.needs-row-label.st {
-  width: auto;
-  padding-left: 14px;
-  border-left: 1px solid var(--line);
-}
-
+/* One row per side, always: the column count is set inline per row (8 OFF, 7
+   DEF) so the tiles share the width evenly; narrow windows wrap the words
+   inside a tile, never the row. */
 .needs-cells {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 18px;
+  display: grid;
+  gap: 4px 5px;
+  flex: 1;
+  min-width: 0;
 }
 
-.need-cell {
+/* ——— Seats: shared pips ——— */
+
+.nd-pips {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.nd-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.nd-pip.ret {
+  background: color-mix(in srgb, var(--team) 35%, var(--ink-2));
+}
+
+.nd-pip.commit {
+  background: var(--good);
+}
+
+.nd-pip.open {
+  background: transparent;
+  border: 1.5px dashed color-mix(in srgb, var(--bad) 75%, var(--ink-3));
+}
+
+.nd-extra {
+  font: 700 9px/1 var(--font-ui);
+  color: var(--ink-3);
+  padding-left: 1px;
+}
+
+.nd-pos {
+  font: 700 11.5px/1 var(--font-display);
+  letter-spacing: 0.05em;
+  color: var(--ink);
+}
+
+.nd-in {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.nd-tgt {
+  color: var(--warn);
+}
+
+/* ——— Seats: position tiles (two-line: identity+seats, then the counts) ——— */
+
+.nd-cell {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 3px 7px 4px;
+  min-width: 0;
+}
+
+.nd-cell.short {
+  border-color: color-mix(in srgb, var(--bad) 36%, var(--line));
+  background: color-mix(in srgb, var(--bad) 4%, var(--paper));
+}
+
+.nd-cell-top {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.nd-cell > .nd-pips {
+  display: flex;
+  margin-top: 4px;
+}
+
+.nd-pos {
+  min-width: 20px;
+}
+
+.nd-open {
+  font: 700 9px/1 var(--font-ui);
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--bad) 82%, var(--ink-2));
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 3px;
   white-space: nowrap;
-  font-size: 12px;
+}
+
+.nd-open.set {
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+.nd-foot {
+  margin-top: 2px;
+  font: 600 8.5px/1.5 var(--font-ui);
   color: var(--ink-3);
 }
 
-.need-cell b {
-  font: 600 14px/1 var(--font-display);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-2);
-}
 
-.need-cell .pos {
-  font: 600 10.5px var(--font-display);
-  letter-spacing: 0.08em;
-}
-
-.need-cell.hot b,
-.need-cell.hot .pos {
-  color: var(--bad);
-}
-
-.need-cell .plus,
 /* Dealbreaker column + playing-time collision dot. */
 .deal {
   font-size: 12px;
@@ -3243,7 +3400,7 @@ table.tbl.tbl-wide {
   margin-bottom: 2px;
 }
 
-.needs-row-label .info-dot,
+.needs-kicker .info-dot,
 .chip .info-dot {
   margin-left: 2px;
 }

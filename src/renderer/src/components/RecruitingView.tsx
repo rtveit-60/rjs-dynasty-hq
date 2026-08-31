@@ -305,7 +305,9 @@ export default function RecruitingView() {
         </InfoDot>
       </div>
 
-      {board !== 'scout' && school && <TeamNeedsStrip needs={school.teamNeeds} />}
+      {board !== 'scout' && school && (
+        <TeamNeedsStrip needs={school.teamNeeds} targets={school.board?.targets} />
+      )}
 
       {board === 'scout' ? (
         <ScoutingView

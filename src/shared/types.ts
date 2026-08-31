@@ -151,6 +151,8 @@ export interface TeamNeed {
   targeted: number;
   /** max(0, game roster floor − projected). */
   needed: number;
+  /** The game's 57-man minimum composition count for the group (the seats). */
+  floor: number;
 }
 
 export interface DepthChartSlot {
@@ -880,6 +882,10 @@ export interface TargetActionForm {
   actions: TargetActionFlags;
   /** Normalized: None | Revoked | New | Offered | Committed. */
   scholarship: string;
+  /** Offers already out on the board (Offered + Revoked — pulled offers stay spent). */
+  scholarshipsUsed: number;
+  /** The game's season cap on team scholarship offers (tuning: 35). */
+  scholarshipsCap: number;
   nilOffer: number;
   /** Field cap (10-bit). */
   nilCap: number;

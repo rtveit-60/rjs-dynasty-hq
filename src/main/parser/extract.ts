@@ -663,7 +663,8 @@ function buildTeamNeeds(
       committed: incoming,
       projected,
       targeted: targeted.get(group) ?? 0,
-      needed: Math.max(0, (NEED_FLOOR[group] ?? 0) - projected)
+      needed: Math.max(0, (NEED_FLOOR[group] ?? 0) - projected),
+      floor: NEED_FLOOR[group] ?? 0
     };
   });
 }
