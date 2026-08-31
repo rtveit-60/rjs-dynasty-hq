@@ -558,13 +558,14 @@ body {
 
 /* ——— Tabs ——— */
 
-/* Tab strips wear the lower-third plate: skewed trailing edge, the active
-   tab in full team-color glass — the same shape as the section headers. */
+/* Tab strips are one solid team-color bar — the lower-third plate stretched
+   across, tabs living inside it. The selected tab is a darker shade of the
+   bar, pressed in; the depth itself lives in the Team Chrome section. */
 .tabs {
   display: flex;
-  gap: 4px;
   margin: 22px 0 0;
-  border-bottom: 1px solid var(--line);
+  background: var(--team);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -575,36 +576,34 @@ body {
 
 .tab {
   border: 0;
-  background: var(--line-soft);
-  padding: 7px 20px 6px 12px;
+  background: transparent;
+  padding: 8px 18px 7px;
   font-family: var(--font-display);
   font-size: 13.5px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: var(--ink-3);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  color: color-mix(in srgb, var(--team-contrast) 72%, transparent);
   cursor: pointer;
   white-space: nowrap;
   flex: none;
 }
 
 .tab:hover:not(:disabled):not(.active) {
-  color: var(--ink);
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--team-contrast);
 }
 
 .tab.active {
   color: var(--team-contrast);
-  background: var(--team);
+  background: color-mix(in srgb, black 32%, var(--team));
 }
 
-.tab.active .tab-count {
-  color: color-mix(in srgb, var(--team-contrast) 75%, transparent);
+.tabs .tab-count {
+  color: color-mix(in srgb, var(--team-contrast) 62%, transparent);
 }
 
 .tab:disabled {
   cursor: default;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 /* ——— Section headers ——— */
@@ -5337,11 +5336,14 @@ table.tbl.tbl-wide {
     0 2px 8px -2px rgba(23, 28, 38, 0.3);
 }
 
-.tab.active {
+.tabs {
   background-image: var(--gloss);
+}
+
+.tab.active {
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+    inset 0 2px 6px rgba(0, 0, 0, 0.45),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
