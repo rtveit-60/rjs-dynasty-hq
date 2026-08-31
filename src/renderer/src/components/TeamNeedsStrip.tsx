@@ -9,10 +9,9 @@ import InfoDot, { InfoRow } from './InfoDot.tsx';
  * immediately; the game itself carries them until week 4 of the offseason.
  */
 
-const SIDES: { key: TeamNeed['side']; row: string }[] = [
+const MAIN_SIDES: { key: TeamNeed['side']; row: string }[] = [
   { key: 'OFF', row: 'OFFENSIVE TARGETS' },
-  { key: 'DEF', row: 'DEFENSIVE TARGETS' },
-  { key: 'ST', row: 'SPECIAL TEAMS' }
+  { key: 'DEF', row: 'DEFENSIVE TARGETS' }
 ];
 
 /** Seats math: how the floor's seats split for one position. */
@@ -41,6 +40,24 @@ function Pips({ n }: { n: TeamNeed }) {
       ))}
       {s.surplus > 0 && <span className="nd-extra">+{s.surplus}</span>}
     </span>
+  );
+}
+
+function Tile({ n }: { n: TeamNeed }) {
+  return (
+    <div className={`nd-cell ${n.needed > 0 ? 'short' : ''}`}>
+      <div className="nd-cell-top">
+        <span className="nd-pos">{n.group}</span>
+        <span className={`nd-open ${n.needed > 0 ? '' : 'set'}`}>
+          {n.needed > 0 ? `${n.needed} OPEN` : 'SET'}
+        </span>
+      </div>
+      <Pips n={n} />
+      <div className="nd-foot">
+        {`${n.departing} departing`} · {`${n.targeted} targeted`}
+        {n.committed > 0 && <span className="nd-in"> · {`+${n.committed} committed`}</span>}
+      </div>
+    </div>
   );
 }
 
@@ -75,30 +92,31 @@ export default function TeamNeedsStrip({ needs }: { needs: TeamNeed[] }) {
           <span className="nd-pip open" /> open seat
         </span>
       </div>
-      {SIDES.map(({ key, row }) => (
-        <div key={key} className="needs-row">
-          <span className="needs-row-label">{row}</span>
-          <div className="needs-cells">
-            {needs
-              .filter((n) => n.side === key)
-              .map((n) => (
-                <div key={n.group} className={`nd-cell ${n.needed > 0 ? 'short' : ''}`}>
-                  <div className="nd-cell-top">
-                    <span className="nd-pos">{n.group}</span>
-                    <Pips n={n} />
-                    <span className={`nd-open ${n.needed > 0 ? '' : 'set'}`}>
-                      {n.needed > 0 ? `${n.needed} OPEN` : 'SET'}
-                    </span>
-                  </div>
-                  <div className="nd-foot">
-                    {n.departing} departing · {n.targeted} targeted
-                    {n.committed > 0 && <span className="nd-in"> · +{n.committed} committed</span>}
-                  </div>
+      <div className="needs-body">
+        <div className="needs-main">
+          {MAIN_SIDES.map(({ key, row }) => {
+            const rows = needs.filter((n) => n.side === key);
+            return (
+              <div key={key} className="needs-row">
+                <span className="needs-row-label">{row}</span>
+                <div className="needs-cells">
+                  {rows.map((n) => (
+                    <Tile key={n.group} n={n} />
+                  ))}
                 </div>
-              ))}
-          </div>
+              </div>
+            );
+          })}
         </div>
-      ))}
+        <div className="needs-st">
+          <span className="needs-row-label">SPECIAL TEAMS</span>
+          {needs
+            .filter((n) => n.side === 'ST')
+            .map((n) => (
+              <Tile key={n.group} n={n} />
+            ))}
+        </div>
+      </div>
     </div>
   );
 }
