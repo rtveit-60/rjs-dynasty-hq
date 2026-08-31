@@ -4731,3 +4731,17 @@ tr:hover .bd-btn,
 .fp-choose-label {
   color: var(--ink-2);
 }
+
+/* --- Weekly plan: derived hour costs -------------------------------------- */
+
+.ta-check .ta-cost {
+  margin-left: auto;
+  color: var(--ink-3);
+  font: 600 11px var(--font-ui);
+  white-space: nowrap;
+}
+
+.ta-total {
+  font: 700 13px var(--font-ui);
+  color: var(--ink);
+}

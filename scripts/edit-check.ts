@@ -500,10 +500,11 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     form.swayOptions.length >= 15 && form.swayOptions.every((o) => o.name), `${form.swayOptions.length}`);
 
   const poolBefore = form.poolAssigned;
+  // send house 50 + social 5 + sway 30 + scout 10 + scholarship offer 5 = 100
+  const expectHours = 100;
   await applyTargetActions(fr, editedPath, {
     teamRow,
     recruitRow: addTargetGlobal,
-    hours: 40,
     actions: { sendHouse: true, socialMedia: true },
     scholarship: 'Offered',
     nilOffer: 300,
@@ -511,23 +512,26 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     scoutFull: true
   }, dir);
   const form2 = await buildTargetForm(await loadFranchise(editedPath), teamRow, addTargetGlobal, editedPath);
-  check('actions: everything persisted through cold reload',
-    form2.hours === 40 && form2.actions.sendHouse && form2.actions.socialMedia &&
+  check('actions: hours derive from the game\u2019s action prices',
+    form2.hours === expectHours && form2.actions.sendHouse && form2.actions.socialMedia &&
     form2.scholarship === 'Offered' && form2.nilOffer === 300 &&
     form2.swayPitch === 'HometownHero' && form2.intel === 16383,
     JSON.stringify({ h: form2.hours, s: form2.scholarship, n: form2.nilOffer, p: form2.swayPitch, i: form2.intel }));
-  check('actions: pool assigned moved with the hours', form2.poolAssigned === poolBefore + 40,
+  check('actions: pool assigned moved with the derived hours', form2.poolAssigned === poolBefore + expectHours,
     `${poolBefore} -> ${form2.poolAssigned}`);
 
   const fr3 = await loadFranchise(editedPath);
-  await rejects('actions reject: hours past the 7-bit cap', () =>
-    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, hours: 200 }, dir));
+  await rejects('actions reject: every action at once overflows the field', () =>
+    applyTargetActions(fr3, editedPath, {
+      teamRow, recruitRow: addTargetGlobal,
+      actions: { contactFamily: true, contactCoaches: true, socialMedia: true, sendHouse: true, visitSchool: true }
+    }, dir));
   await rejects('actions reject: NIL past the 10-bit cap', () =>
     applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, nilOffer: 2000 }, dir));
   await rejects('actions reject: unknown pitch', () =>
     applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, swayPitch: 'MoxiePitch' }, dir));
   await rejects('actions reject: recruit not on the board', () =>
-    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: removedTargetGlobal, hours: 5 }, dir));
+    applyTargetActions(fr3, editedPath, { teamRow, recruitRow: removedTargetGlobal, nilOffer: 5 }, dir));
   check('source still untouched after action edits', sha(work) === sourceHash);
 }
 

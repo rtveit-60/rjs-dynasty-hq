@@ -26,6 +26,7 @@ import type {
   TargetActionForm
 } from '../shared/types.ts';
 import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
+import { ACTION_HOURS } from '../shared/recruiting-actions.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
@@ -1459,16 +1460,36 @@ export async function applyTargetActions(
   const poolAssigned = Number(val(h.board, 'RecruitingHoursAssigned') ?? 0);
 
   // ---- validate everything first ----
-  if (req.hours !== undefined) {
-    const cap = fieldMax(target, 'ProspectHoursSpentCurrent', 127);
-    if (!Number.isInteger(req.hours) || req.hours < 0 || req.hours > cap) {
-      throw new Error(`Hours must be 0–${cap}.`);
-    }
-    if (poolAssigned - oldHours + req.hours > poolTotal) {
-      throw new Error(
-        `That leaves the weekly pool over-assigned (${poolAssigned - oldHours + req.hours} of ${poolTotal}).`
-      );
-    }
+  // Hours are not freeform: each action carries the game's own fixed price
+  // (generated recruiting-actions.ts) and the prospect's week is the sum of
+  // what ends up selected.
+  const flagAfter = (key: keyof TargetActionFlags, field: string): boolean => {
+    const want = req.actions?.[key];
+    return want !== undefined ? want === true : val(target, field) === true;
+  };
+  let derivedHours = 0;
+  if (flagAfter('contactFamily', 'ContactFriendsAndFamily')) derivedHours += ACTION_HOURS.contactFamily;
+  if (flagAfter('contactCoaches', 'ContactHighSchoolCoaches')) derivedHours += ACTION_HOURS.contactCoaches;
+  if (flagAfter('socialMedia', 'SearchSocialMedia')) derivedHours += ACTION_HOURS.socialMedia;
+  if (flagAfter('sendHouse', 'SendTheHouse')) derivedHours += ACTION_HOURS.sendHouse;
+  if (flagAfter('visitSchool', 'VisitRecruitsSchool')) derivedHours += ACTION_HOURS.visitSchool;
+  const swayAfter = req.swayPitch !== undefined ? req.swayPitch : String(val(target, 'SwayPitch') ?? 'Invalid');
+  if (swayAfter !== 'Invalid') derivedHours += ACTION_HOURS.sway;
+  const intelCap = fieldMax(target, 'UnlockedIntelBitfield', 16383);
+  if (req.scoutFull && Number(val(target, 'UnlockedIntelBitfield') ?? 0) < intelCap) {
+    derivedHours += ACTION_HOURS.scoutFull;
+  }
+  if (req.scholarship === 'Offered' && String(val(target, 'ScholarshipStatus') ?? '') !== 'Offered') {
+    derivedHours += ACTION_HOURS.scholarship;
+  }
+  const hourCap = fieldMax(target, 'ProspectHoursSpentCurrent', 127);
+  if (derivedHours > hourCap) {
+    throw new Error(`Those actions total ${derivedHours} hours — the save stores at most ${hourCap} on one prospect.`);
+  }
+  if (poolAssigned - oldHours + derivedHours > poolTotal) {
+    throw new Error(
+      `That leaves the weekly pool over-assigned (${poolAssigned - oldHours + derivedHours} of ${poolTotal}).`
+    );
   }
   if (req.nilOffer !== undefined) {
     const cap = fieldMax(target, 'CurrentNILOffer', 1023);
@@ -1485,9 +1506,9 @@ export async function applyTargetActions(
   }
 
   // ---- apply ----
-  if (req.hours !== undefined && req.hours !== oldHours) {
-    target.ProspectHoursSpentCurrent = req.hours;
-    h.board.RecruitingHoursAssigned = Math.max(0, poolAssigned - oldHours + req.hours);
+  if (derivedHours !== oldHours) {
+    target.ProspectHoursSpentCurrent = derivedHours;
+    h.board.RecruitingHoursAssigned = Math.max(0, poolAssigned - oldHours + derivedHours);
   }
   for (const [key, field] of Object.entries(ACTION_FIELDS)) {
     const want = req.actions?.[key as keyof TargetActionFlags];
@@ -1500,8 +1521,8 @@ export async function applyTargetActions(
 
   return writeEditedSave(franchise, savePath, backupDir, async (check) => {
     const { target: written, h: h2 } = await targetRecordFor(check, req.teamRow, req.recruitRow);
-    if (req.hours !== undefined && Number(val(written, 'ProspectHoursSpentCurrent')) !== req.hours) {
-      throw new Error('The written save did not read back with the new hours.');
+    if (Number(val(written, 'ProspectHoursSpentCurrent')) !== derivedHours) {
+      throw new Error('The written save did not read back with the derived hours.');
     }
     if (req.nilOffer !== undefined && Number(val(written, 'CurrentNILOffer')) !== req.nilOffer) {
       throw new Error('The written save did not read back with the new NIL offer.');
@@ -1509,9 +1530,9 @@ export async function applyTargetActions(
     if (req.scoutFull && Number(val(written, 'UnlockedIntelBitfield')) !== fieldMax(written, 'UnlockedIntelBitfield', 16383)) {
       throw new Error('The written save did not read back fully scouted.');
     }
-    if (req.hours !== undefined) {
+    if (derivedHours !== oldHours) {
       const assigned = Number(val(h2.board, 'RecruitingHoursAssigned') ?? 0);
-      if (assigned !== Math.max(0, poolAssigned - oldHours + req.hours)) {
+      if (assigned !== Math.max(0, poolAssigned - oldHours + derivedHours)) {
         throw new Error('The board pool did not read back with the new assignment.');
       }
     }

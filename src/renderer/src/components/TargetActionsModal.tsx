@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { TargetActionChanges, TargetActionFlags, TargetActionForm } from '../../../shared/types.ts';
 import { stars } from '../lib/format.ts';
+import { ACTION_HOURS, ACTION_LABELS as GAME_ACTION_LABELS } from '../../../shared/recruiting-actions.ts';
 import { Stepper } from './EditPlayerModal.tsx';
 import InfoDot from './InfoDot.tsx';
 
-const ACTION_LABELS: { key: keyof TargetActionFlags; label: string }[] = [
-  { key: 'contactFamily', label: 'Contact Friends & Family' },
-  { key: 'contactCoaches', label: 'Contact High School Coaches' },
-  { key: 'socialMedia', label: 'Search Social Media' },
-  { key: 'sendHouse', label: 'Send the House' },
-  { key: 'visitSchool', label: "Visit Recruit's School" }
+/** The game's own action names and hour prices (the save's field for
+ *  contactCoaches has drifted — in-game it is "DM the Player"). */
+const ACTION_LABELS: { key: keyof TargetActionFlags; label: string; cost: number }[] = [
+  { key: 'contactFamily', label: GAME_ACTION_LABELS.contactFamily, cost: ACTION_HOURS.contactFamily },
+  { key: 'contactCoaches', label: GAME_ACTION_LABELS.contactCoaches, cost: ACTION_HOURS.contactCoaches },
+  { key: 'socialMedia', label: GAME_ACTION_LABELS.socialMedia, cost: ACTION_HOURS.socialMedia },
+  { key: 'sendHouse', label: GAME_ACTION_LABELS.sendHouse, cost: ACTION_HOURS.sendHouse },
+  { key: 'visitSchool', label: GAME_ACTION_LABELS.visitSchool, cost: ACTION_HOURS.visitSchool }
 ];
 
 /**
@@ -30,7 +33,6 @@ export default function TargetActionsModal({
   const [error, setError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState('');
 
-  const [hours, setHours] = useState(0);
   const [actions, setActions] = useState<TargetActionFlags>({
     contactFamily: false,
     contactCoaches: false,
@@ -54,7 +56,6 @@ export default function TargetActionsModal({
           return;
         }
         setForm(f);
-        setHours(f.hours);
         setActions({ ...f.actions });
         setScholarship(f.scholarship);
         setNilOffer(f.nilOffer);
@@ -78,21 +79,20 @@ export default function TargetActionsModal({
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  const poolAfter = form ? form.poolAssigned - form.hours + hours : 0;
-  const overPool = form ? poolAfter > form.poolTotal : false;
-  /** Hours cap for the stepper: field cap, then whatever the pool leaves. */
-  const hoursMax = form
-    ? Math.min(form.hoursCap, form.hours + Math.max(0, form.poolTotal - form.poolAssigned))
+  // Hours are the sum of the game's fixed action prices, not a free number.
+  const derivedHours = form
+    ? ACTION_LABELS.reduce((sum, a) => sum + (actions[a.key] ? a.cost : 0), 0) +
+      (swayPitch !== 'Invalid' ? ACTION_HOURS.sway : 0) +
+      (scoutFull && form.intel < form.intelMax ? ACTION_HOURS.scoutFull : 0) +
+      (scholarship === 'Offered' && form.scholarship !== 'Offered' ? ACTION_HOURS.scholarship : 0)
     : 0;
+  const poolAfter = form ? form.poolAssigned - form.hours + derivedHours : 0;
+  const overPool = form ? poolAfter > form.poolTotal || derivedHours > form.hoursCap : false;
 
   const changes: TargetActionChanges | null = useMemo(() => {
     if (!form) return null;
     const out: TargetActionChanges = { recruitRow: form.recruitRow };
     let any = false;
-    if (hours !== form.hours) {
-      out.hours = hours;
-      any = true;
-    }
     const changedActions: Partial<TargetActionFlags> = {};
     for (const { key } of ACTION_LABELS) {
       if (actions[key] !== form.actions[key]) changedActions[key] = actions[key];
@@ -118,7 +118,7 @@ export default function TargetActionsModal({
       any = true;
     }
     return any ? out : null;
-  }, [form, hours, actions, scholarship, nilOffer, swayPitch, scoutFull]);
+  }, [form, actions, scholarship, nilOffer, swayPitch, scoutFull]);
 
   const save = async (): Promise<void> => {
     if (!changes || overPool) return;
@@ -155,9 +155,16 @@ export default function TargetActionsModal({
           <InfoDot title="Weekly plan">
             <p>
               These are the game's own weekly recruiting controls, written straight to your
-              board: assigned hours, the five contact and visit actions, scholarship and NIL
-              offers, and the pitch to sway toward. The game consumes them when it processes
-              the next week.
+              board. Hours are not assigned freely — each action carries the game's fixed
+              price (shown beside it), a sway pitch costs {ACTION_HOURS.sway}, full scouting{' '}
+              {ACTION_HOURS.scoutFull}, a new scholarship offer {ACTION_HOURS.scholarship} —
+              and the prospect's week is the sum of what you select. The game consumes it all
+              when it processes the next week.
+            </p>
+            <p>
+              One label differs from the save's internals: the action the save calls
+              "contact high school coaches" is <strong>DM the Player</strong> in the game
+              itself, so that is the name shown here.
             </p>
             <p>
               Scout fully unlocks every piece of the recruit's intel at once — the same state
@@ -176,24 +183,9 @@ export default function TargetActionsModal({
 
         {form && (state === 'ready' || state === 'writing') && (
           <>
-            <div className="ed-sec">Hours this week</div>
-            <div className="ta-hours">
-              <Stepper
-                value={hours}
-                min={0}
-                max={hoursMax}
-                changed={hours !== form.hours}
-                label="Assigned hours"
-                onChange={setHours}
-              />
-              <span className={`ta-pool ${overPool ? 'over' : ''}`}>
-                pool {poolAfter}/{form.poolTotal} assigned
-              </span>
-            </div>
-
             <div className="ed-sec">Actions</div>
             <div className="ta-actions">
-              {ACTION_LABELS.map(({ key, label }) => (
+              {ACTION_LABELS.map(({ key, label, cost }) => (
                 <label key={key} className={`ta-check ${actions[key] !== form.actions[key] ? 'changed' : ''}`}>
                   <input
                     type="checkbox"
@@ -201,8 +193,17 @@ export default function TargetActionsModal({
                     onChange={(e) => setActions((prev) => ({ ...prev, [key]: e.target.checked }))}
                   />
                   <span>{label}</span>
+                  <span className="ta-cost">{cost} hrs</span>
                 </label>
               ))}
+            </div>
+            <div className="ta-hours">
+              <span className="ta-total">
+                {derivedHours} hrs this week
+              </span>
+              <span className={`ta-pool ${overPool ? 'over' : ''}`}>
+                pool {poolAfter}/{form.poolTotal} assigned
+              </span>
             </div>
 
             <div className="ed-sec">Offers</div>

@@ -896,7 +896,6 @@ export interface TargetActionForm {
 /** Changed values only; absent fields stay untouched in the save. */
 export interface TargetActionChanges {
   recruitRow: number;
-  hours?: number;
   actions?: Partial<TargetActionFlags>;
   scholarship?: 'Offered' | 'Revoked' | 'None';
   nilOffer?: number;
