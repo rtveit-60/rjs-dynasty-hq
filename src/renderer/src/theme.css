@@ -579,6 +579,7 @@ body {
   background: transparent;
   padding: 8px 18px 7px;
   position: relative;
+  z-index: 0;
   font-family: var(--font-display);
   font-size: 13.5px;
   font-weight: 700;
@@ -609,7 +610,18 @@ body {
 
 .tab.active {
   color: var(--team-contrast);
-  background: color-mix(in srgb, black 32%, var(--team));
+}
+
+/* The pressed segment: a parallelogram matching the seam angle, in a darker
+   shade of the bar with its own pressed-glass ramp. */
+.tab.active::after {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+  z-index: -1;
+  background-color: color-mix(in srgb, black 32%, var(--team));
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0) 55%, rgba(255, 255, 255, 0.05) 100%);
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
 }
 
 .tabs .tab-count {
@@ -5356,10 +5368,13 @@ table.tbl.tbl-wide {
 }
 
 .tab.active {
-  box-shadow:
-    inset 0 2px 6px rgba(0, 0, 0, 0.45),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.tab.active::after {
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .btn.primary {
