@@ -186,27 +186,30 @@ export default function TargetActionsModal({
 
         {form && (state === 'ready' || state === 'writing') && (
           <>
-            <div className="ed-sec">Actions</div>
-            <div className="ta-actions">
-              {ACTION_LABELS.map(({ key, label, cost }) => (
-                <label key={key} className={`ta-check ${actions[key] !== form.actions[key] ? 'changed' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={actions[key]}
-                    onChange={(e) => setActions((prev) => ({ ...prev, [key]: e.target.checked }))}
+            <div className="wp-meter">
+              <div className="wp-meter-top">
+                <span className={`wp-big ${overBudget ? 'over' : inPerkBand ? 'warn' : ''}`}>
+                  {derivedHours}
+                  <em>/{budgetCeiling}</em>
+                </span>
+                <span className="wp-cap">Hours committed</span>
+                <span className={`wp-pool ${overPool ? 'over' : ''}`}>
+                  Team pool {poolAfter}/{form.poolTotal}
+                </span>
+              </div>
+              <div className="wp-bar">
+                <div
+                  className={`wp-fill ${overBudget ? 'over' : inPerkBand ? 'warn' : ''}`}
+                  style={{ width: `${Math.min(100, (derivedHours / Math.max(1, budgetCeiling)) * 100)}%` }}
+                />
+                {form.budgetBonus > 0 && (
+                  <div
+                    className="wp-tick"
+                    title={`${form.budgetBase} guaranteed; +${form.budgetBonus} from recruiter perks`}
+                    style={{ left: `${(form.budgetBase / Math.max(1, budgetCeiling)) * 100}%` }}
                   />
-                  <span>{label}</span>
-                  <span className="ta-cost">{cost} hrs</span>
-                </label>
-              ))}
-            </div>
-            <div className="ta-hours">
-              <span className={`ta-total ${overBudget ? 'over' : inPerkBand ? 'warn' : ''}`}>
-                {derivedHours}/{budgetCeiling} hrs this week
-              </span>
-              <span className={`ta-pool ${overPool ? 'over' : ''}`}>
-                pool {poolAfter}/{form.poolTotal} assigned
-              </span>
+                )}
+              </div>
             </div>
             {overBudget && (
               <p className="cr-note over">
@@ -223,10 +226,29 @@ export default function TargetActionsModal({
               </p>
             )}
 
+            <div className="ed-sec">Actions</div>
+            <div className="wp-rows">
+              {ACTION_LABELS.map(({ key, label, cost }) => (
+                <label key={key} className={`wp-row ${actions[key] ? 'on' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={actions[key]}
+                    onChange={(e) => setActions((prev) => ({ ...prev, [key]: e.target.checked }))}
+                  />
+                  <span className="wp-box" aria-hidden="true" />
+                  <span className="wp-name">{label}</span>
+                  {actions[key] !== form.actions[key] && <span className="wp-changed" title="changed this visit" />}
+                  <span className="wp-price">{cost} hrs</span>
+                </label>
+              ))}
+            </div>
+
             <div className="ed-sec">Offers</div>
             <div className="ta-offers">
               <label className="ta-field">
-                <span>Scholarship</span>
+                <span>
+                  Scholarship <em>(new offer {ACTION_HOURS.scholarship} hrs)</em>
+                </span>
                 <select value={scholarship} onChange={(e) => setScholarship(e.target.value)}>
                   {[form.scholarship, 'None', 'Offered', 'Revoked']
                     .filter((v, i, a) => a.indexOf(v) === i)
@@ -251,7 +273,9 @@ export default function TargetActionsModal({
                 />
               </label>
               <label className="ta-field">
-                <span>Sway pitch</span>
+                <span>
+                  Sway pitch <em>({ACTION_HOURS.sway} hrs when set)</em>
+                </span>
                 <select value={swayPitch} onChange={(e) => setSwayPitch(e.target.value)}>
                   <option value="Invalid">—</option>
                   {form.swayOptions.map((o) => (
@@ -268,13 +292,18 @@ export default function TargetActionsModal({
               {scouted ? (
                 <span className="ta-scouted">Fully scouted</span>
               ) : (
-                <label className={`ta-check ${scoutFull ? 'changed' : ''}`}>
+                <label className={`wp-row ${scoutFull ? 'on' : ''}`}>
                   <input
                     type="checkbox"
                     checked={scoutFull}
                     onChange={(e) => setScoutFull(e.target.checked)}
                   />
-                  <span>Scout fully ({form.intel} of {form.intelMax} intel unlocked now)</span>
+                  <span className="wp-box" aria-hidden="true" />
+                  <span className="wp-name">
+                    Scout fully <em>({form.intel} of {form.intelMax} intel unlocked now)</em>
+                  </span>
+                  {scoutFull && <span className="wp-changed" title="changed this visit" />}
+                  <span className="wp-price">{ACTION_HOURS.scoutFull} hrs</span>
                 </label>
               )}
             </div>
