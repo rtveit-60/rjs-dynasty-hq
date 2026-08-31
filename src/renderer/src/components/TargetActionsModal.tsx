@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import type { TargetActionChanges, TargetActionFlags, TargetActionForm } from '../../../shared/types.ts';
 import { stars } from '../lib/format.ts';
 import { ACTION_HOURS, ACTION_LABELS as GAME_ACTION_LABELS } from '../../../shared/recruiting-actions.ts';
-import { PROSPECT_HOURS_CEILING, PROSPECT_HOURS_FLOOR } from '../../../shared/recruiting-budget.ts';
 import { Stepper } from './EditPlayerModal.tsx';
 import InfoDot from './InfoDot.tsx';
 
@@ -88,8 +87,9 @@ export default function TargetActionsModal({
       (scholarship === 'Offered' && form.scholarship !== 'Offered' ? ACTION_HOURS.scholarship : 0)
     : 0;
   const poolAfter = form ? form.poolAssigned - form.hours + derivedHours : 0;
-  const overBudget = derivedHours > PROSPECT_HOURS_CEILING;
-  const inPerkBand = derivedHours > PROSPECT_HOURS_FLOOR && !overBudget;
+  const budgetCeiling = form ? form.budgetBase + form.budgetBonus : 0;
+  const overBudget = form ? derivedHours > budgetCeiling : false;
+  const inPerkBand = form ? derivedHours > form.budgetBase && !overBudget : false;
   const overPool = form ? poolAfter > form.poolTotal || overBudget : false;
 
   const changes: TargetActionChanges | null = useMemo(() => {
@@ -210,14 +210,16 @@ export default function TargetActionsModal({
             </div>
             {overBudget && (
               <p className="cr-note over">
-                No prospect allows more than {PROSPECT_HOURS_CEILING} hours in a week.
+                {form.budgetBonus > 0
+                  ? `This staff's prospect budget tops out at ${budgetCeiling} (${form.budgetBase} base + ${form.budgetBonus} from recruiter perks).`
+                  : `A prospect allows ${form.budgetBase} hours per week — recruiter perks can raise it.`}
               </p>
             )}
             {inPerkBand && (
               <p className="cr-note">
-                Above the guaranteed {PROSPECT_HOURS_FLOOR} — prospects allow{' '}
-                {PROSPECT_HOURS_FLOOR}–{PROSPECT_HOURS_CEILING} depending on your recruiter
-                perks, so check this prospect's budget in game before counting on it.
+                Above the {form.budgetBase}-hour base — your recruiter perks add up to{' '}
+                {form.budgetBonus}, but only on prospects matching their conditions, so
+                confirm this prospect's budget in game before counting on it.
               </p>
             )}
 

@@ -500,26 +500,29 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     form.swayOptions.length >= 15 && form.swayOptions.every((o) => o.name), `${form.swayOptions.length}`);
 
   const poolBefore = form.poolAssigned;
-  // write 1: send house 50 + social 5 + scholarship offer 5 = 60 (perk band)
+  check('actions form: prospect budget from tuning + perks',
+    form.budgetBase === 50 && form.budgetBonus >= 0,
+    `${form.budgetBase} + ${form.budgetBonus} perk bound`);
+  // write 1: visit 40 + social 5 + scholarship offer 5 = 50 (always legal)
   await applyTargetActions(fr, editedPath, {
     teamRow,
     recruitRow: addTargetGlobal,
-    actions: { sendHouse: true, socialMedia: true },
+    actions: { visitSchool: true, socialMedia: true },
     scholarship: 'Offered',
     nilOffer: 300
   }, dir);
-  // write 2: drop the house, add sway + full scouting = 5 + 30 + 10 = 45
+  // write 2: drop the visit, add sway + full scouting = 5 + 30 + 10 = 45
   await applyTargetActions(fr, editedPath, {
     teamRow,
     recruitRow: addTargetGlobal,
-    actions: { sendHouse: false },
+    actions: { visitSchool: false },
     swayPitch: 'HometownHero',
     scoutFull: true
   }, dir);
   const expectHours = 45;
   const form2 = await buildTargetForm(await loadFranchise(editedPath), teamRow, addTargetGlobal, editedPath);
   check('actions: hours derive from the game\u2019s action prices',
-    form2.hours === expectHours && !form2.actions.sendHouse && form2.actions.socialMedia &&
+    form2.hours === expectHours && !form2.actions.visitSchool && form2.actions.socialMedia &&
     form2.scholarship === 'Offered' && form2.nilOffer === 300 &&
     form2.swayPitch === 'HometownHero' && form2.intel === 16383,
     JSON.stringify({ h: form2.hours, s: form2.scholarship, n: form2.nilOffer, p: form2.swayPitch, i: form2.intel }));
@@ -527,11 +530,13 @@ check('rejections left the edited file unchanged', sha(editedPath) === before);
     `${poolBefore} -> ${form2.poolAssigned}`);
 
   const fr3 = await loadFranchise(editedPath);
-  await rejects('actions reject: every action at once overflows the field', () =>
-    applyTargetActions(fr3, editedPath, {
-      teamRow, recruitRow: addTargetGlobal,
-      actions: { contactFamily: true, contactCoaches: true, socialMedia: true, sendHouse: true, visitSchool: true }
-    }, dir));
+  if (130 > form.budgetBase + form.budgetBonus) {
+    await rejects('actions reject: totals past the prospect budget', () =>
+      applyTargetActions(fr3, editedPath, {
+        teamRow, recruitRow: addTargetGlobal,
+        actions: { contactFamily: true, contactCoaches: true, socialMedia: true, sendHouse: true, visitSchool: true }
+      }, dir));
+  }
   await rejects('actions reject: NIL past the 10-bit cap', () =>
     applyTargetActions(fr3, editedPath, { teamRow, recruitRow: addTargetGlobal, nilOffer: 2000 }, dir));
   await rejects('actions reject: unknown pitch', () =>

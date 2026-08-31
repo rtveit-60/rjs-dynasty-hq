@@ -883,6 +883,10 @@ export interface TargetActionForm {
   nilOffer: number;
   /** Field cap (10-bit). */
   nilCap: number;
+  /** The game's flat per-prospect weekly hour base (tuning). */
+  budgetBase: number;
+  /** This staff's recruiter-perk bonus total (condition-gated upper bound). */
+  budgetBonus: number;
   nilExpectation: number;
   /** RecruitingPitchType member id; 'Invalid' = none selected. */
   swayPitch: string;

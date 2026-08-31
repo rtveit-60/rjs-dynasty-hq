@@ -27,7 +27,7 @@ import type {
 } from '../shared/types.ts';
 import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
 import { ACTION_HOURS } from '../shared/recruiting-actions.ts';
-import { PROSPECT_HOURS_CEILING } from '../shared/recruiting-budget.ts';
+import { RECRUITING_TUNABLES } from '../shared/recruiting-tunables.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
@@ -1404,6 +1404,7 @@ export async function buildTargetForm(
   const { PITCHES } = await import('../shared/pitches.ts');
 
   const targetPath = editedPathFor(savePath);
+  const budget = await prospectHourBudget(franchise, teamRow);
   return {
     recruitRow,
     name: pRec
@@ -1415,6 +1416,8 @@ export async function buildTargetForm(
     hoursCap: fieldMax(target, 'ProspectHoursSpentCurrent', 127),
     poolTotal: Number(val(h.board, 'RecruitingHoursTotal') ?? 0),
     poolAssigned: Number(val(h.board, 'RecruitingHoursAssigned') ?? 0),
+    budgetBase: budget.base,
+    budgetBonus: budget.bonusTotal,
     actions: {
       contactFamily: val(target, 'ContactFriendsAndFamily') === true,
       contactCoaches: val(target, 'ContactHighSchoolCoaches') === true,
@@ -1444,6 +1447,48 @@ export async function buildTargetForm(
  * assignments move the board's assigned total with them and must fit the
  * weekly pool.
  */
+/**
+ * A prospect's weekly hour budget for this team: the game's flat tuning base
+ * plus the coach staff's recruiter-perk bonuses, read from the save's
+ * CoachTalentEffects row (row index = TeamIndex; Recruiting_BonusHours →
+ * an 8-slot condition array — slot conditions live in the coach talent trees
+ * and are not yet decoded, so the bonus total is an upper bound that applies
+ * only to prospects matching the perk conditions).
+ */
+export async function prospectHourBudget(
+  franchise: any,
+  teamRow: number
+): Promise<{ base: number; bonusTotal: number }> {
+  const base = RECRUITING_TUNABLES.maxHoursPerRecruitPerWeek;
+  try {
+    const teams = mainTable(franchise, 'Team');
+    if (!teams.recordsRead) await teams.readRecords();
+    const teamIndex = Number(val(teams.records[teamRow], 'TeamIndex'));
+    if (!Number.isFinite(teamIndex)) return { base, bonusTotal: 0 };
+    let eff: any = null;
+    for (const t of (franchise.tables as any[])) {
+      if (t?.name !== 'CoachTalentEffects') continue;
+      if (!eff || (t.header?.recordCapacity ?? 0) > (eff.header?.recordCapacity ?? 0)) eff = t;
+    }
+    if (!eff) return { base, bonusTotal: 0 };
+    if (!eff.recordsRead) await eff.readRecords();
+    const row = eff.records?.[teamIndex];
+    if (!row || row.isEmpty) return { base, bonusTotal: 0 };
+    const ref = refFromRecord(row, 'Recruiting_BonusHours');
+    if (!ref || ref.tableId === 0) return { base, bonusTotal: 0 };
+    const arr = franchise.getTableById(ref.tableId);
+    if (!arr) return { base, bonusTotal: 0 };
+    if (!arr.recordsRead) await arr.readRecords();
+    const slots = arr.records?.[ref.row];
+    if (!slots) return { base, bonusTotal: 0 };
+    let bonusTotal = 0;
+    for (let i = 0; i < 8; i++) bonusTotal += Number(val(slots, `int${i}`) ?? 0) || 0;
+    return { base, bonusTotal };
+  } catch {
+    return { base, bonusTotal: 0 };
+  }
+}
+
 export async function applyTargetActions(
   franchise: any,
   savePath: string,
@@ -1483,12 +1528,15 @@ export async function applyTargetActions(
   if (req.scholarship === 'Offered' && String(val(target, 'ScholarshipStatus') ?? '') !== 'Offered') {
     derivedHours += ACTION_HOURS.scholarship;
   }
-  // In-game verified 2026-08-31: every prospect's weekly budget falls between
-  // 50 and 65 hours (base plus recruiter perks) — beyond the ceiling is
-  // invalid for any coach.
-  if (derivedHours > PROSPECT_HOURS_CEILING) {
+  // The prospect budget: the game's flat tuning base (50) plus this staff's
+  // recruiter-perk bonus slots from the save.
+  const budget = await prospectHourBudget(franchise, req.teamRow);
+  const ceiling = budget.base + budget.bonusTotal;
+  if (derivedHours > ceiling) {
     throw new Error(
-      `Those actions total ${derivedHours} hours — no prospect allows more than ${PROSPECT_HOURS_CEILING} in a week.`
+      budget.bonusTotal > 0
+        ? `Those actions total ${derivedHours} hours — this staff's prospect budget tops out at ${ceiling} (${budget.base} base + ${budget.bonusTotal} from recruiter perks).`
+        : `Those actions total ${derivedHours} hours — a prospect allows ${budget.base} per week (recruiter perks can raise it).`
     );
   }
   if (poolAssigned - oldHours + derivedHours > poolTotal) {
