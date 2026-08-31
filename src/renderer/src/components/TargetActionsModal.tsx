@@ -89,7 +89,6 @@ export default function TargetActionsModal({
   const poolAfter = form ? form.poolAssigned - form.hours + derivedHours : 0;
   const budgetCeiling = form ? form.budgetBase + form.budgetBonus : 0;
   const overBudget = form ? derivedHours > budgetCeiling : false;
-  const inPerkBand = form ? derivedHours > form.budgetBase && !overBudget : false;
   const overPool = form ? poolAfter > form.poolTotal || overBudget : false;
 
   const changes: TargetActionChanges | null = useMemo(() => {
@@ -188,7 +187,7 @@ export default function TargetActionsModal({
           <>
             <div className="wp-meter">
               <div className="wp-meter-top">
-                <span className={`wp-big ${overBudget ? 'over' : inPerkBand ? 'warn' : ''}`}>
+                <span className={`wp-big ${overBudget ? 'over' : ''}`}>
                   {derivedHours}
                   <em>/{budgetCeiling}</em>
                 </span>
@@ -199,13 +198,13 @@ export default function TargetActionsModal({
               </div>
               <div className="wp-bar">
                 <div
-                  className={`wp-fill ${overBudget ? 'over' : inPerkBand ? 'warn' : ''}`}
+                  className={`wp-fill ${overBudget ? 'over' : ''}`}
                   style={{ width: `${Math.min(100, (derivedHours / Math.max(1, budgetCeiling)) * 100)}%` }}
                 />
                 {form.budgetBonus > 0 && (
                   <div
                     className="wp-tick"
-                    title={`${form.budgetBase} guaranteed; +${form.budgetBonus} from recruiter perks`}
+                    title={`${form.budgetBase} base; +${form.budgetBonus} position-group perk`}
                     style={{ left: `${(form.budgetBase / Math.max(1, budgetCeiling)) * 100}%` }}
                   />
                 )}
@@ -214,15 +213,8 @@ export default function TargetActionsModal({
             {overBudget && (
               <p className="cr-note over">
                 {form.budgetBonus > 0
-                  ? `This staff's prospect budget tops out at ${budgetCeiling} (${form.budgetBase} base + ${form.budgetBonus} from recruiter perks).`
+                  ? `This prospect allows ${budgetCeiling} hours (${form.budgetBase} base + ${form.budgetBonus} position-group perk).`
                   : `A prospect allows ${form.budgetBase} hours per week — recruiter perks can raise it.`}
-              </p>
-            )}
-            {inPerkBand && (
-              <p className="cr-note">
-                Above the {form.budgetBase}-hour base — your recruiter perks add up to{' '}
-                {form.budgetBonus}, but only on prospects matching their conditions, so
-                confirm this prospect's budget in game before counting on it.
               </p>
             )}
 
@@ -314,8 +306,8 @@ export default function TargetActionsModal({
               )}
               {form.scoutBoost > 0 && (
                 <p className="cr-note">
-                  Your staff's scouting perks add up to {form.scoutBoost} on prospects
-                  matching their conditions — the game applies that on top when it scouts.
+                  Your staff's scouting perk adds +{form.scoutBoost} on this prospect's
+                  position group — the game applies it on top when it scouts.
                 </p>
               )}
             </div>

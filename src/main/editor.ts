@@ -28,6 +28,7 @@ import type {
 import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
 import { ACTION_HOURS } from '../shared/recruiting-actions.ts';
 import { RECRUITING_TUNABLES } from '../shared/recruiting-tunables.ts';
+import { POSITION_TO_GROUP, POS_GROUP_NAMES } from '../shared/talent-groups.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
@@ -1404,7 +1405,8 @@ export async function buildTargetForm(
   const { PITCHES } = await import('../shared/pitches.ts');
 
   const targetPath = editedPathFor(savePath);
-  const budget = await prospectHourBudget(franchise, teamRow);
+  const targetPosition = pRec ? String(val(pRec, 'Position') ?? '') : '';
+  const budget = await prospectHourBudget(franchise, teamRow, targetPosition);
   return {
     recruitRow,
     name: pRec
@@ -1438,7 +1440,7 @@ export async function buildTargetForm(
     intelMax: fieldMax(target, 'UnlockedIntelBitfield', 16383),
     scoutsDone: scoutsDoneFor(Number(val(target, 'UnlockedIntelBitfield') ?? 0)),
     scoutsMax: RECRUITING_TUNABLES.maxTimesScouted,
-    scoutBoost: await scoutingBoost(franchise, teamRow),
+    scoutBoost: await scoutingBoost(franchise, teamRow, targetPosition),
     targetFileName: basename(targetPath),
     targetExists: existsSync(targetPath)
   };
@@ -1458,38 +1460,58 @@ export async function buildTargetForm(
  * and are not yet decoded, so the bonus total is an upper bound that applies
  * only to prospects matching the perk conditions).
  */
-export async function prospectHourBudget(
-  franchise: any,
-  teamRow: number
-): Promise<{ base: number; bonusTotal: number }> {
-  const base = RECRUITING_TUNABLES.maxHoursPerRecruitPerWeek;
+/**
+ * A staff's aggregated talent-effect slot array (8 ints indexed by
+ * CoachTalentPosGroup: QB/RB/WR_TE/OL/DB/LB/KP_ATH/LE_RE_DT) for one effect
+ * field on the save's CoachTalentEffects row (row index = TeamIndex).
+ */
+async function talentSlots(franchise: any, teamRow: number, field: string): Promise<number[]> {
+  const zero = [0, 0, 0, 0, 0, 0, 0, 0];
   try {
     const teams = mainTable(franchise, 'Team');
     if (!teams.recordsRead) await teams.readRecords();
     const teamIndex = Number(val(teams.records[teamRow], 'TeamIndex'));
-    if (!Number.isFinite(teamIndex)) return { base, bonusTotal: 0 };
+    if (!Number.isFinite(teamIndex)) return zero;
     let eff: any = null;
     for (const t of (franchise.tables as any[])) {
       if (t?.name !== 'CoachTalentEffects') continue;
       if (!eff || (t.header?.recordCapacity ?? 0) > (eff.header?.recordCapacity ?? 0)) eff = t;
     }
-    if (!eff) return { base, bonusTotal: 0 };
+    if (!eff) return zero;
     if (!eff.recordsRead) await eff.readRecords();
     const row = eff.records?.[teamIndex];
-    if (!row || row.isEmpty) return { base, bonusTotal: 0 };
-    const ref = refFromRecord(row, 'Recruiting_BonusHours');
-    if (!ref || ref.tableId === 0) return { base, bonusTotal: 0 };
+    if (!row || row.isEmpty) return zero;
+    const ref = refFromRecord(row, field);
+    if (!ref || ref.tableId === 0) return zero;
     const arr = franchise.getTableById(ref.tableId);
-    if (!arr) return { base, bonusTotal: 0 };
+    if (!arr) return zero;
     if (!arr.recordsRead) await arr.readRecords();
     const slots = arr.records?.[ref.row];
-    if (!slots) return { base, bonusTotal: 0 };
-    let bonusTotal = 0;
-    for (let i = 0; i < 8; i++) bonusTotal += Number(val(slots, `int${i}`) ?? 0) || 0;
-    return { base, bonusTotal };
+    if (!slots) return zero;
+    return zero.map((_, i) => Number(val(slots, `int${i}`) ?? 0) || 0);
   } catch {
-    return { base, bonusTotal: 0 };
+    return zero;
   }
+}
+
+/**
+ * The prospect's weekly hour budget: the game's flat tuning base plus this
+ * staff's recruiter-perk bonus for the prospect's position group (the 8-slot
+ * arrays are indexed by CoachTalentPosGroup, so the "condition" on a perk is
+ * simply which positions it covers).
+ */
+export async function prospectHourBudget(
+  franchise: any,
+  teamRow: number,
+  position?: string
+): Promise<{ base: number; bonusTotal: number; groupName: string }> {
+  const base = RECRUITING_TUNABLES.maxHoursPerRecruitPerWeek;
+  const slots = await talentSlots(franchise, teamRow, 'Recruiting_BonusHours');
+  const group = position !== undefined ? POSITION_TO_GROUP[position] : undefined;
+  if (group === undefined) {
+    return { base, bonusTotal: Math.max(...slots), groupName: '' };
+  }
+  return { base, bonusTotal: slots[group] ?? 0, groupName: POS_GROUP_NAMES[group] ?? '' };
 }
 
 const INTEL_BITS = 14;
@@ -1545,35 +1567,11 @@ export function scoutOnce(intel: number, recruitRow: number): number {
   return next;
 }
 
-/** This staff's scouting-perk bonus total (condition-slotted, like hours). */
-async function scoutingBoost(franchise: any, teamRow: number): Promise<number> {
-  try {
-    const teams = mainTable(franchise, 'Team');
-    if (!teams.recordsRead) await teams.readRecords();
-    const teamIndex = Number(val(teams.records[teamRow], 'TeamIndex'));
-    if (!Number.isFinite(teamIndex)) return 0;
-    let eff: any = null;
-    for (const t of (franchise.tables as any[])) {
-      if (t?.name !== 'CoachTalentEffects') continue;
-      if (!eff || (t.header?.recordCapacity ?? 0) > (eff.header?.recordCapacity ?? 0)) eff = t;
-    }
-    if (!eff) return 0;
-    if (!eff.recordsRead) await eff.readRecords();
-    const row = eff.records?.[teamIndex];
-    if (!row || row.isEmpty) return 0;
-    const ref = refFromRecord(row, 'Recruiting_ScoutingBoost_Start');
-    if (!ref || ref.tableId === 0) return 0;
-    const arr = franchise.getTableById(ref.tableId);
-    if (!arr) return 0;
-    if (!arr.recordsRead) await arr.readRecords();
-    const slots = arr.records?.[ref.row];
-    if (!slots) return 0;
-    let total = 0;
-    for (let i = 0; i < 8; i++) total += Number(val(slots, `int${i}`) ?? 0) || 0;
-    return total;
-  } catch {
-    return 0;
-  }
+/** This staff's scouting-perk bonus for one prospect's position group. */
+async function scoutingBoost(franchise: any, teamRow: number, position?: string): Promise<number> {
+  const slots = await talentSlots(franchise, teamRow, 'Recruiting_ScoutingBoost_Start');
+  const group = position !== undefined ? POSITION_TO_GROUP[position] : undefined;
+  return group === undefined ? Math.max(...slots) : (slots[group] ?? 0);
 }
 
 export async function applyTargetActions(
@@ -1624,14 +1622,21 @@ export async function applyTargetActions(
   if (req.scholarship === 'Offered' && String(val(target, 'ScholarshipStatus') ?? '') !== 'Offered') {
     derivedHours += ACTION_HOURS.scholarship;
   }
-  // The prospect budget: the game's flat tuning base (50) plus this staff's
-  // recruiter-perk bonus slots from the save.
-  const budget = await prospectHourBudget(franchise, req.teamRow);
+  // The prospect budget, exact: the game's flat tuning base plus this staff's
+  // recruiter-perk bonus for the prospect's position group.
+  const targetPlayerRef = refFromRecord(rRec, 'Player');
+  let targetPosition = '';
+  if (targetPlayerRef && targetPlayerRef.tableId !== 0) {
+    const pTable = mainTable(franchise, 'Player');
+    if (!pTable.recordsRead) await pTable.readRecords();
+    targetPosition = String(val(pTable.records?.[targetPlayerRef.row], 'Position') ?? '');
+  }
+  const budget = await prospectHourBudget(franchise, req.teamRow, targetPosition);
   const ceiling = budget.base + budget.bonusTotal;
   if (derivedHours > ceiling) {
     throw new Error(
       budget.bonusTotal > 0
-        ? `Those actions total ${derivedHours} hours — this staff's prospect budget tops out at ${ceiling} (${budget.base} base + ${budget.bonusTotal} from recruiter perks).`
+        ? `Those actions total ${derivedHours} hours — this prospect allows ${ceiling} (${budget.base} base + ${budget.bonusTotal} ${budget.groupName} perk).`
         : `Those actions total ${derivedHours} hours — a prospect allows ${budget.base} per week (recruiter perks can raise it).`
     );
   }
