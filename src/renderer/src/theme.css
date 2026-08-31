@@ -4485,44 +4485,59 @@ table.tbl.tbl-wide {
 
 /* --- Board membership stage buttons (+ add / x remove) ------------------- */
 
+.bd-actions {
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
 .bd-btn {
   appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-left: 6px;
+  width: 19px;
+  height: 19px;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 2px;
-  background: transparent;
-  color: var(--ink-3);
-  font: 700 11px/1 var(--font-ui);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: 700 12px/1 var(--font-ui);
   cursor: pointer;
   vertical-align: middle;
-  opacity: 0;
-  transition: opacity 80ms;
-}
-
-tr:hover .bd-btn,
-.bd-btn.staged {
-  opacity: 1;
+  transition: color 80ms, border-color 80ms, background 80ms;
 }
 
 .bd-btn:hover {
   color: var(--ink);
   border-color: var(--ink-3);
+  background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+}
+
+.bd-btn.plan {
+  letter-spacing: -0.05em;
+  padding-bottom: 2px;
+}
+
+.bd-btn.plan:hover {
+  color: var(--team);
+  border-color: color-mix(in srgb, var(--team) 60%, var(--line));
+  background: color-mix(in srgb, var(--team) 10%, var(--surface));
 }
 
 .bd-btn.staged.add {
   color: var(--good);
-  border-color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 60%, var(--line));
+  background: color-mix(in srgb, var(--good) 12%, var(--surface));
 }
 
 .bd-btn.staged.remove {
   color: var(--bad);
-  border-color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 60%, var(--line));
+  background: color-mix(in srgb, var(--bad) 12%, var(--surface));
 }
 
 /* --- Weekly plan dialog --------------------------------------------------- */
