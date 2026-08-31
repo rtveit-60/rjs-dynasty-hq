@@ -618,7 +618,9 @@ body {
 .tab.active::after {
   content: '';
   position: absolute;
-  inset: 0 -10px;
+  /* Asymmetric reach: with the 9px clip slopes this puts both edges exactly
+     on the neighbouring seam lines (seams sit 2px past the edge, skewed). */
+  inset: 0 -7px 0 -2px;
   z-index: -1;
   background-color: color-mix(in srgb, black 32%, var(--team));
   background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0) 55%, rgba(255, 255, 255, 0.05) 100%);
