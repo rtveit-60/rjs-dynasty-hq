@@ -1802,6 +1802,27 @@ async function resolveDepthSlot(franchise: any, slotRef: any, playerTableId: num
   return rows;
 }
 
+/**
+ * Stable per-dynasty identity. FranchiseUser.TrophyProfileId is minted once at
+ * dynasty creation (a microsecond-resolution creation stamp) and never changes
+ * across seasons, job moves, file renames or the app's edited-sibling writes;
+ * save-as copies of a dynasty share it, which is the continuity we want.
+ * Verified across seven save lineages — see docs/RESEARCH.md "Dynasty
+ * identity". Null (legacy flat state layout) when the field is unreadable.
+ */
+async function extractDynastyId(franchise: any): Promise<string | null> {
+  try {
+    const t = await tableWithField(franchise, 'FranchiseUser', 'TrophyProfileId');
+    if (!t) return null;
+    const users = (t.records as any[]).filter((r: any) => !r.isEmpty);
+    const owner = users.find((r: any) => String(val(r, 'AdminLevel')) === 'Owner') ?? users[0];
+    const raw = String(val(owner, 'TrophyProfileId') ?? '').trim();
+    return /^\d{6,20}$/.test(raw) && Number(raw) > 0 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function extractSnapshot(
   franchise: any,
   opts: { schoolTeamRow: number | null; fileName: string }
@@ -1968,6 +1989,7 @@ export async function extractSnapshot(
   return {
     parsedAt: Date.now(),
     fileName: opts.fileName,
+    dynastyId: await extractDynastyId(franchise),
     weeklyAwards,
     annualAwards,
     rivalries,
