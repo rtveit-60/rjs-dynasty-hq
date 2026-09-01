@@ -220,11 +220,23 @@ body {
   margin-top: 2px;
 }
 
+/* The nav as a full-bleed broadcast band: header cap, ruled rows, no card. */
 .nav {
-  padding: 10px 8px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.nav::before {
+  content: 'SECTIONS';
+  display: block;
+  font: 700 10.5px var(--font-display);
+  letter-spacing: 0.18em;
+  color: var(--ink);
+  background: var(--sunken);
+  border-bottom: 1px solid var(--line);
+  padding: 6px 12px 5px;
 }
 
 .nav-item {
@@ -232,9 +244,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border: 0;
-  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--line-soft);
   background: none;
   color: var(--ink-2);
   font-family: var(--font-display);
@@ -243,7 +255,11 @@ body {
   letter-spacing: 0.12em;
   text-align: left;
   cursor: pointer;
-  border-radius: 0 2px 2px 0;
+  border-radius: 0;
+}
+
+.nav-item:last-child {
+  border-bottom: 0;
 }
 
 .nav-item:hover:not(:disabled) {
@@ -253,8 +269,7 @@ body {
 
 .nav-item.active {
   color: var(--ink);
-  border-left-color: var(--team);
-  background: var(--line-soft);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--team) 20%, transparent), transparent 75%);
 }
 
 .nav-item:disabled {
@@ -271,6 +286,38 @@ body {
   border: 1px solid var(--line);
   padding: 1px 5px;
   border-radius: 2px;
+}
+
+/* The space under the nav: broadcast set dressing — the game's own state
+   outline over a ghosted team mark. */
+.rail-fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 22px;
+  padding: 20px 0 8px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rail-fill .team-logo,
+.rail-fill .school-mark {
+  opacity: 0.06;
+  filter: saturate(0.6);
+}
+
+.rail-state {
+  width: 150px;
+  max-width: 70%;
+  opacity: 0.14;
+}
+
+[data-theme='dark'] .rail-state {
+  filter: invert(1);
+  opacity: 0.1;
 }
 
 .rail-foot {
@@ -558,11 +605,14 @@ body {
 
 /* ——— Tabs ——— */
 
+/* Tab strips are one solid team-color bar — the lower-third plate stretched
+   across, tabs living inside it. The selected tab is a darker shade of the
+   bar, pressed in; the depth itself lives in the Team Chrome section. */
 .tabs {
   display: flex;
-  gap: 2px;
   margin: 22px 0 0;
-  border-bottom: 1px solid var(--line);
+  background: var(--team);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -573,32 +623,64 @@ body {
 
 .tab {
   border: 0;
-  background: none;
-  padding: 8px 14px 9px;
-  margin-bottom: -1px;
+  background: transparent;
+  padding: 8px 18px 7px;
+  position: relative;
+  z-index: 0;
   font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--ink-3);
-  border-bottom: 2px solid transparent;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: color-mix(in srgb, var(--team-contrast) 72%, transparent);
   cursor: pointer;
   white-space: nowrap;
   flex: none;
 }
 
-.tab:hover:not(:disabled) {
-  color: var(--ink-2);
+/* Diagonal seams between the bar's segments, at the plate-cut angle. */
+.tab + .tab::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.3);
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.06);
+  transform: skewX(-16deg);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tab:hover:not(:disabled):not(.active) {
+  color: var(--team-contrast);
 }
 
 .tab.active {
-  color: var(--ink);
-  border-bottom-color: var(--team-bright, var(--team));
+  color: var(--team-contrast);
+}
+
+/* The pressed segment: a parallelogram matching the seam angle, in a darker
+   shade of the bar with its own pressed-glass ramp. */
+.tab.active::after {
+  content: '';
+  position: absolute;
+  /* Asymmetric reach: with the 9px clip slopes this puts both edges exactly
+     on the neighbouring seam lines (seams sit 2px past the edge, skewed). */
+  inset: 0 -7px 0 -2px;
+  z-index: -1;
+  background-color: color-mix(in srgb, black 32%, var(--team));
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0) 55%, rgba(255, 255, 255, 0.05) 100%);
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+}
+
+.tabs .tab-count {
+  color: color-mix(in srgb, var(--team-contrast) 62%, transparent);
 }
 
 .tab:disabled {
   cursor: default;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 /* ——— Section headers ——— */
@@ -3340,6 +3422,14 @@ table.tbl.tbl-wide {
     display: none;
   }
 
+  .nav::before {
+    display: none;
+  }
+
+  .rail-fill {
+    display: none;
+  }
+
   .rail-foot {
     padding: 10px 6px;
     align-items: center;
@@ -3363,8 +3453,8 @@ table.tbl.tbl-wide {
   }
 
   .tab {
-    padding: 8px 10px 9px;
-    font-size: 13px;
+    padding: 7px 15px 6px 10px;
+    font-size: 12.5px;
   }
 }
 
@@ -3560,18 +3650,97 @@ table.tbl.tbl-wide {
 .tk-item .team-logo,
 .tk-item .swatch,
 .hqm-row .team-logo,
-.hqm-row .swatch {
+.hqm-row .swatch,
+.tk-item .mv {
   align-self: center;
 }
 
-.up {
-  color: var(--good);
-  font-weight: 700;
+/* Poll-movement chips: drawn glyph + tabular count on tinted glass. */
+.mv {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px 1px 5px;
+  border-radius: 2px;
+  font: 700 10.5px/1.4 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  vertical-align: 1px;
 }
 
-.dn {
+.mv.up {
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 13%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px color-mix(in srgb, var(--good) 28%, transparent);
+}
+
+.mv.dn {
   color: var(--bad);
-  font-weight: 700;
+  background: color-mix(in srgb, var(--bad) 13%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px color-mix(in srgb, var(--bad) 28%, transparent);
+}
+
+.mv.new {
+  color: var(--hot);
+  background: color-mix(in srgb, var(--hot) 12%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px color-mix(in srgb, var(--hot) 30%, transparent);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+}
+
+.mv.flat {
+  color: var(--ink-3);
+  padding: 1px 6px;
+}
+
+.mv-g {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  flex: 0 0 auto;
+}
+
+.mv-g.up {
+  border-bottom: 5.5px solid currentColor;
+}
+
+.mv-g.dn {
+  border-top: 5.5px solid currentColor;
+}
+
+.mv-g.flat {
+  width: 7px;
+  height: 0;
+  border: 0;
+  border-top: 2px solid currentColor;
+  border-radius: 1px;
+  opacity: 0.8;
+}
+
+.mv.sm {
+  gap: 2px;
+  padding: 0 4px 0 3px;
+  font-size: 9.5px;
+}
+
+.mv.sm .mv-g {
+  border-left-width: 3px;
+  border-right-width: 3px;
+}
+
+.mv.sm .mv-g.up {
+  border-bottom-width: 4.5px;
+}
+
+.mv.sm .mv-g.dn {
+  border-top-width: 4.5px;
 }
 
 /* HQ module grid */
@@ -5122,4 +5291,264 @@ table.tbl.tbl-wide {
 
 .ta-field.locked {
   opacity: 0.45;
+}
+
+/* ————————————————————————————————————————————————
+   Team Chrome — the broadcast-glass depth pass.
+   Surfaces catch light from above (inner top highlight + specular ramp),
+   sit on real shadows, and carry the team color as rim light and tinted
+   washes. Tokens first so both sets stay tunable in one place; the light
+   studio keeps the same structure with daylight-weighted values. */
+
+:root {
+  /* inner rim light / base shade on raised surfaces */
+  --edge-hi: rgba(255, 255, 255, 0.65);
+  --edge-lo: rgba(23, 28, 38, 0.12);
+  /* soft surface ramp (panels, headers) and deeper tile ramp */
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 38%, rgba(23, 28, 38, 0.03) 100%);
+  --sheen-deep: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 42%, rgba(23, 28, 38, 0.05) 100%);
+  /* specular gloss for team plates and primary actions */
+  --gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.05) 42%, rgba(0, 0, 0, 0.12) 100%);
+  /* elevation tiers: modules, then overlays */
+  --elev-1: 0 1px 2px rgba(23, 28, 38, 0.07), 0 12px 28px -16px rgba(23, 28, 38, 0.28);
+  --elev-2: 0 24px 60px -20px rgba(23, 28, 38, 0.45);
+  --elev-tile: 0 2px 6px -3px rgba(23, 28, 38, 0.18);
+  --num-shadow: none;
+}
+
+[data-theme='dark'] {
+  --edge-hi: rgba(255, 255, 255, 0.07);
+  --edge-lo: rgba(0, 0, 0, 0.32);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0) 30%, rgba(0, 0, 0, 0.12) 100%);
+  --sheen-deep: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 38%, rgba(0, 0, 0, 0.13) 100%);
+  --gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.07) 42%, rgba(0, 0, 0, 0.22) 100%);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 32px -16px rgba(0, 0, 0, 0.85);
+  --elev-2: 0 30px 70px -22px rgba(0, 0, 0, 0.95);
+  --elev-tile: 0 3px 8px -4px rgba(0, 0, 0, 0.55);
+  --num-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Modules float: rim light on top, team in the border, shadow below. */
+.panel, .staff-grid, .statgrid, .tbl-wrap, .needs-strip, .hqm, .story, .pager,
+.hq-browse-bar, .wp-meter {
+  border-color: color-mix(in srgb, var(--team) 22%, var(--line));
+  background-image: var(--sheen);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--team-bright, var(--team)) 20%, var(--edge-hi)),
+    inset 0 -1px 0 var(--edge-lo),
+    var(--elev-1);
+}
+
+.stat, .staff-card, .nd-cell, .hq-card {
+  background-image: var(--sheen-deep);
+  box-shadow:
+    inset 0 1px 0 var(--edge-hi),
+    inset 0 -1px 0 var(--edge-lo),
+    var(--elev-tile);
+}
+
+/* The frame: titlebar casts onto the stage, team hairline under it; the
+   rail recedes a step behind the content. */
+.titlebar {
+  border-bottom-color: transparent;
+  background-image: var(--sheen);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--team) 35%, transparent),
+    0 4px 18px rgba(0, 0, 0, 0.28);
+  position: relative;
+  z-index: 6;
+}
+
+[data-theme='dark'] .titlebar {
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--team) 35%, transparent),
+    0 4px 18px rgba(0, 0, 0, 0.6);
+}
+
+.rail {
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.015), rgba(23, 28, 38, 0.05) 100%);
+  border-right-color: color-mix(in srgb, var(--team) 25%, var(--line));
+  position: relative;
+  z-index: 5;
+}
+
+[data-theme='dark'] .rail {
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.015), rgba(0, 0, 0, 0.16) 100%);
+  border-right-color: color-mix(in srgb, var(--team) 25%, rgba(0, 0, 0, 0.45));
+}
+
+.nav-item.active {
+  box-shadow: inset 3px 0 0 var(--team-bright, var(--team)), inset 0 1px 0 var(--edge-hi);
+}
+
+/* Team plates go glassy and cast team-colored light. */
+.section-h h3, .bug-plate {
+  background-image: var(--gloss);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 4px 14px -4px color-mix(in srgb, var(--team) 55%, rgba(0, 0, 0, 0.45));
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.nd-bar-cap {
+  background-image: var(--gloss);
+}
+
+/* Chips and controls: raised glass, pressed or ringed when active. */
+.pill, .filter, .pf-btn, .bd-btn, .hq-chev {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.01) 48%, rgba(23, 28, 38, 0.05) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--edge-hi),
+    inset 0 -1px 0 var(--edge-lo),
+    0 2px 5px -2px rgba(23, 28, 38, 0.25);
+}
+
+[data-theme='dark'] .pill, [data-theme='dark'] .filter, [data-theme='dark'] .pf-btn,
+[data-theme='dark'] .bd-btn, [data-theme='dark'] .hq-chev {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.01) 48%, rgba(0, 0, 0, 0.16) 100%);
+  box-shadow:
+    inset 0 1px 0 var(--edge-hi),
+    inset 0 -1px 0 var(--edge-lo),
+    0 2px 5px -2px rgba(0, 0, 0, 0.5);
+}
+
+.filter.active {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02) 60%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 1px color-mix(in srgb, var(--team-bright, var(--team)) 45%, transparent),
+    0 2px 8px -2px rgba(23, 28, 38, 0.3);
+}
+
+.tabs {
+  background-image: var(--gloss);
+}
+
+.tab.active {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.tab.active::after {
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.btn.primary {
+  background-image: var(--gloss);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 5px 16px -5px color-mix(in srgb, var(--team) 60%, rgba(0, 0, 0, 0.5));
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Tables and module headers take the team wash. */
+.tbl thead th {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--team) 12%, transparent), rgba(0, 0, 0, 0) 65%, rgba(23, 28, 38, 0.05) 100%);
+}
+
+.tbl-wrap thead {
+  box-shadow: 0 3px 10px -3px rgba(23, 28, 38, 0.25);
+}
+
+[data-theme='dark'] .tbl thead th {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--team) 12%, transparent), rgba(0, 0, 0, 0) 65%, rgba(0, 0, 0, 0.16) 100%);
+}
+
+[data-theme='dark'] .tbl-wrap thead {
+  box-shadow: 0 3px 10px -3px rgba(0, 0, 0, 0.7);
+}
+
+.hqm-h, .nav::before {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--team) 14%, transparent), rgba(0, 0, 0, 0) 60%, rgba(23, 28, 38, 0.05) 100%);
+  border-bottom-color: color-mix(in srgb, var(--team) 30%, var(--line));
+}
+
+[data-theme='dark'] .hqm-h, [data-theme='dark'] .nav::before {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--team) 14%, transparent), rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.18) 100%);
+}
+
+/* The needs desk sits in a soft halo of the program's color. */
+.needs-strip {
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--team-bright, var(--team)) 22%, var(--edge-hi)),
+    inset 0 -1px 0 var(--edge-lo),
+    0 0 22px -6px color-mix(in srgb, var(--team) 35%, transparent),
+    var(--elev-1);
+}
+
+/* Overlay tier: dialogs and profiles float above everything. */
+.pf-panel, .ed-panel, .info-dialog, .fp-panel {
+  background-image: var(--sheen);
+  box-shadow:
+    inset 0 1px 0 var(--edge-hi),
+    var(--elev-2);
+}
+
+/* Display numerals get broadcast depth in the night studio only. */
+.wp-big, .nd-plate-n {
+  text-shadow: var(--num-shadow);
+}
+
+/* ————————————————————————————————————————————————
+   Field graphic — the team-dressed broadcast field. */
+
+.field-graphic {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 3px;
+}
+
+.field-graphic .fg-ez {
+  font: 700 30px var(--font-display);
+  letter-spacing: 0.35em;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.field-graphic .fg-num {
+  font: 600 26px var(--font-display);
+  letter-spacing: 0.08em;
+  text-anchor: middle;
+  dominant-baseline: central;
+  opacity: 0.92;
+}
+
+/* The dashboard plays on the field: the whole team-dressed field fits the
+   window behind the panels, centered in the tab's stage. */
+.dash-stage {
+  position: relative;
+  min-height: calc(100vh - 400px);
+}
+
+.dash-stage > .two-col {
+  position: relative;
+  z-index: 1;
+}
+
+.dash-field {
+  position: absolute;
+  inset: 8px 0 0 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  opacity: 0.34;
+  pointer-events: none;
+  filter: saturate(0.72);
+}
+
+.dash-field .field-graphic {
+  width: 100%;
+  height: 100%;
+}
+
+/* Dashboard panels sit on the field like broadcast graphics: translucent,
+   frosted, so the turf reads through without costing text. */
+.dash-stage .panel {
+  background-color: color-mix(in srgb, var(--paper) 72%, transparent);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
 }

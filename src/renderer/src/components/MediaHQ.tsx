@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LeagueLeaders, MediaEvent } from '../../../shared/types.ts';
 import { AWARD_NAMES } from '../../../shared/awards.ts';
 import { useHQ } from '../store.ts';
+import Delta from './Delta.tsx';
 import InfoDot from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import Story from './Story.tsx';
@@ -201,8 +202,12 @@ export default function MediaHQ({
             <span className="dots" />
             <span className="v">
               {me && me.rank > 0 ? `#${me.rank}` : 'NR'}
-              {rankDelta > 0 && <span className="up"> ▲{rankDelta}</span>}
-              {rankDelta < 0 && <span className="dn"> ▼{-rankDelta}</span>}
+              {rankDelta !== 0 && (
+                <>
+                  {' '}
+                  <Delta delta={rankDelta} />
+                </>
+              )}
             </span>
             <span className="k">STREAK</span>
             <span className="dots" />
@@ -291,15 +296,7 @@ export default function MediaHQ({
                     </span>
                   </span>
                   <span className="v">
-                    {t.lastWeekRank === 0 ? (
-                      <span className="up">NEW</span>
-                    ) : delta > 0 ? (
-                      <span className="up">▲{delta}</span>
-                    ) : delta < 0 ? (
-                      <span className="dn">▼{-delta}</span>
-                    ) : (
-                      <span style={{ color: 'var(--ink-3)' }}>—</span>
-                    )}
+                    {t.lastWeekRank === 0 ? <Delta state="new" /> : <Delta delta={delta} />}
                   </span>
                 </div>
               );
