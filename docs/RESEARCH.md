@@ -278,6 +278,10 @@ The Tendencies tab therefore already shows everything the save offers: the four 
 
 Banked for a future title update (if EA ever persists the history, this is the mechanism to re-probe): concept vocabularies live in the save schema as enums — `DefensivePlayConcepts` (Man_Blitz, Cover_1, Cover_2, Cover_2_Man, Cover_3, Cover_4, Cover_6, Double_Man, Zone_Blitz_2_Deep, Zone_Blitz_3_Deep), 65-member `OffensivePlayConcepts` (runs/options/quick-medium-deep passes/PA/screens), situational `PlaycallHistoryStoredAiGroup` (First_and_Long, Second_and_Long, Third_and_Long, Third_and_Short). Concept rows carry no id field, so the array index is the enum value (the usual parallel-array pattern). The group names alone would give man/zone % and situational blitz rate by the game's own words.
 
+### FBS record book — FOUND (2026-09-01): League.Player{Season,Game,Career}StatRecords
+
+The save carries the game's live records-to-beat: the League row's three ref fields each point at a small `PlayerStatRecord` array (9 rows apiece — rushing/passing/receiving yards + TDs and kin). Rows are denormalized text (`firstName`/`lastName`/`teamName`/`calendarYear`/`statType`/`statValue`), seeded with real history (Barry Sanders' 2,628 season rushing yards, Samaje Perine's 427-yard game) and **rewritten with the dynasty player's identity when a record falls** — the 9-season sample shows dynasty-set rows ("Greg Elmore, 1,061 passing yards, 2034"). Read by `readRecordBook` in `src/main/parser/matchup.ts` for the Matchup tab's Players to Watch (record holders are matched by team + a year inside the dynasty era, so the pre-dynasty legends don't masquerade as roster players; a current leader ≥70% of a season mark reads as chasing it).
+
 ### Dynasty identity — FOUND (2026-09-01): FranchiseUser.TrophyProfileId is minted once per dynasty
 
 The app's persisted stores (media state/feed, banked season history, the schedule bank) need a key that tells two *dynasties* apart, not just two schools — team row alone let a second dynasty sharing a school inherit the first one's feed and history, and the schedule bank had no key at all. The save carries exactly one field that fits:
