@@ -3,6 +3,7 @@ import type { MediaEvent } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
 import ArticleModal from './ArticleModal.tsx';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
+import CfpBracketView from './CfpBracketView.tsx';
 import MediaHQ from './MediaHQ.tsx';
 import Story, { WirePost, weekLabel } from './Story.tsx';
 
@@ -34,7 +35,7 @@ const POST_CAP = 80;
 
 export default function MediaView() {
   const media = useHQ((s) => s.media);
-  const [tab, setTab] = useState<'hq' | 'wire' | 'social'>('hq');
+  const [tab, setTab] = useState<'hq' | 'bracket' | 'wire' | 'social'>('hq');
   const [filter, setFilter] = useState('all');
   const [reading, setReading] = useState<MediaEvent | null>(null);
 
@@ -72,6 +73,9 @@ export default function MediaView() {
         <button className={`tab ${tab === 'hq' ? 'active' : ''}`} onClick={() => setTab('hq')}>
           MEDIA HQ
         </button>
+        <button className={`tab ${tab === 'bracket' ? 'active' : ''}`} onClick={() => setTab('bracket')}>
+          CFP BRACKET
+        </button>
         <button className={`tab ${tab === 'wire' ? 'active' : ''}`} onClick={() => setTab('wire')}>
           THE WIRE
           {articles.length > 0 && <span className="tab-count">{articles.length}</span>}
@@ -88,6 +92,10 @@ export default function MediaView() {
           <InfoRow term="Media HQ">
             The league desk. The ticker's cap switches between the Top 25, stat leaders and award
             races; the modules read polls, schedules and season stats straight from the save.
+          </InfoRow>
+          <InfoRow term="CFP Bracket">
+            The College Football Playoff, rebuilt from the save's own playoff games — the current
+            season once it reaches December, otherwise the most recent completed bracket.
           </InfoRow>
           <InfoRow term="The Wire">
             The article feed. Click any story to read the full write-up, bylined by the press corps
@@ -107,6 +115,8 @@ export default function MediaView() {
       {tab === 'hq' && (
         <MediaHQ media={articles} onOpenWire={() => setTab('wire')} onOpenStory={setReading} />
       )}
+
+      {tab === 'bracket' && <CfpBracketView />}
 
       {tab === 'wire' && (
         <>
