@@ -3480,10 +3480,20 @@ table.tbl.tbl-wide {
   align-items: center;
 }
 
+/* On the solid team bar the dot draws in the bar's own contrast ink (the
+   panel grays vanish against team color) and keeps clear of the plate's
+   clipped rear corner. */
 .tabs .info-dot {
   margin-left: auto;
+  margin-right: 16px;
   align-self: center;
-  margin-bottom: 6px;
+  border-color: color-mix(in srgb, var(--team-contrast) 45%, transparent);
+  color: color-mix(in srgb, var(--team-contrast) 78%, transparent);
+}
+
+.tabs .info-dot:hover {
+  color: var(--team-contrast);
+  border-color: color-mix(in srgb, var(--team-contrast) 70%, transparent);
 }
 
 .section-h .info-dot {
@@ -5425,8 +5435,21 @@ table.tbl.tbl-wide {
   background-image: var(--gloss);
 }
 
+/* Stamped lettering: the label reads pressed into the plate, not printed on
+   it — a dark sliver above each glyph (the cavity's shaded top edge) and a
+   light catch below (its lit bottom edge). Works on light and dark plates
+   alike because it shades the cavity, not the glyph. */
+.tab {
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.46),
+    0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+/* The pressed segment sits deeper, so its stamp cuts deeper too. */
 .tab.active {
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  text-shadow:
+    0 -1px 1px rgba(0, 0, 0, 0.66),
+    0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .tab.active::after {
