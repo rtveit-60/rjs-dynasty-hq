@@ -1,4 +1,6 @@
-import type { Snapshot } from '../../../shared/types.ts';
+import { useEffect, useState } from 'react';
+import type { RivalrySeries, Snapshot } from '../../../shared/types.ts';
+import { assetSlug, probeArt, useArt } from '../lib/art-probe.ts';
 import { NameLink } from './ProfileModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 import { AWARD_NAMES } from '../../../shared/awards.ts';
@@ -12,6 +14,79 @@ const awardLabel = (t: string) =>
     .split('_')
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
     .join(' ');
+
+const trophyUrl = (r: RivalrySeries) =>
+  r.assetName ? `gameicon://trophy-${assetSlug(r.assetName)}` : null;
+
+/**
+ * One shelf spot in the trophy case: the real trophy render (extracted from
+ * the user's install by `node scripts/extract-rivalry-art.ts`) over the
+ * series line. Renders nothing when the art isn't on this machine.
+ */
+function TrophyCard({ r, school }: { r: RivalrySeries; school: School }) {
+  const url = trophyUrl(r);
+  const ok = useArt(url);
+  if (!ok || !url) return null;
+  const held = r.usWins > r.themWins || (r.usWins === r.themWins && r.streakOurs === true);
+  return (
+    <div className={`th-trophy${held ? ' held' : ''}`} title={`${r.name} — vs ${r.rivalName}`}>
+      <img src={url} alt={r.secondaryName || r.name} loading="lazy" />
+      <div className="th-trophy-name">{r.secondaryName || r.name}</div>
+      <div className={`th-trophy-rec${held ? ' good' : ''}`}>
+        {r.usWins}–{r.themWins}
+        {r.streakOurs !== null && r.streakLength > 0 && (
+          <span className="stk">
+            {' '}
+            · {r.streakOurs ? 'W' : 'L'}
+            {r.streakLength}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Small ledger-row trophy mark; absent art collapses to nothing. */
+function TrophyThumb({ r }: { r: RivalrySeries }) {
+  const url = trophyUrl(r);
+  const ok = useArt(url);
+  if (!ok || !url) return null;
+  return <img className="th-thumb" src={url} alt="" loading="lazy" />;
+}
+
+/**
+ * The trophy case: every rivalry trophy the game actually models for this
+ * program's series, extracted per machine. Hidden entirely until at least one
+ * render is on disk.
+ */
+function TrophyShelf({ rivalries, school }: { rivalries: RivalrySeries[]; school: School }) {
+  const [ready, setReady] = useState<RivalrySeries[]>([]);
+  const probeKey = rivalries.map((r) => r.assetName).join('|');
+  useEffect(() => {
+    let alive = true;
+    void Promise.all(
+      rivalries.map(async (r) => {
+        const url = trophyUrl(r);
+        return url && (await probeArt(url)) ? r : null;
+      })
+    ).then((rs) => alive && setReady(rs.filter((x): x is RivalrySeries => x !== null)));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [probeKey]);
+  if (!ready.length) return null;
+  return (
+    <div className="panel" style={{ marginTop: 12 }}>
+      <div className="panel-title">Trophy Case</div>
+      <div className="th-shelf">
+        {ready.map((r) => (
+          <TrophyCard key={r.assetName} r={r} school={school} />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function TeamHistoryView({ school }: { school: School }) {
   const h = school.history;
@@ -56,6 +131,8 @@ export default function TeamHistoryView({ school }: { school: School }) {
         </div>
       </div>
 
+      <TrophyShelf rivalries={h.rivalries} school={school} />
+
       <div className="two-col" style={{ marginTop: 12 }}>
         <div className="panel">
           <div className="panel-title">Rivalry Ledger</div>
@@ -77,6 +154,7 @@ export default function TeamHistoryView({ school }: { school: School }) {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>
                     <NameLink req={{ kind: 'school', row: r.rivalRow }}>{r.rivalName}</NameLink>
+                    <TrophyThumb r={r} />
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--ink-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {r.name}

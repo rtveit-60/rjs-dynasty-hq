@@ -1446,6 +1446,7 @@ async function extractTeamHistory(
         rivalries.push({
           name: String(val(rec, 'Name') ?? '').trim(),
           secondaryName: String(val(rec, 'SecondaryName') ?? '').trim() || null,
+          assetName: String(val(rec, 'AssetName') ?? '').trim(),
           rivalRow,
           rivalName: nameByRow.get(rivalRow) ?? 'Unknown',
           usWins,
