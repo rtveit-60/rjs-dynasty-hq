@@ -3,6 +3,7 @@ import type { BowlAppearance, SeasonRecord, SeasonState, Snapshot } from '../../
 import { spaceOut } from '../lib/format.ts';
 import BowlIcon, { BowlMarkGroup, CfpMarkGroup } from './BowlIcon.tsx';
 import ContractPanel from './ContractPanel.tsx';
+import FieldGraphic from './FieldGraphic.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -237,6 +238,10 @@ export default function ProgramDashboard({
   const bowls = seasons.filter((s) => s.bowl);
 
   return (
+    <div className="dash-stage">
+    <div className="dash-field" aria-hidden="true">
+      <FieldGraphic team={school.team} cover />
+    </div>
     <div className="two-col" style={{ marginTop: 16 }}>
       <div className="panel">
         <div className="panel-title">Season Records</div>
@@ -299,6 +304,7 @@ export default function ProgramDashboard({
           ))}
         </div>
       </div>
+    </div>
     </div>
   );
 }

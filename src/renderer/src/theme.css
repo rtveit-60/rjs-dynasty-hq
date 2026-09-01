@@ -5491,3 +5491,63 @@ table.tbl.tbl-wide {
 .wp-big, .nd-plate-n {
   text-shadow: var(--num-shadow);
 }
+
+/* ————————————————————————————————————————————————
+   Field graphic — the team-dressed broadcast field. */
+
+.field-graphic {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 3px;
+}
+
+.field-graphic .fg-ez {
+  font: 700 30px var(--font-display);
+  letter-spacing: 0.35em;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.field-graphic .fg-num {
+  font: 600 26px var(--font-display);
+  letter-spacing: 0.08em;
+  text-anchor: middle;
+  dominant-baseline: central;
+  opacity: 0.92;
+}
+
+/* The dashboard plays on the field: the team-dressed graphic sits ghosted
+   behind the panels, fading out toward the foot of the page. */
+.dash-stage {
+  position: relative;
+}
+
+.dash-stage > .two-col {
+  position: relative;
+  z-index: 1;
+}
+
+.dash-field {
+  position: absolute;
+  inset: 8px 0 0 0;
+  z-index: 0;
+  opacity: 0.32;
+  pointer-events: none;
+  filter: saturate(0.72);
+  -webkit-mask-image: linear-gradient(180deg, #000 68%, transparent 98%);
+  mask-image: linear-gradient(180deg, #000 68%, transparent 98%);
+}
+
+.dash-field .field-graphic {
+  width: 100%;
+  height: 100%;
+}
+
+/* Dashboard panels sit on the field like broadcast graphics: a touch
+   translucent, frosted, so the turf reads through without costing text. */
+.dash-stage .panel {
+  background-color: color-mix(in srgb, var(--paper) 82%, transparent);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
