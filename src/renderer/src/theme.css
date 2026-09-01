@@ -5552,3 +5552,70 @@ table.tbl.tbl-wide {
   -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
 }
+
+/* ————————————————————————————————————————————————
+   Concept Library — the game's playcall diagrams. */
+
+.cl-group {
+  font: 700 10.5px var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+
+.cl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  gap: 8px;
+}
+
+.cl-card {
+  margin: 0;
+}
+
+/* The art is authored for the game's dark playcall screen — keep it on a
+   dark well in both studios. */
+.cl-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  background: #191d26;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 6px;
+}
+
+.cl-card figcaption {
+  margin-top: 4px;
+  font: 600 10px var(--font-ui);
+  color: var(--ink-2);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dashboard pair panels equalize; the grades read as a uniform grid. */
+.dash-stage > .two-col {
+  align-items: stretch;
+}
+
+.grade-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(186px, 1fr));
+  gap: 6px;
+}
+
+.grade-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.grade-lbl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

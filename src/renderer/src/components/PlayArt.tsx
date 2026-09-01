@@ -1,22 +1,29 @@
 import type { PlaybookFormation, PlaybookPlay, PlaybookPlayer } from '../../../shared/types.ts';
 
 /**
- * Self-rendered play art in the broadcast/telestrator style of the reference sites, on our own
- * game-extracted data. A field slice with distinct yard lines, sideline ticks, college hash
- * marks and the line of scrimmage; offensive skill players drawn as their controller passing
- * icon (A/B/X/Y face buttons, RB/LB bumpers) with a color-matched route + arrowhead; the QB
- * and offensive line marked; and on defense, position icons (DL/LB/DB) with rush arrows for
- * rushers and translucent coverage-zone bubbles where defenders drop. Assumes Xbox controls.
+ * Per-play diagrams drawn in the game's own playcall art language, from the
+ * book's own geometry. The palette and marks are sampled from the extracted
+ * concept diagrams (`pcc_*`): routes in the game's yellow, carrier and rush
+ * paths in its red, blocking as white T-bars, zone drops as its blue
+ * (deep) / teal (underneath) wells — combined with the app's controller
+ * passing icons on the eligible receivers. The card is a dark well like the
+ * game's playcall screen in both themes.
  *
- * Geometry is in yards (LOS at y=0, +x = offense's right, +y downfield). Light/dark safe: the
- * field uses theme tokens, the icons a fixed controller/position palette.
+ * Geometry is in yards (LOS at y=0, +x = offense's right, +y downfield).
  */
 
 const PX = 11; // pixels per yard
 const PAD = 2.6; // yard padding around fitted content
 const DEPTH_CAP = 24; // clip routes this many yards past the LOS for readability
 const MIN_HALF_WIDTH = 16; // always show at least this many yards either side of center
-const HASH_X = 6.67; // college hash marks sit 40 ft (13.3 yd) apart → ±6.67 yd off centre
+
+// The game's playcall art palette (sampled from the extracted concept art).
+const WELL = '#191d26';
+const ROUTE_YELLOW = '#f0e060';
+const CARRY_RED = '#c01020';
+const DEEP_BLUE = '#4070b0';
+const UNDER_TEAL = '#60c0a0';
+const CHALK = '#f0f0f0';
 
 // Xbox controller colors for the passing icons; bumpers/triggers are gray pills.
 const BTN_COLOR: Record<string, string> = {
@@ -29,10 +36,6 @@ const BTN_COLOR: Record<string, string> = {
   RT: '#71767f',
   LT: '#71767f'
 };
-const QB_COLOR = '#e24a84';
-const OL_COLOR = '#8b9099';
-// Defense: line red, backers amber, backs blue (level-coded).
-const DEF_COLOR: Record<string, string> = { DL: '#e2555a', LB: '#f0a028', DB: '#3b82f6' };
 
 type Pt = { x: number; y: number };
 
@@ -97,6 +100,27 @@ function inkFor(hex: string): string {
   return lum > 0.62 ? '#141210' : '#ffffff';
 }
 
+/** A solid game-style triangle arrowhead at the end of a path. */
+function ArrowHead({ end, prev, color, size = 9 }: { end: Pt; prev: Pt; color: string; size?: number }) {
+  const ang = Math.atan2(end.y - prev.y, end.x - prev.x);
+  const a1 = ang + Math.PI - 0.5;
+  const a2 = ang + Math.PI + 0.5;
+  const tip = end;
+  const b1 = { x: end.x + size * Math.cos(a1), y: end.y + size * Math.sin(a1) };
+  const b2 = { x: end.x + size * Math.cos(a2), y: end.y + size * Math.sin(a2) };
+  return <path d={`M ${tip.x} ${tip.y} L ${b1.x} ${b1.y} L ${b2.x} ${b2.y} Z`} fill={color} />;
+}
+
+/** A blocking T-bar: a short perpendicular cap at the end of a block path. */
+function BlockCap({ end, prev, color, half = 6 }: { end: Pt; prev: Pt; color: string; half?: number }) {
+  const ang = Math.atan2(end.y - prev.y, end.x - prev.x) + Math.PI / 2;
+  const b1 = { x: end.x + half * Math.cos(ang), y: end.y + half * Math.sin(ang) };
+  const b2 = { x: end.x - half * Math.cos(ang), y: end.y - half * Math.sin(ang) };
+  return (
+    <line x1={b1.x} y1={b1.y} x2={b2.x} y2={b2.y} stroke={color} strokeWidth={3} strokeLinecap="round" />
+  );
+}
+
 export default function PlayArt({
   formation,
   play,
@@ -122,21 +146,21 @@ export default function PlayArt({
   const h = (yHi - yLo) * PX;
   const sx = (x: number) => (x + xHalf) * PX;
   const sy = (y: number) => (yHi - y) * PX; // +y (downfield) = up on screen
+  const S = (p: Pt): Pt => ({ x: sx(p.x), y: sy(p.y) });
 
-  const yardRows: number[] = [];
-  for (let y = Math.ceil(yLo); y <= yHi; y += 1) yardRows.push(y);
-
-  const rr = PX * 0.76; // player icon radius
-  const olHalf = PX * 0.5;
-
+  // Route color, all from geometry: offensive assignments draw in the
+  // game's route yellow; a defender whose assignment crosses the ball is a
+  // rusher and draws in its red.
   const routeColor = (i: number): string => {
-    if (side === 'defense') return DEF_COLOR[defenseLabel(align[i])] ?? DEF_COLOR.DB;
-    if (buttons[i]) return BTN_COLOR[buttons[i]!] ?? OL_COLOR;
-    return align[i]?.posType === 1 ? QB_COLOR : OL_COLOR;
+    if (side === 'defense') {
+      const endPt = routes[i]?.[routes[i].length - 1];
+      return endPt && endPt.y < 1 ? CARRY_RED : ROUTE_YELLOW;
+    }
+    return ROUTE_YELLOW;
   };
 
-  const maxDepth = Math.max(0, ...routes.flatMap((rt) => rt.map((p) => p.y)));
-  const playType = side === 'defense' ? null : maxDepth >= 7 ? 'PASS' : 'RUN';
+  const rr = PX * 0.72; // player icon radius
+  const olR = PX * 0.5;
 
   return (
     <svg
@@ -145,96 +169,91 @@ export default function PlayArt({
       role="img"
       aria-label={`${formation.name} — ${play.name} play diagram`}
     >
-      <rect x={0} y={0} width={w} height={h} fill="var(--sunken)" />
+      <rect x={0} y={0} width={w} height={h} fill={WELL} />
 
-      {/* distinct 5-yard lines across the field */}
-      {yardRows
-        .filter((y) => y % 5 === 0 && y !== 0)
-        .map((y) => (
-          <line key={`yl${y}`} x1={0} x2={w} y1={sy(y)} y2={sy(y)} stroke="var(--line)" strokeWidth={1.1} />
-        ))}
-
-      {/* sideline yard ticks + college hash marks (per yard) */}
-      {yardRows.map((y) => {
-        const five = y % 5 === 0;
-        const yy = sy(y);
+      {/* faint 5-yard rails, game-minimal */}
+      {Array.from({ length: Math.floor((yHi - Math.ceil(yLo)) / 5) + 1 }, (_, k) => {
+        const y = Math.ceil(yLo / 5) * 5 + k * 5;
+        if (y < yLo || y > yHi || y === 0) return null;
         return (
-          <g key={`row${y}`} stroke="var(--line)" strokeWidth={1}>
-            <line x1={0} x2={five ? 13 : 7} y1={yy} y2={yy} />
-            <line x1={w - (five ? 13 : 7)} x2={w} y1={yy} y2={yy} />
-            <line x1={sx(-HASH_X) - 3} x2={sx(-HASH_X) + 3} y1={yy} y2={yy} opacity={0.6} />
-            <line x1={sx(HASH_X) - 3} x2={sx(HASH_X) + 3} y1={yy} y2={yy} opacity={0.6} />
-          </g>
+          <line key={`yl${y}`} x1={0} x2={w} y1={sy(y)} y2={sy(y)} stroke={CHALK} strokeWidth={1} opacity={0.07} />
         );
       })}
 
-      {/* yard-depth numbers off the LOS */}
-      {yardRows
-        .filter((y) => y > 0 && y % 5 === 0)
-        .map((y) => (
-          <text
-            key={`yn${y}`}
-            x={17}
-            y={sy(y) + 3}
-            fontSize={8.5}
-            fontFamily="var(--font-display)"
-            textAnchor="middle"
-            fill="var(--ink-3)"
-            opacity={0.75}
-          >
-            {y}
-          </text>
-        ))}
-
-      {/* coverage-zone bubbles: where non-rushing defenders drop */}
+      {/* coverage-zone wells: deep drops in the game's blue, underneath in its teal */}
       {side === 'defense' &&
         align.map((p, i) => {
           const lbl = defenseLabel(p);
           if (lbl === 'DL') return null;
           const end = routes[i]?.[routes[i].length - 1] ?? p;
           if (end.y < 1) return null; // rushed across the ball → not a zone
+          const deep = end.y >= 12;
+          const color = deep ? DEEP_BLUE : UNDER_TEAL;
           return (
-            <circle
+            <ellipse
               key={`z${i}`}
               cx={sx(end.x)}
               cy={sy(end.y)}
-              r={PX * 3.4}
-              fill={DEF_COLOR[lbl]}
-              opacity={0.1}
-              stroke={DEF_COLOR[lbl]}
-              strokeOpacity={0.4}
-              strokeWidth={1}
-              strokeDasharray="3 3"
+              rx={PX * 4.1}
+              ry={PX * 2.7}
+              fill={color}
+              opacity={0.3}
+              stroke={color}
+              strokeOpacity={0.85}
+              strokeWidth={1.6}
             />
           );
         })}
 
       {/* line of scrimmage */}
-      <line x1={0} x2={w} y1={sy(0)} y2={sy(0)} stroke="var(--ink-2)" strokeWidth={1.8} />
+      <line x1={0} x2={w} y1={sy(0)} y2={sy(0)} stroke={CHALK} strokeWidth={1.8} opacity={0.55} />
 
-      {/* routes, colored to match their player's icon */}
+      {/* offensive-line assignments: white block paths capped with T-bars */}
+      {side === 'offense' &&
+        align.map((p, i) => {
+          if (p.posType !== 4) return null;
+          const rt = routes[i];
+          const from = S(p);
+          if (rt && rt.length >= 2) {
+            const d = rt.map((q, k) => `${k === 0 ? 'M' : 'L'} ${sx(q.x).toFixed(1)} ${sy(q.y).toFixed(1)}`).join(' ');
+            const end = S(rt[rt.length - 1]);
+            const prev = S(rt[rt.length - 2]);
+            return (
+              <g key={`ol${i}`}>
+                <path d={d} fill="none" stroke={CHALK} strokeWidth={2.6} strokeLinejoin="round" strokeLinecap="round" opacity={0.9} />
+                <BlockCap end={end} prev={prev} color={CHALK} />
+              </g>
+            );
+          }
+          const stub = { x: from.x, y: from.y - PX * 1.15 };
+          return (
+            <g key={`ol${i}`} opacity={0.9}>
+              <line x1={from.x} y1={from.y} x2={stub.x} y2={stub.y} stroke={CHALK} strokeWidth={2.6} strokeLinecap="round" />
+              <BlockCap end={stub} prev={from} color={CHALK} />
+            </g>
+          );
+        })}
+
+      {/* routes in the game's yellow; carriers and rushers in its red */}
       {routes.map((pts2, i) => {
         if (pts2.length < 2) return null;
+        if (side === 'offense' && align[i]?.posType === 4) return null; // drawn as blocks above
         const stroke = routeColor(i);
         const d = pts2
           .map((p, k) => `${k === 0 ? 'M' : 'L'} ${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`)
           .join(' ');
-        const end = pts2[pts2.length - 1];
-        const prev = pts2[pts2.length - 2];
-        const ang = Math.atan2(sy(end.y) - sy(prev.y), sx(end.x) - sx(prev.x));
-        const ah = 7.5;
-        const a1 = ang + Math.PI - 0.42;
-        const a2 = ang + Math.PI + 0.42;
+        
         return (
           <g key={`r${i}`}>
-            <path d={d} fill="none" stroke={stroke} strokeWidth={2.3} strokeLinejoin="round" strokeLinecap="round" />
             <path
-              d={`M ${sx(end.x).toFixed(1)} ${sy(end.y).toFixed(1)} L ${(sx(end.x) + ah * Math.cos(a1)).toFixed(1)} ${(sy(end.y) + ah * Math.sin(a1)).toFixed(1)} M ${sx(end.x).toFixed(1)} ${sy(end.y).toFixed(1)} L ${(sx(end.x) + ah * Math.cos(a2)).toFixed(1)} ${(sy(end.y) + ah * Math.sin(a2)).toFixed(1)}`}
-              stroke={stroke}
-              strokeWidth={2.3}
-              strokeLinecap="round"
+              d={d}
               fill="none"
+              stroke={stroke}
+              strokeWidth={3}
+              strokeLinejoin="round"
+              strokeLinecap="round"
             />
+            <ArrowHead end={S(pts2[pts2.length - 1])} prev={S(pts2[pts2.length - 2])} color={stroke} size={9} />
           </g>
         );
       })}
@@ -244,30 +263,15 @@ export default function PlayArt({
         const cx = sx(p.x);
         const cy = sy(p.y);
 
-        // offensive line — blockers
+        // offensive line — white knots under their block bars
         if (side === 'offense' && p.posType === 4) {
-          return (
-            <g key={`p${i}`}>
-              <title>Offensive line</title>
-              <rect
-                x={cx - olHalf}
-                y={cy - olHalf}
-                width={olHalf * 2}
-                height={olHalf * 2}
-                rx={2}
-                fill={OL_COLOR}
-                stroke="var(--surface)"
-                strokeWidth={1.3}
-              />
-              <line x1={cx} x2={cx} y1={cy - olHalf} y2={cy - PX * 1.05} stroke={OL_COLOR} strokeWidth={1.6} />
-            </g>
-          );
+          return <circle key={`p${i}`} cx={cx} cy={cy} r={olR} fill={CHALK} stroke={WELL} strokeWidth={1.4} />;
         }
 
         // offensive receiver with a controller passing icon
         const btn = side === 'offense' ? buttons[i] : null;
         if (btn) {
-          const fill = BTN_COLOR[btn] ?? OL_COLOR;
+          const fill = BTN_COLOR[btn] ?? CHALK;
           const bumper = btn.length > 1;
           if (bumper) {
             const bw = PX * 1.9;
@@ -275,7 +279,7 @@ export default function PlayArt({
             return (
               <g key={`p${i}`}>
                 <title>{btn}</title>
-                <rect x={cx - bw / 2} y={cy - bh / 2} width={bw} height={bh} rx={bh / 2} fill={fill} stroke="var(--surface)" strokeWidth={1.5} />
+                <rect x={cx - bw / 2} y={cy - bh / 2} width={bw} height={bh} rx={bh / 2} fill={fill} stroke={WELL} strokeWidth={1.5} />
                 <text x={cx} y={cy + 3} fontSize={8.5} fontWeight={700} fontFamily="var(--font-display)" textAnchor="middle" fill="#fff">
                   {btn}
                 </text>
@@ -285,7 +289,7 @@ export default function PlayArt({
           return (
             <g key={`p${i}`}>
               <title>{btn}</title>
-              <circle cx={cx} cy={cy} r={rr} fill={fill} stroke="var(--surface)" strokeWidth={1.7} />
+              <circle cx={cx} cy={cy} r={rr} fill={fill} stroke={WELL} strokeWidth={1.7} />
               <text x={cx} y={cy + 3.4} fontSize={10} fontWeight={700} fontFamily="var(--font-display)" textAnchor="middle" fill={inkFor(fill)}>
                 {btn}
               </text>
@@ -293,60 +297,37 @@ export default function PlayArt({
           );
         }
 
-        // quarterback
+        // quarterback — white knot like the game's, marked
         if (side === 'offense' && p.posType === 1) {
           return (
             <g key={`p${i}`}>
               <title>Quarterback</title>
-              <circle cx={cx} cy={cy} r={rr} fill={QB_COLOR} stroke="var(--surface)" strokeWidth={1.7} />
-              <text x={cx} y={cy + 3.2} fontSize={8.5} fontWeight={700} fontFamily="var(--font-display)" textAnchor="middle" fill="#fff">
+              <circle cx={cx} cy={cy} r={rr} fill={CHALK} stroke={WELL} strokeWidth={1.6} />
+              <text x={cx} y={cy + 3.2} fontSize={8} fontWeight={700} fontFamily="var(--font-display)" textAnchor="middle" fill="#20242e">
                 QB
               </text>
             </g>
           );
         }
 
-        // defender
+        // defender — white knot with a level label
         if (side === 'defense') {
           const lbl = defenseLabel(p);
-          const fill = DEF_COLOR[lbl];
           return (
             <g key={`p${i}`}>
               <title>{lbl}</title>
-              <circle cx={cx} cy={cy} r={rr} fill={fill} stroke="var(--surface)" strokeWidth={1.6} />
-              <text x={cx} y={cy + 3.2} fontSize={8.5} fontWeight={700} fontFamily="var(--font-display)" textAnchor="middle" fill={inkFor(fill)}>
+              <circle cx={cx} cy={cy} r={rr} fill={CHALK} stroke={WELL} strokeWidth={1.5} />
+              <text x={cx} y={cy + 3.2} fontSize={8} fontWeight={700} fontFamily="var(--font-display)" textAnchor="middle" fill="#20242e">
                 {lbl}
               </text>
             </g>
           );
         }
 
-        // fallback (offensive skill player without an icon)
-        return (
-          <g key={`p${i}`}>
-            <circle cx={cx} cy={cy} r={rr} fill={OL_COLOR} stroke="var(--surface)" strokeWidth={1.6} />
-          </g>
-        );
+        // remaining offensive skill player (uniconed back/TE)
+        return <circle key={`p${i}`} cx={cx} cy={cy} r={rr * 0.9} fill={CHALK} stroke={WELL} strokeWidth={1.5} />;
       })}
 
-      {/* play-type flag */}
-      {playType && (
-        <g>
-          <rect x={7} y={h - 20} width={playType === 'PASS' ? 42 : 38} height={14} rx={3} fill={BTN_COLOR.X} opacity={0.92} />
-          <text
-            x={playType === 'PASS' ? 28 : 26}
-            y={h - 9.5}
-            fontSize={9}
-            fontWeight={700}
-            fontFamily="var(--font-display)"
-            textAnchor="middle"
-            fill="#fff"
-            style={{ letterSpacing: '0.06em' }}
-          >
-            {playType}
-          </text>
-        </g>
-      )}
     </svg>
   );
 }
