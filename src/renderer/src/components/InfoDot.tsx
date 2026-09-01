@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * A small circled "i" that opens a dialog explaining the block it sits in.
@@ -35,19 +36,24 @@ export default function InfoDot({ title, children }: { title: string; children: 
       >
         i
       </button>
-      {open && (
-        <div className="info-overlay" onClick={() => setOpen(false)}>
-          <div className="info-dialog" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
-            <div className="info-head">
-              <span className="info-title">{title}</span>
-              <button type="button" className="info-close" onClick={() => setOpen(false)} aria-label="Close">
-                ✕
-              </button>
+      {open &&
+        /* Portaled to <body>: the dot can sit inside clipped chrome (the team
+           tab bar clips to its plate shape) without the dialog inheriting the
+           clip — fixed-position boxes still clip under an ancestor clip-path. */
+        createPortal(
+          <div className="info-overlay" onClick={() => setOpen(false)}>
+            <div className="info-dialog" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
+              <div className="info-head">
+                <span className="info-title">{title}</span>
+                <button type="button" className="info-close" onClick={() => setOpen(false)} aria-label="Close">
+                  ✕
+                </button>
+              </div>
+              <div className="info-body">{children}</div>
             </div>
-            <div className="info-body">{children}</div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 }
