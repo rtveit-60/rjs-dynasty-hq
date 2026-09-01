@@ -754,7 +754,7 @@ const SPLIT_FIELDS: Record<string, keyof Omit<import('../../shared/types.ts').Se
   DEFPASSYARDS: 'defPassYds'
 };
 
-async function extractSplits(franchise: any, teamRec: any): Promise<import('../../shared/types.ts').SeasonSplits | null> {
+export async function extractSplits(franchise: any, teamRec: any): Promise<import('../../shared/types.ts').SeasonSplits | null> {
   const sumRows = async (arrayRef: ReturnType<typeof refFromRecord>, onlyLast: boolean) => {
     if (isNullRef(arrayRef)) return null;
     const arrTable = await tableById(franchise, arrayRef.tableId);

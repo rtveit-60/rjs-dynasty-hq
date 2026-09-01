@@ -4,6 +4,7 @@ import { schemeLabel } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 import BudgetView from './BudgetView.tsx';
 import DepthChartView from './DepthChartView.tsx';
+import MatchupView from './MatchupView.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 import PlaybookView from './PlaybookView.tsx';
@@ -13,10 +14,20 @@ import TargetsView from './TargetsView.tsx';
 import TeamHistoryView from './TeamHistoryView.tsx';
 import TendenciesView from './TendenciesView.tsx';
 
-type Tab = 'program' | 'roster' | 'depth' | 'targets' | 'budget' | 'tendencies' | 'playbook' | 'history';
+type Tab =
+  | 'program'
+  | 'matchup'
+  | 'roster'
+  | 'depth'
+  | 'targets'
+  | 'budget'
+  | 'tendencies'
+  | 'playbook'
+  | 'history';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'program', label: 'PROGRAM DASHBOARD' },
+  { key: 'matchup', label: "THIS WEEK'S MATCHUP" },
   { key: 'roster', label: 'ROSTER' },
   { key: 'depth', label: 'DEPTH CHART' },
   { key: 'targets', label: 'RECRUITING OFFICE' },
@@ -181,6 +192,7 @@ export default function TeamHQ() {
       </div>
 
       {tab === 'program' && <ProgramDashboard school={school!} season={snapshot?.season ?? null} />}
+      {tab === 'matchup' && <MatchupView school={school!} />}
       {tab === 'roster' && (
         <RosterTable roster={roster} proPotential={school!.recruiting?.proPotential ?? []} />
       )}

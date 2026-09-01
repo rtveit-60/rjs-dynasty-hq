@@ -272,6 +272,14 @@ function registerIpc(): void {
   // League stat leaders for Media HQ — one sweep per parse, cached in the pipeline.
   handle('league:leaders', () => pipeline.leagueLeaders());
 
+  // Matchup-tab extras: both schools' season splits, banked prior meetings,
+  // and the record book — read on demand from the cached parse.
+  handle('matchup:extras', (_e, homeRow: number, awayRow: number) =>
+    Number.isInteger(homeRow) && homeRow >= 0 && Number.isInteger(awayRow) && awayRow >= 0
+      ? pipeline.matchupExtras(homeRow, awayRow)
+      : null,
+  );
+
   // Attribute search over the recruiting class. Runs against the cached parse,
   // so it is cheap enough to re-run as the user types a threshold.
   handle('recruit:scout', (_e, criteria: unknown) =>
@@ -782,6 +790,14 @@ function createWindow(): void {
                 `document.querySelectorAll('.info-dot')[${Number(infoIndex)}]?.click()`
               );
               await new Promise((r) => setTimeout(r, 500));
+            }
+            // HQ_CAPTURE_SCROLL=<px> scrolls the content pane before the shot.
+            const scrollPx = process.env['HQ_CAPTURE_SCROLL'];
+            if (scrollPx) {
+              await win!.webContents.executeJavaScript(
+                `document.querySelector('.content')?.scrollTo({ top: ${Number(scrollPx) || 0} })`
+              );
+              await new Promise((r) => setTimeout(r, 400));
             }
             // HQ_CAPTURE_ROW=<n> expands the nth table row (for detail cards).
             const rowIndex = process.env['HQ_CAPTURE_ROW'];

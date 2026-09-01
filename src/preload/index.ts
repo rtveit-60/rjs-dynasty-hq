@@ -10,6 +10,7 @@ import type {
   DetectedSave,
   GameDirStatus,
   LeagueLeaders,
+  MatchupExtras,
   MediaEvent,
   PlaybookBook,
   PlayerEditChanges,
@@ -54,6 +55,7 @@ export interface HQBridge {
   revealSave: () => Promise<void>;
   getRecruitCard: (playerRow: number) => Promise<RecruitCard | null>;
   getLeagueLeaders: () => Promise<LeagueLeaders | null>;
+  getMatchupExtras: (homeRow: number, awayRow: number) => Promise<MatchupExtras | null>;
   getProfile: (req: ProfileRequest) => Promise<Profile | null>;
   getEditForm: (playerRow: number) => Promise<PlayerEditForm | null>;
   editPlayer: (changes: PlayerEditChanges) => Promise<PlayerEditResult>;
@@ -104,6 +106,7 @@ const bridge: HQBridge = {
   revealSave: () => ipcRenderer.invoke('save:reveal'),
   getRecruitCard: (playerRow) => ipcRenderer.invoke('recruit:card', playerRow),
   getLeagueLeaders: () => ipcRenderer.invoke('league:leaders'),
+  getMatchupExtras: (homeRow, awayRow) => ipcRenderer.invoke('matchup:extras', homeRow, awayRow),
   getProfile: (req) => ipcRenderer.invoke('profile:get', req),
   getEditForm: (playerRow) => ipcRenderer.invoke('player:editform', playerRow),
   editPlayer: (changes) => ipcRenderer.invoke('player:edit', changes),

@@ -555,6 +555,44 @@ export interface LeagueLeaders {
   teams: TeamSeasonTotals[];
 }
 
+// --- This Week's Matchup (Team HQ tab; heavy pieces fetched on demand) ---
+
+/** One completed meeting between the two matchup schools, from the schedule bank. */
+export interface MatchupMeeting {
+  year: number;
+  week: number;
+  weekType: string;
+  homeRow: number;
+  awayRow: number;
+  homeScore: number;
+  awayScore: number;
+  bowlName: string | null;
+}
+
+/** One row of the game's own FBS record book (League.Player*StatRecords). */
+export interface StatRecordEntry {
+  scope: 'season' | 'game' | 'career';
+  /** The save's stat key, e.g. "RushYards", "PassYards", "ReceiveYards". */
+  statType: string;
+  value: number;
+  firstName: string;
+  lastName: string;
+  /** Denormalized text, exactly as the record book stores it. */
+  teamName: string;
+  year: number;
+}
+
+/**
+ * The matchup pieces only the main process can read: season stat splits for
+ * both schools, every banked prior meeting, and the live record book.
+ */
+export interface MatchupExtras {
+  home: SeasonSplits | null;
+  away: SeasonSplits | null;
+  meetings: MatchupMeeting[];
+  records: StatRecordEntry[];
+}
+
 // --- Profiles (on-demand pop-up detail for a player, coach or school) ---
 
 /**

@@ -40,6 +40,7 @@ import {
 import { log, reportError } from './log.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
+import { extractMatchupExtras } from './parser/matchup.ts';
 import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from './parser/profile.ts';
 import { scoutRecruits } from './parser/recruit-scout.ts';
 import { mergeSeasonHistory } from './history.ts';
@@ -153,6 +154,12 @@ export class Pipeline {
   async recruitCard(playerRow: number): Promise<RecruitCard | null> {
     if (!this.franchise) return null;
     return extractRecruitCard(this.franchise, playerRow);
+  }
+
+  /** Matchup-tab extras (splits, banked meetings, record book) from the cached parse. */
+  async matchupExtras(homeRow: number, awayRow: number): Promise<import('../shared/types.ts').MatchupExtras | null> {
+    if (!this.franchise) return null;
+    return extractMatchupExtras(this.franchise, homeRow, awayRow, readBankedGames(this.lastDynastyId));
   }
 
   /** League stat leaders for Media HQ — swept once per parse, then cached. */
