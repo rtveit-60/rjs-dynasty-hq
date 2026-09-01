@@ -263,6 +263,9 @@ export interface CoachContract {
 export interface RivalrySeries {
   name: string;
   secondaryName: string | null;
+  /** Stable art key from the save (e.g. "Alabama_Auburn_Game") — joins the
+   * extracted rivalry logo / trophy renders in the game-icons store. */
+  assetName: string;
   rivalRow: number;
   rivalName: string;
   usWins: number;
