@@ -9,6 +9,13 @@ type School = NonNullable<Snapshot['school']>;
 
 type Side = 'offense' | 'defense';
 
+/**
+ * Play-art work in progress: the per-play generator (PlayArt.tsx, drawn in the
+ * game's concept-art language) and the extracted concept library stay in the
+ * tree but off screen until the diagrams read right. Flip to true to resume.
+ */
+const SHOW_PLAY_ART = false;
+
 export default function PlaybookView({ school }: { school: School }) {
   const { team, staff } = school;
   const oc = staff.find((s) => s.role === 'OC');
@@ -94,7 +101,7 @@ export default function PlaybookView({ school }: { school: School }) {
       </div>
 
       <PlaybookBrowser book={activeBook} side={side} onSide={setSide} loaded={loaded} />
-      <ConceptLibrary side={side} />
+      {SHOW_PLAY_ART && <ConceptLibrary side={side} />}
     </>
   );
 }
@@ -250,13 +257,42 @@ function PlaybookBrowser({
                 </span>
               )}
             </div>
-            {play ? (
+            {SHOW_PLAY_ART && play ? (
               <div style={{ marginTop: 10 }}>
                 <PlayArt formation={formation} play={play} side={side} />
               </div>
             ) : (
-              <div style={{ color: 'var(--ink-3)', fontSize: 12.5, padding: '18px 0' }}>
-                This formation lists no plays.
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  minHeight: 240,
+                  marginTop: 10,
+                  padding: 24,
+                  border: '1px dashed var(--line)',
+                  borderRadius: 8,
+                  background: 'var(--sunken)',
+                  textAlign: 'center'
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontWeight: 700,
+                    fontSize: 15,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: 'var(--ink-2)'
+                  }}
+                >
+                  Play Art
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', maxWidth: 320 }}>
+                  Diagrams aren't drawn yet. The names and structure above are live from your book.
+                </div>
               </div>
             )}
           </div>
