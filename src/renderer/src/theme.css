@@ -5441,15 +5441,17 @@ table.tbl.tbl-wide {
    alike because it shades the cavity, not the glyph. */
 .tab {
   text-shadow:
-    0 -1px 0 rgba(0, 0, 0, 0.46),
-    0 1px 0 rgba(255, 255, 255, 0.16);
+    0 -1px 0 rgba(0, 0, 0, 0.55),
+    0 -2px 3px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 /* The pressed segment sits deeper, so its stamp cuts deeper too. */
 .tab.active {
   text-shadow:
-    0 -1px 1px rgba(0, 0, 0, 0.66),
-    0 1px 0 rgba(255, 255, 255, 0.12);
+    0 -1px 0 rgba(0, 0, 0, 0.72),
+    0 -2px 3px rgba(0, 0, 0, 0.4),
+    0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .tab.active::after {
