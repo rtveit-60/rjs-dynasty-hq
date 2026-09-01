@@ -72,8 +72,13 @@ for (const bundle of toc.bundles) {
     skipped++;
     continue;
   }
-  fs.writeFileSync(path.join(OUT_DIR, `${outBase}.png`), texturePng(tex));
-  written++;
+  try {
+    fs.writeFileSync(path.join(OUT_DIR, `${outBase}.png`), texturePng(tex, outBase));
+    written++;
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    skipped++;
+  }
 }
 
 console.log(`${teams.size} teams, ${written} textures decoded, ${skipped} skipped`);

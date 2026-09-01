@@ -76,8 +76,12 @@ for (const { out, bundle } of targets) {
     console.error(`${out}: unhandled format 0x${format.toString(16)} (${pixels.length}b ${width}x${height})`);
     continue;
   }
-  fs.writeFileSync(path.join(OUT_DIR, `${out}.png`), texturePng(tex));
-  decoded++;
+  try {
+    fs.writeFileSync(path.join(OUT_DIR, `${out}.png`), texturePng(tex, out));
+    decoded++;
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+  }
 }
 if (decoded) console.log(`decoded ${decoded} new textures`);
 

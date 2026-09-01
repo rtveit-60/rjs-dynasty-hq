@@ -41,6 +41,7 @@ if (!bundles.length) throw new Error('no global/states bundles found');
 console.log(`${bundles.length} state textures`);
 
 let written = 0;
+let failed = 0;
 for (const bundle of bundles) {
   const raw = bundle.name.match(/\/st_([a-z]+)_assetlibrary_states_brt$/)![1];
   const slug = FIXUPS[raw] ?? raw;
@@ -63,9 +64,15 @@ for (const bundle of bundles) {
     console.error(`${slug}: not a BC7 texture — skipped`);
     continue;
   }
-  fs.writeFileSync(path.join(OUT_DIR, `state-${slug}.png`), texturePng(tex));
-  written++;
+  try {
+    fs.writeFileSync(path.join(OUT_DIR, `state-${slug}.png`), texturePng(tex, `state-${slug}`));
+    written++;
+  } catch (err) {
+    failed++;
+    console.error(err instanceof Error ? err.message : String(err));
+  }
 }
 
-console.log(`wrote ${written} PNGs into ${OUT_DIR}`);
+console.log(`wrote ${written} PNGs into ${OUT_DIR}${failed ? `, ${failed} failed` : ''}`);
+if (failed) process.exitCode = 1;
 console.log('done');

@@ -12,6 +12,12 @@ export function resizeRgba(
   dw: number,
   dh: number
 ): Buffer {
+  for (const [name, v] of [['sw', sw], ['sh', sh], ['dw', dw], ['dh', dh]] as const) {
+    if (!Number.isInteger(v) || v < 1) throw new Error(`resizeRgba: invalid ${name}=${v}`);
+  }
+  if (src.length !== sw * sh * 4) {
+    throw new Error(`resizeRgba: ${src.length} bytes for ${sw}x${sh} RGBA (need ${sw * sh * 4})`);
+  }
   const out = Buffer.alloc(dw * dh * 4);
   const xr = sw / dw;
   const yr = sh / dh;

@@ -61,7 +61,12 @@ for (const [outName, needle] of Object.entries(ICONS)) {
     console.error(`${outName}: not a BC7 texture — skipped (extend the script)`);
     continue;
   }
-  fs.writeFileSync(path.join(OUT_DIR, `${outName}.png`), texturePng(tex));
-  console.log(`${outName}: ${tex.width}x${tex.height} BC7 -> png`);
+  try {
+    fs.writeFileSync(path.join(OUT_DIR, `${outName}.png`), texturePng(tex, outName));
+    console.log(`${outName}: ${tex.width}x${tex.height} BC7 -> png`);
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exitCode = 1;
+  }
 }
 console.log('done');

@@ -36,8 +36,13 @@ function chunk(type: string, data: Buffer): Buffer {
 
 /** Encode an RGBA pixel buffer (width * height * 4 bytes) as a PNG file. */
 export function encodePng(rgba: Buffer, width: number, height: number): Buffer {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+    throw new Error(`encodePng: invalid dimensions ${width}x${height}`);
+  }
   if (rgba.length !== width * height * 4) {
-    throw new Error(`encodePng: ${rgba.length} bytes for ${width}x${height} RGBA`);
+    throw new Error(
+      `encodePng: ${rgba.length} bytes for ${width}x${height} RGBA (need ${width * height * 4})`
+    );
   }
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);

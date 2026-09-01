@@ -294,6 +294,31 @@ function decodeBc3Alpha(data: Buffer, base: number, out: Uint8Array): void {
 
 type BlockDecoder = (data: Buffer, base: number, out: Uint8Array) => void;
 
+/**
+ * Reject bad input loudly instead of decoding garbage: a short buffer would
+ * otherwise read out of bounds as undefined and propagate NaN into pixels
+ * silently. Extra trailing bytes are tolerated (mip tails, padded payloads).
+ * The message names the format, dimensions and byte counts so a logged error
+ * code pins the failure without a debugger.
+ */
+function checkInput(
+  format: string,
+  data: Buffer,
+  width: number,
+  height: number,
+  blockBytes: number
+): void {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) {
+    throw new Error(`${format}: invalid dimensions ${width}x${height}`);
+  }
+  const need = Math.ceil(width / 4) * Math.ceil(height / 4) * blockBytes;
+  if (data.length < need) {
+    throw new Error(
+      `${format}: ${data.length} bytes for ${width}x${height} (need ${need})`
+    );
+  }
+}
+
 /** Walk a block-compressed image, cropping edge blocks on non-multiple sizes. */
 function decodeBlocks(
   data: Buffer,
@@ -322,16 +347,19 @@ function decodeBlocks(
 
 /** BC7 (DXGI 98/99 — the sRGB variant carries identical bytes) → RGBA. */
 export function decodeBC7(data: Buffer, width: number, height: number): Buffer {
+  checkInput('BC7', data, width, height, 16);
   return decodeBlocks(data, width, height, 16, decodeBc7Block);
 }
 
 /** BC1 / DXT1 (DXGI 71) → RGBA, honoring the 3-color punch-through mode. */
 export function decodeBC1(data: Buffer, width: number, height: number): Buffer {
+  checkInput('BC1', data, width, height, 8);
   return decodeBlocks(data, width, height, 8, (d, b, o) => decodeBc1Block(d, b, o, false));
 }
 
 /** BC3 / DXT5 (DXGI 77) → RGBA; the color half is always 4-color per spec. */
 export function decodeBC3(data: Buffer, width: number, height: number): Buffer {
+  checkInput('BC3', data, width, height, 16);
   return decodeBlocks(data, width, height, 16, (d, b, o) => {
     decodeBc1Block(d, b + 8, o, true);
     decodeBc3Alpha(d, b, o);

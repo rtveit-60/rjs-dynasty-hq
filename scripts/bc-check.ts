@@ -113,6 +113,40 @@ cases.push({ name: 'fuzz:bc7-all-modes', tex: fuzzBc7() });
 cases.push({ name: 'fuzz:bc1', tex: fuzzBcn(71, 8) });
 cases.push({ name: 'fuzz:bc3', tex: fuzzBcn(77, 16) });
 
+// ---- error paths -----------------------------------------------------------
+// Bad input must throw a message naming the format — never decode garbage
+// silently. Valid-length garbage must NOT throw (the fuzz above proves it
+// also decodes correctly).
+{
+  const { decodeBC1, decodeBC3, decodeBC7 } = await import('../src/main/textures/bcn.ts');
+  const { encodePng } = await import('../src/main/textures/png.ts');
+  const { resizeRgba } = await import('../src/main/textures/resize.ts');
+  const mustThrow = (label: string, needle: string, fn: () => unknown) => {
+    try {
+      fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes(needle)) {
+        console.error(`error-path ${label}: message "${msg}" lacks "${needle}"`);
+        process.exit(1);
+      }
+      return;
+    }
+    console.error(`error-path ${label}: did not throw`);
+    process.exit(1);
+  };
+  mustThrow('bc7-short', 'BC7', () => decodeBC7(Buffer.alloc(100), 16, 16));
+  mustThrow('bc1-short', 'BC1', () => decodeBC1(Buffer.alloc(10), 16, 16));
+  mustThrow('bc3-short', 'BC3', () => decodeBC3(Buffer.alloc(10), 16, 16));
+  mustThrow('bc7-dims', 'dimensions', () => decodeBC7(Buffer.alloc(16), 0, 4));
+  mustThrow('bc7-frac', 'dimensions', () => decodeBC7(Buffer.alloc(64), 2.5, 4));
+  mustThrow('png-len', 'encodePng', () => encodePng(Buffer.alloc(10), 4, 4));
+  mustThrow('png-dims', 'dimensions', () => encodePng(Buffer.alloc(0), 0, 4));
+  mustThrow('resize-len', 'resizeRgba', () => resizeRgba(Buffer.alloc(10), 4, 4, 2, 2));
+  mustThrow('resize-dims', 'invalid dw', () => resizeRgba(Buffer.alloc(64), 4, 4, 0, 2));
+  console.log('error paths: 9/9 throw with named formats');
+}
+
 // ---- decode both ways and compare ------------------------------------------
 console.log(`${cases.length} textures (${work})`);
 for (let i = 0; i < cases.length; i++) {

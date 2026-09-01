@@ -57,9 +57,18 @@ export function decodeToRgba(t: TexInfo): Buffer {
   return decodeBC7(t.data, t.width, t.height);
 }
 
-/** Decode a classified texture straight to PNG bytes. */
-export function texturePng(t: TexInfo): Buffer {
-  return encodePng(decodeToRgba(t), t.width, t.height);
+/**
+ * Decode a classified texture straight to PNG bytes. `name` rides along in
+ * any failure so an extractor's error line (or, in-app, the logged HQ code)
+ * identifies the exact texture without a debugger.
+ */
+export function texturePng(t: TexInfo, name?: string): Buffer {
+  try {
+    return encodePng(decodeToRgba(t), t.width, t.height);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`${name ? `${name}: ` : ''}dxgi${t.dxgi} ${t.width}x${t.height} — ${msg}`);
+  }
 }
 
 /** Wrap raw BCn payload as a DX10 DDS (used by bc-check's Pillow oracle). */
