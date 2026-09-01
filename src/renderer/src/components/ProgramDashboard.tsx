@@ -240,7 +240,7 @@ export default function ProgramDashboard({
   return (
     <div className="dash-stage">
     <div className="dash-field" aria-hidden="true">
-      <FieldGraphic team={school.team} cover />
+      <FieldGraphic team={school.team} />
     </div>
     <div className="two-col" style={{ marginTop: 16 }}>
       <div className="panel">

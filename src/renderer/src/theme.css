@@ -5517,10 +5517,11 @@ table.tbl.tbl-wide {
   opacity: 0.92;
 }
 
-/* The dashboard plays on the field: the team-dressed graphic sits ghosted
-   behind the panels, fading out toward the foot of the page. */
+/* The dashboard plays on the field: the whole team-dressed field fits the
+   window behind the panels, centered in the tab's stage. */
 .dash-stage {
   position: relative;
+  min-height: calc(100vh - 400px);
 }
 
 .dash-stage > .two-col {
@@ -5532,11 +5533,11 @@ table.tbl.tbl-wide {
   position: absolute;
   inset: 8px 0 0 0;
   z-index: 0;
-  opacity: 0.32;
+  display: flex;
+  align-items: center;
+  opacity: 0.34;
   pointer-events: none;
   filter: saturate(0.72);
-  -webkit-mask-image: linear-gradient(180deg, #000 68%, transparent 98%);
-  mask-image: linear-gradient(180deg, #000 68%, transparent 98%);
 }
 
 .dash-field .field-graphic {
@@ -5544,10 +5545,10 @@ table.tbl.tbl-wide {
   height: 100%;
 }
 
-/* Dashboard panels sit on the field like broadcast graphics: a touch
-   translucent, frosted, so the turf reads through without costing text. */
+/* Dashboard panels sit on the field like broadcast graphics: translucent,
+   frosted, so the turf reads through without costing text. */
 .dash-stage .panel {
-  background-color: color-mix(in srgb, var(--paper) 82%, transparent);
+  background-color: color-mix(in srgb, var(--paper) 72%, transparent);
   -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
 }
