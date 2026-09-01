@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { PlaybookBook, Snapshot } from '../../../shared/types.ts';
 import { prestigeLabel, schemeLabel } from '../lib/format.ts';
+import { PLAY_CONCEPTS } from '../../../shared/play-concepts.ts';
 import InfoDot from './InfoDot.tsx';
-import { personnelLabel } from './PlayArt.tsx';
+import PlayArt, { personnelLabel } from './PlayArt.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -93,6 +94,7 @@ export default function PlaybookView({ school }: { school: School }) {
       </div>
 
       <PlaybookBrowser book={activeBook} side={side} onSide={setSide} loaded={loaded} />
+      <ConceptLibrary side={side} />
     </>
   );
 }
@@ -248,41 +250,71 @@ function PlaybookBrowser({
                 </span>
               )}
             </div>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                minHeight: 240,
-                marginTop: 10,
-                padding: 24,
-                border: '1px dashed var(--line)',
-                borderRadius: 8,
-                background: 'var(--sunken)',
-                textAlign: 'center'
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  fontWeight: 700,
-                  fontSize: 15,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  color: 'var(--ink-2)'
-                }}
-              >
-                Play Art
+            {play ? (
+              <div style={{ marginTop: 10 }}>
+                <PlayArt formation={formation} play={play} side={side} />
               </div>
-              <div style={{ fontSize: 12, color: 'var(--ink-3)', maxWidth: 320 }}>
-                Diagrams aren't drawn yet. The names and structure above are live from your book.
+            ) : (
+              <div style={{ color: 'var(--ink-3)', fontSize: 12.5, padding: '18px 0' }}>
+                This formation lists no plays.
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+/**
+ * The game's own playcall concept diagrams (extracted by
+ * scripts/extract-playcall-art.ts), grouped and named by its concept enums.
+ * Hidden entirely on machines that have not run the extraction.
+ */
+function ConceptLibrary({ side }: { side: Side }) {
+  const [haveArt, setHaveArt] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const img = new Image();
+    img.onload = () => alive && setHaveArt(true);
+    img.src = `gameicon://${PLAY_CONCEPTS[0]?.slug ?? 'pcc-empty'}`;
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const groups = useMemo(() => {
+    const wanted = side === 'defense' ? ['Defense'] : ['Run', 'Option', 'RPO', 'Quick Pass', 'Medium Pass', 'Deep Pass', 'Play Action', 'Screen'];
+    return wanted
+      .map((g) => ({ group: g, items: PLAY_CONCEPTS.filter((c) => c.group === g) }))
+      .filter((g) => g.items.length);
+  }, [side]);
+  if (!haveArt) return null;
+  return (
+    <div className="panel" style={{ marginTop: 16 }}>
+      <div className="panel-title">
+        Concept Library
+        <InfoDot title="Concept Library">
+          <p>
+            The game's own playcall concept diagrams, pulled straight from its files —
+            the same X-and-O art its concept browser draws — named and grouped by the
+            game's concept list.
+          </p>
+        </InfoDot>
+      </div>
+      {groups.map((g) => (
+        <div key={g.group} style={{ marginTop: 10 }}>
+          <div className="cl-group">{g.group}</div>
+          <div className="cl-grid">
+            {g.items.map((c) => (
+              <figure key={c.slug} className="cl-card">
+                <img src={`gameicon://${c.slug}`} alt="" loading="lazy" />
+                <figcaption>{c.name}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
