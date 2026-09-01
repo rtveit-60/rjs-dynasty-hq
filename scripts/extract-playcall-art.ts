@@ -21,7 +21,6 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import {
   GAME_ROOT_DEFAULT,
   loadLayout,
@@ -32,28 +31,10 @@ import {
   readCasAsset,
   decompressCasBlocksUnknownSize,
 } from './fb/frostbite.ts';
+import { classifyTexture, texturePng } from './fb/texture.ts';
 
 const OUT_DIR = 'resources/game-icons';
 const CATALOG_OUT = 'src/shared/play-concepts.ts';
-
-function ddsBc7(w: number, h: number, dxgi: number, data: Buffer): Buffer {
-  const hdr = Buffer.alloc(148);
-  hdr.write('DDS ', 0, 'latin1');
-  hdr.writeUInt32LE(124, 4);
-  hdr.writeUInt32LE(0x81007, 8);
-  hdr.writeUInt32LE(h, 12);
-  hdr.writeUInt32LE(w, 16);
-  hdr.writeUInt32LE(data.length, 20);
-  hdr.writeUInt32LE(1, 28);
-  hdr.writeUInt32LE(32, 76);
-  hdr.writeUInt32LE(0x4, 80);
-  hdr.write('DX10', 84, 'latin1');
-  hdr.writeUInt32LE(0x1000, 108);
-  hdr.writeUInt32LE(dxgi, 128);
-  hdr.writeUInt32LE(3, 132);
-  hdr.writeUInt32LE(1, 140);
-  return Buffer.concat([hdr, data]);
-}
 
 const layout = loadLayout(GAME_ROOT_DEFAULT);
 
@@ -73,7 +54,7 @@ for (const b of toc.bundles) {
 }
 console.log(`${targets.length} playcall art bundles`);
 
-const ddsFiles: string[] = [];
+let decoded = 0;
 for (const { out, bundle } of targets) {
   if (fs.existsSync(path.join(OUT_DIR, `${out}.png`))) continue;
   let parsed;
@@ -90,45 +71,15 @@ for (const { out, bundle } of targets) {
   const width = header.readUInt16LE(0x16);
   const height = header.readUInt16LE(0x18);
   const pixels = await readCasAsset(layout, chunk.location!, chunk.originalSize);
-  const bc3 = width * height;
-  let dxgi: number | null = null;
-  let data = pixels;
-  if (format === 0x42) dxgi = 98;
-  else if (format === 0x43) dxgi = 99;
-  else if (pixels.length === bc3 / 2) dxgi = 71;
-  else if (pixels.length === bc3) dxgi = 77;
-  else if (pixels.length > bc3 && pixels.length < bc3 * 1.4) {
-    dxgi = 77;
-    data = pixels.subarray(0, bc3);
-  }
-  if (dxgi === null) {
+  const tex = classifyTexture(format, width, height, pixels);
+  if (!tex) {
     console.error(`${out}: unhandled format 0x${format.toString(16)} (${pixels.length}b ${width}x${height})`);
     continue;
   }
-  const p = path.join(OUT_DIR, `${out}.dds`);
-  fs.writeFileSync(p, ddsBc7(width, height, dxgi, data));
-  ddsFiles.push(p);
+  fs.writeFileSync(path.join(OUT_DIR, `${out}.png`), texturePng(tex));
+  decoded++;
 }
-if (ddsFiles.length) {
-  const py = [
-    'import sys',
-    'from PIL import Image',
-    'for p in sys.argv[1:]:',
-    '    im = Image.open(p); im.load()',
-    "    im.save(p[:-4] + '.png')",
-  ].join('\n');
-  for (let i = 0; i < ddsFiles.length; i += 50) {
-    const batch = ddsFiles.slice(i, i + 50);
-    const r = spawnSync('python', ['-c', py, ...batch], { encoding: 'utf8' });
-    if (r.status !== 0) {
-      console.error('python/Pillow conversion failed (dev dependency: python3 + Pillow>=11):');
-      console.error(r.stderr || r.stdout);
-      process.exit(1);
-    }
-    for (const f of batch) fs.rmSync(f);
-  }
-  console.log(`decoded ${ddsFiles.length} new textures`);
-}
+if (decoded) console.log(`decoded ${decoded} new textures`);
 
 // ---- 2) concept catalog from the game's own enums --------------------------
 const globalsToc = parseSuperbundleToc(

@@ -12,7 +12,7 @@
  * protocol resolves portraits by that id.
  *
  * Output PNGs are for the user's own machine (EA's art never enters the
- * repo). Conversion needs python3 + Pillow (BC7 decode), dev/power-user only
+ * repo). Decoding and resizing are in-process TypeScript (no Python needed),
  * until an in-app decoder lands.
  *
  * Usage:
@@ -27,7 +27,6 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import {
   GAME_ROOT_DEFAULT,
   loadLayout,
@@ -37,6 +36,9 @@ import {
   readRawCasBytes,
   readCasAsset
 } from './fb/frostbite.ts';
+import { decodeBC7 } from '../src/main/textures/bcn.ts';
+import { encodePng } from '../src/main/textures/png.ts';
+import { thumbnailRgba } from '../src/main/textures/resize.ts';
 import { loadFranchise, mainTable, val } from '../src/main/parser/franchise.ts';
 import { ensureCoachSchema } from '../src/main/parser/coach-schema.ts';
 
@@ -54,24 +56,6 @@ const size = args.includes('--size') ? Number(args[args.indexOf('--size') + 1]) 
 
 const BC7_FORMAT = 0x42;
 
-function ddsBc7(w: number, h: number, data: Buffer): Buffer {
-  const hdr = Buffer.alloc(148);
-  hdr.write('DDS ', 0, 'latin1');
-  hdr.writeUInt32LE(124, 4);
-  hdr.writeUInt32LE(0x81007, 8);
-  hdr.writeUInt32LE(h, 12);
-  hdr.writeUInt32LE(w, 16);
-  hdr.writeUInt32LE(data.length, 20);
-  hdr.writeUInt32LE(1, 28);
-  hdr.writeUInt32LE(32, 76);
-  hdr.writeUInt32LE(0x4, 80);
-  hdr.write('DX10', 84, 'latin1');
-  hdr.writeUInt32LE(0x1000, 108);
-  hdr.writeUInt32LE(98, 128);
-  hdr.writeUInt32LE(3, 132);
-  hdr.writeUInt32LE(1, 140);
-  return Buffer.concat([hdr, data]);
-}
 
 // ---- 1. The save: who needs a portrait, keyed how ----
 const fr = await loadFranchise(savePath);
@@ -171,14 +155,12 @@ for (const b of toc.bundles) {
 console.log(`portrait bundles in the library: ${bundleByKey.size}`);
 
 fs.mkdirSync(outDir, { recursive: true });
-const tmpDir = path.join(outDir, '.dds-tmp');
-fs.mkdirSync(tmpDir, { recursive: true });
+
 
 let extracted = 0;
 let cached = 0;
 let missing = 0;
-const ddsToPng: [string, string][] = [];
-const doneAsset = new Map<string, string>(); // asset -> dds path (dedupe shared generics)
+const doneAsset = new Map<string, string>(); // asset -> written png path (dedupe shared generics)
 for (const w of wants) {
   const pngPath = path.join(outDir, `${w.file}.png`);
   if (fs.existsSync(pngPath)) {
@@ -188,7 +170,8 @@ for (const w of wants) {
   const key = w.key;
   const prior = doneAsset.get(w.key);
   if (prior) {
-    ddsToPng.push([prior, pngPath]);
+    fs.copyFileSync(prior, pngPath);
+    extracted++;
     continue;
   }
   let bundle = bundleByKey.get(key);
@@ -221,10 +204,9 @@ for (const w of wants) {
     const width = header.readUInt16LE(0x16);
     const height = header.readUInt16LE(0x18);
     const pixels = await readCasAsset(layout, chunk.location!, chunk.originalSize);
-    const ddsPath = path.join(tmpDir, `${w.file}.dds`);
-    fs.writeFileSync(ddsPath, ddsBc7(width, height, pixels));
-    doneAsset.set(w.key, ddsPath);
-    ddsToPng.push([ddsPath, pngPath]);
+    const thumb = thumbnailRgba(decodeBC7(pixels, width, height), width, height, size);
+    fs.writeFileSync(pngPath, encodePng(thumb.data, thumb.width, thumb.height));
+    doneAsset.set(w.key, pngPath);
     extracted++;
   } catch (err) {
     missing++;
@@ -233,31 +215,4 @@ for (const w of wants) {
 }
 console.log(`extracted ${extracted} textures (${cached} already on disk, ${missing} not found)`);
 
-// ---- 3. BC7 -> PNG via Pillow, resized for app use ----
-if (ddsToPng.length) {
-  const py = [
-    'import sys',
-    'from PIL import Image',
-    `SZ = ${size}`,
-    'pairs = sys.argv[1:]',
-    'for i in range(0, len(pairs), 2):',
-    '    src, dst = pairs[i], pairs[i+1]',
-    '    im = Image.open(src); im.load()',
-    '    im.thumbnail((SZ, SZ))',
-    '    im.save(dst)',
-    `print('converted', len(pairs)//2)`
-  ].join('\n');
-  // Windows command-line length caps out — convert in batches.
-  for (let i = 0; i < ddsToPng.length; i += 120) {
-    const batch = ddsToPng.slice(i, i + 120).flat();
-    const r = spawnSync('python', ['-c', py, ...batch], { encoding: 'utf8' });
-    if (r.status !== 0) {
-      console.error('python/Pillow conversion failed (needs python3 + Pillow>=11):');
-      console.error(r.stderr || r.stdout);
-      process.exit(1);
-    }
-    process.stdout.write(r.stdout);
-  }
-}
-fs.rmSync(tmpDir, { recursive: true, force: true });
 console.log(`done -> ${outDir}`);
