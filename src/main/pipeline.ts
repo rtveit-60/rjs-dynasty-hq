@@ -44,6 +44,7 @@ import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from 
 import { scoutRecruits } from './parser/recruit-scout.ts';
 import { mergeSeasonHistory } from './history.ts';
 import { bankSeasonGames, readBankedGames } from './schedule-bank.ts';
+import { adoptLegacyFile, stateDir } from './state-dirs.ts';
 import { generateMedia, sortEvents, type MediaState } from './media/engine.ts';
 import { extractSnapshot } from './parser/extract.ts';
 import { loadFranchise } from './parser/franchise.ts';
@@ -78,6 +79,8 @@ export class Pipeline {
   private queuedArgs: { savePath: string; schoolTeamRow: number | null } | null = null;
   /** The school scoped by the latest refresh/rescope; marks "us" in profiles. */
   private lastSchoolRow: number | null = null;
+  /** Dynasty identity of the latest snapshot — keys the persisted state stores. */
+  private lastDynastyId: string | null = null;
   /** League leaders, swept once per parsed save (keyed by its hash). */
   private leaders: LeagueLeaders | null = null;
   private leadersHash = '';
@@ -96,6 +99,7 @@ export class Pipeline {
     this.franchise = null;
     this.lastHash = '';
     this.lastUpdate = null;
+    this.lastDynastyId = null;
   }
 
   async refresh(savePath: string, schoolTeamRow: number | null, force = false): Promise<void> {
@@ -172,7 +176,8 @@ export class Pipeline {
     if (!this.franchise) return null;
     if (req.kind === 'player') return extractPlayerProfile(this.franchise, req.row, this.lastSchoolRow);
     if (req.kind === 'coach') return extractCoachProfile(this.franchise, req.row);
-    if (req.kind === 'school') return extractSchoolProfile(this.franchise, req.row, readBankedGames());
+    if (req.kind === 'school')
+      return extractSchoolProfile(this.franchise, req.row, readBankedGames(this.lastDynastyId));
     return null;
   }
 
@@ -425,14 +430,16 @@ export class Pipeline {
 
   /** Fold banked seasons into the save's five-season window (see history.ts). */
   private bankHistory(snapshot: Snapshot): void {
+    this.lastDynastyId = snapshot.dynastyId;
     if (!snapshot.school) return;
     snapshot.school.seasonHistory = mergeSeasonHistory(
+      snapshot.dynastyId,
       snapshot.school.team.row,
       snapshot.school.seasonHistory
     );
     // And the league schedule: the save recycles SeasonGame every year, so the
     // bank is the only game-by-game record a finished season will ever have.
-    if (snapshot.season) bankSeasonGames(snapshot.season.seasonYear, snapshot.games);
+    if (snapshot.season) bankSeasonGames(snapshot.dynastyId, snapshot.season.seasonYear, snapshot.games);
   }
 
   /** Diff against the stored per-school media state, append fresh stories, push the feed. */
@@ -443,13 +450,20 @@ export class Pipeline {
         return;
       }
       const teamRow = snapshot.school.team.row;
-      const dir = join(app.getPath('userData'), 'media');
-      mkdirSync(dir, { recursive: true });
+      adoptLegacyFile('media', snapshot.dynastyId, `state-${teamRow}.json`);
+      const adoptedFeed = adoptLegacyFile('media', snapshot.dynastyId, `events-${teamRow}.json`);
+      const dir = stateDir('media', snapshot.dynastyId);
       const stateFile = join(dir, `state-${teamRow}.json`);
       const eventsFile = join(dir, `events-${teamRow}.json`);
 
       const prev = readJson<MediaState>(stateFile);
-      const log = readJson<MediaEvent[]>(eventsFile) ?? [];
+      let log = readJson<MediaEvent[]>(eventsFile) ?? [];
+      // A freshly adopted flat feed may hold stories another dynasty generated
+      // about this school; seasons this save hasn't reached are provably foreign.
+      if (adoptedFeed && snapshot.season) {
+        const nowYear = snapshot.season.seasonYear;
+        log = log.filter((e) => e.seasonYear <= nowYear);
+      }
       const { state, events } = generateMedia(prev, snapshot, leaders);
       // An app-written save diffs against itself (a rename reads as roster
       // churn): rebaseline the state, publish nothing.

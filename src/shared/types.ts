@@ -1194,6 +1194,12 @@ export interface MediaEvent {
 export interface Snapshot {
   parsedAt: number;
   fileName: string;
+  /**
+   * Stable per-dynasty identity (FranchiseUser.TrophyProfileId, minted once at
+   * dynasty creation). Keys the media/history/schedule stores so two dynasties
+   * sharing a school never cross-contaminate; null when the save lacks one.
+   */
+  dynastyId: string | null;
   /** Latest completed week's Players of the Week (national + conference). */
   weeklyAwards: WeeklyAward[];
   /** The most recent annual awards show on record; null before the first one. */
