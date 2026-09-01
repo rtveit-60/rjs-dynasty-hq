@@ -24,23 +24,35 @@ const PIN_METALS: Record<number, { hi: string; body: string; rim: string; num: s
 };
 
 const PIN_TEXTURE = 'gameicon://pipeline-pin';
-let pinProbe: Promise<boolean> | undefined;
-function probePinTexture(): Promise<boolean> {
+let pinProbe: Promise<string | null> | undefined;
+function probePinTexture(): Promise<string | null> {
+  // CSS mask-image cannot fetch the gameicon: scheme, so the texture is
+  // converted to a data URL once and masked from that.
   pinProbe ??= new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => resolve(true);
-    img.onerror = () => resolve(false);
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        c.getContext('2d')!.drawImage(img, 0, 0);
+        resolve(c.toDataURL('image/png'));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
     img.src = PIN_TEXTURE;
   });
   return pinProbe;
 }
 
 function TierPin({ tier }: { tier: number }) {
-  const [haveTexture, setHaveTexture] = useState(false);
+  const [texture, setTexture] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    void probePinTexture().then((ok) => {
-      if (alive && ok) setHaveTexture(true);
+    void probePinTexture().then((url) => {
+      if (alive && url) setTexture(url);
     });
     return () => {
       alive = false;
@@ -48,12 +60,12 @@ function TierPin({ tier }: { tier: number }) {
   }, []);
   const metal = PIN_METALS[tier];
 
-  if (haveTexture) {
+  if (texture) {
     const mask: React.CSSProperties = {
       position: 'absolute',
       inset: 0,
-      WebkitMaskImage: `url(${PIN_TEXTURE})`,
-      maskImage: `url(${PIN_TEXTURE})`,
+      WebkitMaskImage: `url(${texture})`,
+      maskImage: `url(${texture})`,
       WebkitMaskSize: '100% 100%',
       maskSize: '100% 100%',
       background: metal
@@ -296,10 +308,10 @@ export default function ProgramDashboard({
       </div>
       <div className="panel">
         <div className="panel-title">Program Grades</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div className="grade-grid">
           {(rc?.reportCard ?? []).map((g) => (
-            <span key={g.label} className="chip">
-              {g.label}&nbsp;<span className={`grade ${g.grade.startsWith('A') ? 'good' : ''}`}>{g.grade}</span>
+            <span key={g.label} className="chip grade-cell">
+              <span className="grade-lbl">{g.label}</span><span className={`grade ${g.grade.startsWith('A') ? 'good' : ''}`}>{g.grade}</span>
             </span>
           ))}
         </div>

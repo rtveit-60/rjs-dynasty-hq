@@ -5552,3 +5552,27 @@ table.tbl.tbl-wide {
   -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
 }
+
+/* Dashboard pair panels equalize; the grades read as a uniform grid. */
+.dash-stage > .two-col {
+  align-items: stretch;
+}
+
+.grade-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(186px, 1fr));
+  gap: 6px;
+}
+
+.grade-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.grade-lbl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
