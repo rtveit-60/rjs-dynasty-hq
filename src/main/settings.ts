@@ -12,6 +12,7 @@ const DEFAULTS: Settings = {
   brandPack: 'real',
   portraitsDir: null,
   logosDir: null,
+  gameDir: null,
   autoUpdate: true,
   uiScale: 1,
   uiFit: true

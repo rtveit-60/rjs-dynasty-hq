@@ -8,6 +8,7 @@ import type {
   CreateRecruitRequest,
   DepthChartEditRequest,
   DetectedSave,
+  GameDirStatus,
   LeagueLeaders,
   MediaEvent,
   PlaybookBook,
@@ -68,6 +69,12 @@ export interface HQBridge {
   editTarget: (req: TargetActionChanges) => Promise<PlayerEditResult>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
+  gameStatus: () => Promise<GameDirStatus>;
+  chooseGameDir: () => Promise<GameDirStatus>;
+  clearGameDir: () => Promise<GameDirStatus>;
+  reportError: (p: { message: string; stack?: string; area: string }) => Promise<string>;
+  getDiagnostics: () => Promise<string>;
+  openLogs: () => Promise<void>;
   getPlaybook: (
     side: 'offense' | 'defense',
     coachRow: number | null,
@@ -112,6 +119,12 @@ const bridge: HQBridge = {
   editTarget: (req) => ipcRenderer.invoke('target:edit', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
+  gameStatus: () => ipcRenderer.invoke('game:status'),
+  chooseGameDir: () => ipcRenderer.invoke('game:choose'),
+  clearGameDir: () => ipcRenderer.invoke('game:clear'),
+  reportError: (p) => ipcRenderer.invoke('log:renderer', p),
+  getDiagnostics: () => ipcRenderer.invoke('diag:report'),
+  openLogs: () => ipcRenderer.invoke('diag:logs'),
   getPlaybook: (side, coachRow, schemeEnum) =>
     ipcRenderer.invoke('playbook:get', side, coachRow, schemeEnum),
   onSnapshot: subscribe<Snapshot>('snapshot'),

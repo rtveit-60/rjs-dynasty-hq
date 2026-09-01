@@ -11,6 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { GAME_ROOT_FALLBACK, locateGameRoot, settingsGameDir } from '../../src/main/game-locate.ts';
 
 // ---------------------------------------------------------------------------
 // TOC payload (0x22C signature header, plain payload on this Frostbite branch)
@@ -196,6 +197,12 @@ export interface GameLayout {
 
 export function loadLayout(gameRoot: string): GameLayout {
   const layoutPath = path.join(gameRoot, 'Data', 'layout.toc');
+  if (!fs.existsSync(layoutPath)) {
+    throw new Error(
+      "game install not found at " + gameRoot +
+        " — set the game folder in the app's Setup tab, or export CFB_GAME_ROOT"
+    );
+  }
   const root = parseDbObject(readTocPayload(layoutPath)) as { [key: string]: DbValue };
   const superBundles = ((root.superBundles as DbValue[]) ?? []).map(
     (e) => (e as { name: string }).name,
@@ -826,5 +833,11 @@ export async function decompressCasBlocksUnknownSize(
   return Buffer.concat(parts);
 }
 
+/**
+ * The resolved game install every script reads from: the app's Setup choice
+ * first (settings.json gameDir), then the CFB_GAME_ROOT env override, then
+ * the stock locations and every Steam library. Falls back to the stock Steam
+ * path so error messages still name a concrete folder when nothing is found.
+ */
 export const GAME_ROOT_DEFAULT =
-  'C:/Program Files (x86)/Steam/steamapps/common/College Football 27';
+  locateGameRoot(settingsGameDir()).root ?? GAME_ROOT_FALLBACK;
