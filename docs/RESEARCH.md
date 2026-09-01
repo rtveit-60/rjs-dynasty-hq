@@ -411,6 +411,19 @@ rows (via the coach-schema fix) and looks them up; unmapped rows fall back to th
 (`src/main/playbooks.ts`) resolves the coach row → slug, gunzips the one book, and serves it over the
 `playbook:get` IPC. Same takedown-contingency posture as the bundled logos.
 
+## BCn decoding in TypeScript — PROVEN byte-exact (2026-08-31)
+
+`src/main/textures/bcn.ts` decodes BC1, BC3 and BC7 (plain + sRGB) in pure TypeScript, replacing the python3+Pillow dependency in every extraction script. Why this is trustworthy:
+
+- **BC7 is bit-exact by specification** — a correct decoder has no quality latitude, so equality against a reference implementation is provable, not aspirational.
+- **The partition/anchor tables were recovered mechanically, never hand-typed.** Synthetic single-purpose blocks were fed to Pillow (a spec implementation): mode-1 blocks with black/white subsets and all-zero indices reveal the 2-subset partition row for each of the 64 partition ids; mode-2 blocks with black/red/green subsets reveal the 3-subset rows; setting every index bit to 1 makes anchor texels decode dimmer (they store one bit less), which reads the three anchor tables straight off the pixels. Recovered values match the known spec tables (P2 row 0 = 0xCCCC, anchor table leading 16×15).
+- **BC1/BC3 interpolation was probed the same way**: floor division throughout ((2a+b)/3, (a+b)/2, /7 and /5 alpha ramps), BC1 3-color mode yields transparent black at index 3, and BC3's color half is 4-color regardless of endpoint order.
+- **`node scripts/bc-check.ts` re-proves the whole decoder on demand**: ~200 real textures from this install (playcall diagrams BC7+sRGB, stadium field art BC1/BC3/BC7 incl. mip-chain top-slices) plus a seeded fuzz sweep with uniform coverage of all 8 BC7 block modes — every case byte-identical to Pillow (PASS 185/185 on first run; ~3.4M BC7 blocks, modes m0–m7 all exercised). A separate end-to-end check decoded 44 textures through the full new path (classify → decode → `png.ts` encode) and pixel-compared against the Pillow-era PNGs already shipped on this machine: 0 mismatches.
+
+Supporting pieces: `src/main/textures/png.ts` (minimal zero-dependency PNG writer — RGBA8, filter 0, node zlib), `src/main/textures/resize.ts` (area-average downscale for portrait thumbnails; portraits are per-user output, not covered by the byte-exact promise since Pillow's thumbnail used Lanczos), `scripts/fb/texture.ts` (shared classify/decode/encode for all extractors). Python/Pillow survives ONLY inside bc-check.ts as the verification oracle.
+
+This unblocks in-app extraction: the decoder lives under src/main and is electron-free, so first-run asset extraction from the user's own install (game folder known via Settings.gameDir) no longer has a native-tooling gap.
+
 ## Portraits
 
 - CFB 27 PC has an active Frosty-based asset-modding scene ([MMC Frosty Modding Tools](https://github.com/bphit4/MMC-Frosty-Modding-Tools), [CFBMods](https://www.cfbmods.com/)); community portrait packs replace generic portraits and are keyed by portrait id.
