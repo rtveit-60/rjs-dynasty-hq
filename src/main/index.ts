@@ -5,11 +5,14 @@ import { basename, join } from 'node:path';
 import type {
   AppState,
   DetectedSave,
+  GameDirStatus,
   MediaEvent,
   Snapshot,
   ThemeMode,
   WatchStatus
 } from '../shared/types.ts';
+import { locateGameRoot, validateGameRoot } from './game-locate.ts';
+import { initLog, log, logPath, reportError, tailLog } from './log.ts';
 import { slugName } from './logos.ts';
 import { resolvePlaybook } from './playbooks.ts';
 import { Pipeline } from './pipeline.ts';
@@ -153,20 +156,67 @@ function followEditedSave(editedPath: string): void {
   void pipeline.refresh(editedPath, getSettings().schoolTeamRow);
 }
 
-function registerIpc(): void {
-  ipcMain.handle('state:get', (): AppState => ({ settings: getSettings(), status, snapshot, media, updateReady }));
+/**
+ * Every IPC handler goes through this wrapper: a failure is logged with its
+ * stack under a stable short code, and the error the renderer sees carries
+ * that code so whatever surface shows it gives the user something reportable.
+ */
+function handle(channel: string, fn: (...args: never[]) => unknown): void {
+  ipcMain.handle(channel, async (...args) => {
+    try {
+      return await (fn as (...a: unknown[]) => unknown)(...args);
+    } catch (err) {
+      const code = reportError(`ipc:${channel}`, err);
+      throw new Error(`[${code}] ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+}
 
-  ipcMain.handle('autoupdate:set', (_e, enabled: boolean) => {
+/** Where the game lives, as Setup shows it. */
+function gameDirStatus(rejected?: string): GameDirStatus {
+  const configured = getSettings().gameDir;
+  const loc = locateGameRoot(configured);
+  return {
+    configured,
+    root: loc.root,
+    source: loc.source,
+    settingInvalid: loc.settingInvalid,
+    rejected: rejected ?? null
+  };
+}
+
+/** The copyable report behind Setup's diagnostics: environment + recent log. */
+function diagnosticsText(): string {
+  const s = getSettings();
+  const g = locateGameRoot(s.gameDir);
+  return [
+    `RJ's Dynasty HQ ${app.getVersion()} (${app.isPackaged ? 'installed' : 'dev'})`,
+    `Windows ${process.getSystemVersion()} ${process.arch} · Electron ${process.versions.electron}`,
+    `Save: ${s.savePath ? basename(s.savePath) : 'none selected'} · school row ${s.schoolTeamRow ?? '—'}`,
+    `Game folder: ${g.root ?? 'not found'}${g.source ? ` (${g.source})` : ''}${
+      g.settingInvalid ? ' — configured folder is not a CFB 27 install' : ''
+    }`,
+    `Watcher: ${status.kind}${status.kind === 'error' ? ` — ${status.message}` : ''}`,
+    '',
+    '--- recent log ---',
+    tailLog(3000).trimEnd()
+  ].join('\n');
+}
+
+function registerIpc(): void {
+  handle('state:get', (): AppState => ({ settings: getSettings(), status, snapshot, media, updateReady }));
+
+  handle('autoupdate:set', (_e, enabled: boolean) => {
     const settings = updateSettings({ autoUpdate: enabled === true });
     if (settings.autoUpdate) startUpdateCheck(); // turning it on checks right away
     return settings;
   });
 
-  ipcMain.handle('update:install', () => installUpdate());
+  handle('update:install', () => installUpdate());
 
-  ipcMain.handle('saves:scan', () => scanSaves());
+  handle('saves:scan', () => scanSaves());
 
-  ipcMain.handle('save:pick', async () => {
+  handle('save:pick', async () => {
     const result = await dialog.showOpenDialog(win!, {
       title: 'Select a dynasty save',
       defaultPath: defaultSavesDir(),
@@ -177,61 +227,61 @@ function registerIpc(): void {
     return getSettings();
   });
 
-  ipcMain.handle('save:use', (_e, savePath: string) => {
+  handle('save:use', (_e, savePath: string) => {
     if (typeof savePath === 'string' && existsSync(savePath)) useSave(savePath);
     return getSettings();
   });
 
-  ipcMain.handle('school:set', async (_e, row: number | null) => {
+  handle('school:set', async (_e, row: number | null) => {
     updateSettings({ schoolTeamRow: row });
     const { savePath, schoolTeamRow } = getSettings();
     if (savePath) await pipeline.rescope(savePath, schoolTeamRow);
     return getSettings();
   });
 
-  ipcMain.handle('theme:set', (_e, theme: ThemeMode) => {
+  handle('theme:set', (_e, theme: ThemeMode) => {
     updateSettings({ theme });
     applyOverlay();
     return getSettings();
   });
 
-  ipcMain.handle('zoom:set', (_e, scale: number) => {
+  handle('zoom:set', (_e, scale: number) => {
     const clamped = Math.min(1.5, Math.max(0.7, Number(scale)));
     const settings = updateSettings({ uiScale: Number.isFinite(clamped) ? clamped : 1 });
     applyZoom();
     return settings;
   });
 
-  ipcMain.handle('zoomfit:set', (_e, on: boolean) => {
+  handle('zoomfit:set', (_e, on: boolean) => {
     const settings = updateSettings({ uiFit: on === true });
     applyZoom();
     return settings;
   });
 
-  ipcMain.handle('save:reveal', () => {
+  handle('save:reveal', () => {
     const { savePath } = getSettings();
     if (savePath) shell.showItemInFolder(savePath);
   });
 
   // Expanded recruit detail, read on demand from the cached parse — the class is
   // far too large to ship attributes for every prospect in each snapshot.
-  ipcMain.handle('recruit:card', (_e, playerRow: number) =>
+  handle('recruit:card', (_e, playerRow: number) =>
     Number.isInteger(playerRow) && playerRow >= 0 ? pipeline.recruitCard(playerRow) : null,
   );
 
   // League stat leaders for Media HQ — one sweep per parse, cached in the pipeline.
-  ipcMain.handle('league:leaders', () => pipeline.leagueLeaders());
+  handle('league:leaders', () => pipeline.leagueLeaders());
 
   // Attribute search over the recruiting class. Runs against the cached parse,
   // so it is cheap enough to re-run as the user types a threshold.
-  ipcMain.handle('recruit:scout', (_e, criteria: unknown) =>
+  handle('recruit:scout', (_e, criteria: unknown) =>
     Array.isArray(criteria) ? pipeline.scout(criteria as never) : [],
   );
 
   // Pop-up profile for any clicked name (player, coach or school), read on
   // demand from the cached parse — game logs and season splits are far too
   // heavy to ship in the snapshot.
-  ipcMain.handle('profile:get', (_e, req: unknown) => {
+  handle('profile:get', (_e, req: unknown) => {
     const r = req as { kind?: unknown; row?: unknown };
     const kinds = ['player', 'coach', 'school'];
     if (!r || !kinds.includes(String(r.kind)) || !Number.isInteger(r.row) || (r.row as number) < 0) {
@@ -241,7 +291,7 @@ function registerIpc(): void {
   });
 
   // Current values + options for the player edit dialog, from the cached parse.
-  ipcMain.handle('player:editform', (_e, playerRow: number) => {
+  handle('player:editform', (_e, playerRow: number) => {
     const { savePath } = getSettings();
     if (!Number.isInteger(playerRow) || playerRow < 0 || !savePath) return null;
     return pipeline.editForm(playerRow, savePath, getSettings().portraitsDir);
@@ -249,7 +299,7 @@ function registerIpc(): void {
 
   // The app's only write path: lands in <save>_RJsEdited (never the original),
   // then the dashboard switches to follow the edited file.
-  ipcMain.handle('player:edit', async (_e, changes: unknown) => {
+  handle('player:edit', async (_e, changes: unknown) => {
     const c = changes as { playerRow?: unknown };
     const { savePath } = getSettings();
     if (!c || !Number.isInteger(c.playerRow) || (c.playerRow as number) < 0 || !savePath) {
@@ -264,14 +314,14 @@ function registerIpc(): void {
   });
 
   // Current budget/hours for the Fundraising and Hire Recruiters dialogs.
-  ipcMain.handle('resource:form', () => {
+  handle('resource:form', () => {
     const { savePath } = getSettings();
     return savePath ? pipeline.resourceForm(savePath) : null;
   });
 
   // Fundraising / recruiter hours — the same _RJsEdited write path as player
   // edits, then the dashboard follows the edited file.
-  ipcMain.handle('resource:edit', async (_e, req: unknown) => {
+  handle('resource:edit', async (_e, req: unknown) => {
     const r = req as { kind?: unknown; amount?: unknown };
     const { savePath } = getSettings();
     if (!savePath || (r?.kind !== 'nil' && r?.kind !== 'hours') || !Number.isInteger(r?.amount)) {
@@ -286,11 +336,11 @@ function registerIpc(): void {
   });
 
   // Create-a-recruit: dialog options + the creation write.
-  ipcMain.handle('create:form', () => {
+  handle('create:form', () => {
     const { savePath } = getSettings();
     return savePath ? pipeline.createForm(savePath, getSettings().portraitsDir) : null;
   });
-  ipcMain.handle('create:recruit', async (_e, req: unknown) => {
+  handle('create:recruit', async (_e, req: unknown) => {
     const r = req as { firstName?: unknown };
     const { savePath } = getSettings();
     if (!savePath || typeof r?.firstName !== 'string') {
@@ -305,12 +355,12 @@ function registerIpc(): void {
   });
 
   // Weekly recruiting plan for one board target: current state + the write.
-  ipcMain.handle('target:form', (_e, recruitRow: number) => {
+  handle('target:form', (_e, recruitRow: number) => {
     const { savePath } = getSettings();
     if (!Number.isInteger(recruitRow) || recruitRow < 0 || !savePath) return null;
     return pipeline.targetForm(recruitRow, savePath);
   });
-  ipcMain.handle('target:edit', async (_e, req: unknown) => {
+  handle('target:edit', async (_e, req: unknown) => {
     const r = req as { recruitRow?: unknown };
     const { savePath } = getSettings();
     if (!savePath || !Number.isInteger(r?.recruitRow) || (r.recruitRow as number) < 0) {
@@ -325,7 +375,7 @@ function registerIpc(): void {
   });
 
   // Stage recruits onto or off the user's target board — the _RJsEdited path.
-  ipcMain.handle('board:edit', async (_e, req: unknown) => {
+  handle('board:edit', async (_e, req: unknown) => {
     const r = req as { changes?: unknown };
     const { savePath } = getSettings();
     if (!savePath || !Array.isArray(r?.changes) || !r.changes.length) {
@@ -340,7 +390,7 @@ function registerIpc(): void {
   });
 
   // Mark a CPU coach to be fired at season's end (the game's own PendingFire state).
-  ipcMain.handle('coach:fire', async (_e, req: unknown) => {
+  handle('coach:fire', async (_e, req: unknown) => {
     const r = req as { coachRow?: unknown; undo?: unknown };
     const { savePath } = getSettings();
     if (!savePath || !Number.isInteger(r?.coachRow) || (r.coachRow as number) < 0) {
@@ -358,14 +408,14 @@ function registerIpc(): void {
   });
 
   // View-only browse of another school's full Team HQ, from the cached parse.
-  ipcMain.handle('hq:browse', (_e, teamRow: number) => {
+  handle('hq:browse', (_e, teamRow: number) => {
     const { savePath } = getSettings();
     if (!Number.isInteger(teamRow) || teamRow < 0 || !savePath) return null;
     return pipeline.browseSchool(teamRow, savePath);
   });
 
   // Depth-chart reorders/swaps — the same _RJsEdited write path.
-  ipcMain.handle('depth:edit', async (_e, req: unknown) => {
+  handle('depth:edit', async (_e, req: unknown) => {
     const r = req as { changes?: unknown };
     const { savePath } = getSettings();
     if (!savePath || !Array.isArray(r?.changes) || !r.changes.length) {
@@ -382,7 +432,7 @@ function registerIpc(): void {
   // Returns the pre-extracted playbook the team runs (formations, plays, alignments,
   // routes): the coach's selected book by its playbook row, falling back to the scheme
   // archetype. null if nothing matches.
-  ipcMain.handle(
+  handle(
     'playbook:get',
     (_e, side: 'offense' | 'defense', coachRow: number | null, schemeEnum: string) =>
       side === 'offense' || side === 'defense'
@@ -391,7 +441,7 @@ function registerIpc(): void {
   );
 
   // Opens a link in the user's own browser. Allowlisted hosts only.
-  ipcMain.handle('open:external', (_e, url: string) => {
+  handle('open:external', (_e, url: string) => {
     try {
       const parsed = new URL(url);
       if (parsed.protocol === 'https:' && ['www.civil.gg', 'civil.gg'].includes(parsed.hostname)) {
@@ -402,6 +452,49 @@ function registerIpc(): void {
     }
   });
 
+  // ——— Game install location (Setup) ———
+
+  handle('game:status', () => gameDirStatus());
+
+  handle('game:choose', async () => {
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Choose the College Football 27 install folder',
+      defaultPath: gameDirStatus().root ?? undefined,
+      properties: ['openDirectory']
+    });
+    const picked = result.filePaths[0];
+    if (!picked) return gameDirStatus();
+    if (!validateGameRoot(picked)) {
+      log.warn('game', 'chosen folder is not a CFB 27 install', { picked });
+      return gameDirStatus(picked);
+    }
+    updateSettings({ gameDir: picked });
+    pushSettings();
+    log.info('game', 'game folder set', { picked });
+    return gameDirStatus();
+  });
+
+  handle('game:clear', () => {
+    updateSettings({ gameDir: null });
+    pushSettings();
+    return gameDirStatus();
+  });
+
+  // ——— Diagnostics ———
+
+  // Renderer-side failures land in the same log under the same code scheme.
+  handle('log:renderer', (_e, p: { message?: unknown; stack?: unknown; area?: unknown }) => {
+    const err = new Error(typeof p?.message === 'string' ? p.message : 'unknown renderer error');
+    if (typeof p?.stack === 'string') err.stack = p.stack;
+    return reportError(`renderer:${typeof p?.area === 'string' ? p.area : 'unknown'}`, err);
+  });
+
+  handle('diag:report', () => diagnosticsText());
+
+  handle('diag:logs', () => {
+    const p = logPath();
+    if (p && existsSync(p)) shell.showItemInFolder(p);
+  });
 }
 
 /** Bundled logo set: resources/logos in dev, resources/logos next to the asar when packaged. */
@@ -555,6 +648,11 @@ function createWindow(): void {
   });
 
   win.once('ready-to-show', () => win?.show());
+  // Crash forensics: a dead or hung renderer leaves a trace in the log.
+  win.webContents.on('render-process-gone', (_e, details) => {
+    log.error('renderer', 'render process gone', details);
+  });
+  win.on('unresponsive', () => log.warn('window', 'window unresponsive'));
   win.webContents.on('did-finish-load', applyZoom);
   // Zoom tracks the drag frame by frame — a trailing one-frame throttle keeps
   // IPC sane while the window is in motion and still lands on the final size.
@@ -759,6 +857,7 @@ if (!gotLock) {
   });
 
   void app.whenReady().then(() => {
+    initLog();
     registerPortraitProtocol();
     registerLogoProtocol();
     registerBowlProtocol();

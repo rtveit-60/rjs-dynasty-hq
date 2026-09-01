@@ -9,12 +9,26 @@ export interface Settings {
   brandPack: BrandPack;
   portraitsDir: string | null;
   logosDir: string | null;
+  /** CFB 27 install folder; null = auto-detect (stock locations + Steam libraries). */
+  gameDir: string | null;
   autoUpdate: boolean;
   /** Renderer zoom factor; 1 = 100%. Clamped to 0.7–1.5. */
   uiScale: number;
   /** Scale the UI with window width (uiScale becomes a bias on the fit). */
   uiFit: boolean;
   windowBounds?: { x: number; y: number; width: number; height: number };
+}
+
+export interface GameDirStatus {
+  /** The Setup-configured folder, or null when auto-detecting. */
+  configured: string | null;
+  /** The validated install the app is actually using, or null if none found. */
+  root: string | null;
+  source: 'setting' | 'env' | 'default' | 'steam' | null;
+  /** True when a configured folder exists in settings but isn't a CFB 27 install. */
+  settingInvalid: boolean;
+  /** A folder the user just picked that failed validation (never saved). */
+  rejected?: string | null;
 }
 
 export interface TeamColors {
@@ -739,6 +753,8 @@ export interface PlayerEditResult {
   /** Full path + file name of the edited save that was written. */
   editedPath?: string;
   editedFileName?: string;
+  /** Reportable error code, present when a write failed unexpectedly (logged). */
+  code?: string;
 }
 
 /**

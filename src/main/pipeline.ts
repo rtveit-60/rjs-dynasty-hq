@@ -37,6 +37,7 @@ import {
   buildResourceForm,
   buildTargetForm
 } from './editor.ts';
+import { log, reportError } from './log.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
 import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from './parser/profile.ts';
@@ -116,6 +117,7 @@ export class Pipeline {
         this.lastHash = hash;
         this.lastUpdate = Date.now();
         console.log(`[hq] parsed ${basename(savePath)} (${hash.slice(0, 8)})`);
+        log.info('parse', `parsed ${basename(savePath)}`, { hash: hash.slice(0, 8) });
       }
       this.lastSchoolRow = schoolTeamRow;
       const snapshot = await extractSnapshot(this.franchise, {
@@ -128,9 +130,10 @@ export class Pipeline {
       this.events.onStatus({ kind: 'watching', lastUpdate: this.lastUpdate });
       this.events.onParsed(snapshot);
     } catch (err) {
+      const code = reportError('parse', err, { file: basename(savePath) });
       this.events.onStatus({
         kind: 'error',
-        message: err instanceof Error ? err.message : String(err)
+        message: `[${code}] ${err instanceof Error ? err.message : String(err)}`
       });
     } finally {
       this.busy = false;
@@ -228,7 +231,8 @@ export class Pipeline {
       // drop it and reparse from the original so the dashboard stays truthful.
       this.reset();
       this.queuedArgs = { savePath, schoolTeamRow: this.lastSchoolRow };
-      return { ok: false, message: err instanceof Error ? err.message : String(err) };
+      const code = reportError('edit-write', err);
+      return { ok: false, message: err instanceof Error ? err.message : String(err), code };
     } finally {
       this.busy = false;
       if (this.queuedArgs) {
