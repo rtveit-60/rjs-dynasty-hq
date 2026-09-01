@@ -1,13 +1,16 @@
-import { BOWL_ART, bowlArtKey, readable, type BowlShape } from '../lib/bowl-art.ts';
+import { BOWL_ART, readable, type BowlShape } from '../lib/bowl-art.ts';
 import { BOWL_LOGOS } from '../lib/bowl-logos.ts';
 import { CFP_BALL, CFP_GOLD_STOPS, CFP_LACES, CFP_LETTERS, isPlayoffRound } from '../lib/cfp-mark.ts';
 
 /**
- * Draw the hand-built marks in `bowl-art.ts` for bowls with no bundled logo.
- * Off for now — bowls without real art simply show nothing. Flip to true to
- * bring the generated set back.
+ * Bowls wear their real bundled logo; one with no bundled art wears the plain
+ * generic football from `bowl-art.ts` in its own colors — never the themed
+ * hand-drawn set, which stays benched for the preview sheet only
+ * (`node scripts/bowl-preview.ts`). The bundled set currently covers every
+ * real bowl in the save; only the game's placeholder "Generic Bowl" row (and
+ * any bowl a future title update adds) takes the football.
  */
-const USE_GENERATED_MARKS = false;
+const GENERIC_MARK = BOWL_ART.Generic;
 
 /**
  * Logos drawn as dark ink on transparency. They read fine on the light paper
@@ -109,17 +112,14 @@ export function BowlMarkGroup({
       </>
     );
   }
-  if (!USE_GENERATED_MARKS) return null;
+  if (!name) return null;
 
-  const key = bowlArtKey(assetName, name);
-  const shapes = key ? BOWL_ART[key] : null;
-  if (!shapes?.length) return null;
   const k = size / 24;
   const p = readable(primary);
   const s2 = readable(secondary);
   return (
     <g transform={`translate(${cx - size / 2} ${bottom - size}) scale(${k})`}>
-      {shapes.map((s, i) => bowlShapeNode(s, i, p, s2))}
+      {GENERIC_MARK.map((s, i) => bowlShapeNode(s, i, p, s2))}
     </g>
   );
 }
@@ -148,8 +148,8 @@ export function CfpMarkGroup({ cx, bottom, h }: { cx: number; bottom: number; h:
 }
 
 /**
- * The bowl's bundled logo. Playoff rounds wear the CFP mark; bowls with no
- * bundled art render nothing (see USE_GENERATED_MARKS).
+ * The bowl's bundled logo. Playoff rounds wear the CFP mark; a bowl with no
+ * bundled art wears the generic football in its own colors (see GENERIC_MARK).
  */
 export default function BowlIcon({
   assetName,
@@ -215,11 +215,8 @@ export default function BowlIcon({
       <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>{img}</span>
     );
   }
-  if (!USE_GENERATED_MARKS) return null;
+  if (!name) return null;
 
-  const key = bowlArtKey(assetName, name);
-  const shapes = key ? BOWL_ART[key] : null;
-  if (!shapes?.length) return null;
   const p = readable(primary);
   const s2 = readable(secondary);
   return (
@@ -232,7 +229,7 @@ export default function BowlIcon({
       style={{ display: 'inline-block', verticalAlign: 'middle', flex: 'none' }}
     >
       {title && <title>{title}</title>}
-      {shapes.map((s, i) => bowlShapeNode(s, i, p, s2))}
+      {GENERIC_MARK.map((s, i) => bowlShapeNode(s, i, p, s2))}
     </svg>
   );
 }
