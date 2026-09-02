@@ -12,6 +12,7 @@ import InfoDot from './InfoDot.tsx';
 import { useDialog } from '../lib/dialog.ts';
 import { heightFt } from '../lib/format.ts';
 import { Stepper } from './EditPlayerModal.tsx';
+import TalentTreeModal from './TalentTreeModal.tsx';
 
 type CoachTab = 'base' | 'profile' | 'progression';
 const TABS: { key: CoachTab; label: string }[] = [
@@ -113,7 +114,8 @@ export default function EditCoachModal({ coachRow, onClose }: { coachRow: number
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (document.querySelector('.info-overlay')) return;
+      // An open info dialog or talent-tree pop-up owns the key; its own handler closes it.
+      if (document.querySelector('.info-overlay, .tt-overlay')) return;
       e.stopPropagation();
       onClose();
     };
@@ -495,52 +497,42 @@ export default function EditCoachModal({ coachRow, onClose }: { coachRow: number
                   <p className="cr-note">This coach has no talent tree in the save.</p>
                 ) : (
                   <div className="ed-tree">
-                    {tree.map((s) => {
-                      const st = slotState(s.slot);
-                      const cur = owned[s.slot] ?? new Set<number>();
-                      const locked = !!st && st.status[0] === TALENT_LOCKED && !cur.has(0);
-                      const open = openSlot === s.slot;
-                      return (
-                        <div key={s.slot} className={`ed-sub ${open ? 'open' : ''}`}>
+                    <div className="tt-subgrid">
+                      {tree.map((s) => {
+                        const st = slotState(s.slot);
+                        const cur = owned[s.slot] ?? new Set<number>();
+                        const locked = !!st && st.status[0] === TALENT_LOCKED && !cur.has(0);
+                        return (
                           <button
+                            key={s.slot}
                             type="button"
-                            className="ed-sub-head"
-                            aria-expanded={open}
+                            className={`tt-sub ${cur.has(0) ? 'lit' : ''} ${locked ? 'locked' : ''}`}
                             disabled={!st}
-                            onClick={() => setOpenSlot(open ? null : s.slot)}
+                            onClick={() => setOpenSlot(s.slot)}
+                            title={s.desc}
                           >
-                            <span className="ed-sub-name">{s.name}</span>
-                            <span className="ed-sub-meta">
-                              {s.type}
-                              {locked ? ' · locked' : ''}
-                              {s.prereq?.desc ? ` · ${s.prereq.desc}` : ''}
-                            </span>
-                            <span className="ed-sub-count">
+                            <span className="tt-sub-name">{s.name}</span>
+                            <span className="tt-sub-count">
                               {cur.size}/{s.nodes.length}
                             </span>
+                            <span className="tt-sub-meta">
+                              {s.type}
+                              {locked ? ' · locked' : cur.has(0) ? ' · unlocked' : ''}
+                            </span>
+                            {s.prereq?.desc && <span className="tt-sub-prereq">{s.prereq.desc}</span>}
                           </button>
-                          {open && st && (
-                            <div className="ed-nodes">
-                              {s.nodes.map((n) => (
-                                <label
-                                  key={n.index}
-                                  className={`ed-node lvl-${n.level} ${cur.has(n.index) ? 'owned' : ''}`}
-                                  title={n.desc}
-                                >
-                                  <input type="checkbox" checked={cur.has(n.index)} onChange={() => toggleNode(s.slot, n.index)} />
-                                  <span className="ed-node-name">
-                                    {n.index === 0 ? `${n.name || s.name} (archetype)` : n.name}
-                                    {n.branch ? <em> · {n.branch}</em> : null}
-                                  </span>
-                                  <span className="ed-node-cost">{n.cost}</span>
-                                  <span className="ed-node-desc">{n.desc}</span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                    {openSlot !== null && tree[openSlot] && slotState(openSlot) && (
+                      <TalentTreeModal
+                        tree={tree[openSlot]}
+                        owned={owned[openSlot] ?? new Set<number>()}
+                        locked={slotState(openSlot)!.status[0] === TALENT_LOCKED && !(owned[openSlot]?.has(0) ?? false)}
+                        onChange={(next) => setOwned((prev) => ({ ...prev, [openSlot]: next }))}
+                        onClose={() => setOpenSlot(null)}
+                      />
+                    )}
                     <div className="ed-sp">
                       <span className="ed-sp-label">Ledger</span>
                       <span className="ed-sp-note">

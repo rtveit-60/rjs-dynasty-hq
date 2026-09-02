@@ -73,6 +73,53 @@ export function costDelta(tree: CoachTalentSubTree, before: Set<number>, after: 
   return d;
 }
 
+/**
+ * A perk branch: the chain of nodes hanging off the archetype node, level 1
+ * upward. Every subtree in the game is the root plus single-parent chains
+ * (verified across all 14 subtrees), so a branch's "level" is simply how many
+ * links of the chain are owned.
+ */
+export interface TalentBranch {
+  /** Node indices from level 1 upward. */
+  chain: number[];
+  /** The game's branch heading when the level-1 node carries one, else that node's name. */
+  title: string;
+}
+
+export function branchesOf(tree: CoachTalentSubTree): TalentBranch[] {
+  const root = tree.nodes[0];
+  if (!root) return [];
+  return root.children.map((head) => {
+    const chain: number[] = [];
+    let cur: number | undefined = head;
+    while (cur !== undefined && tree.nodes[cur]) {
+      chain.push(cur);
+      cur = tree.nodes[cur].children[0];
+    }
+    const first = tree.nodes[head];
+    return { chain, title: first.branch ?? first.name };
+  });
+}
+
+/** How many links of a branch are owned, counting from level 1. */
+export function branchLevel(owned: Set<number>, branch: TalentBranch): number {
+  let n = 0;
+  for (const i of branch.chain) {
+    if (!owned.has(i)) break;
+    n++;
+  }
+  return n;
+}
+
+/** The owned set after setting a branch to `level` links (the root is owned whenever level > 0). */
+export function withBranchLevel(tree: CoachTalentSubTree, owned: Set<number>, branch: TalentBranch, level: number): Set<number> {
+  let next = new Set(owned);
+  const target = Math.max(0, Math.min(branch.chain.length, level));
+  if (target > 0) next = withNodeOwned(tree, next, branch.chain[target - 1]);
+  if (target < branch.chain.length) next = withNodeReleased(tree, next, branch.chain[target]);
+  return next;
+}
+
 /** True when the wanted set respects the tree (every owned node's parent is owned). */
 export function ownedSetIsClosed(tree: CoachTalentSubTree, owned: Set<number>): boolean {
   for (const i of owned) {
