@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/renderer/src/theme.css"
+        ],
+        "createdAt": "2026-09-02T01:05:24.803Z",
+        "reason": "RJ confirmed: the 3px team-color edge bar is the Team Chrome house style (user-story card, savebar, browse bar, plan meter)"
+      }
+    ]
+  }
+}

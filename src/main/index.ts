@@ -623,12 +623,21 @@ function registerPortraitProtocol(): void {
  */
 const ZOOM_BASE_WIDTH = 1380;
 
+/**
+ * Zoom floor and ceiling. The floor keeps the smallest labels (10px) at 8px
+ * on screen; below that they stop being readable. A window narrower than
+ * 1104px therefore lays out at fewer CSS pixels than the design width and
+ * the wide tables scroll inside their wrappers instead of shrinking further.
+ */
+const ZOOM_MIN = 0.8;
+const ZOOM_MAX = 1.6;
+
 function applyZoom(): void {
   if (!win) return;
   const s = getSettings();
   const bias = Number.isFinite(s.uiScale) ? s.uiScale : 1;
   const fit = s.uiFit ? win.getContentBounds().width / ZOOM_BASE_WIDTH : 1;
-  const effective = Math.min(1.6, Math.max(0.6, bias * fit));
+  const effective = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, bias * fit));
   win.webContents.setZoomFactor(effective);
   win.webContents.send('ui:zoom', effective);
 }
