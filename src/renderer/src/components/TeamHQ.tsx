@@ -25,16 +25,18 @@ type Tab =
   | 'playbook'
   | 'history';
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'program', label: 'PROGRAM DASHBOARD' },
-  { key: 'matchup', label: "THIS WEEK'S MATCHUP" },
-  { key: 'roster', label: 'ROSTER' },
-  { key: 'depth', label: 'DEPTH CHART' },
-  { key: 'targets', label: 'RECRUITING OFFICE' },
-  { key: 'budget', label: 'NIL & BUDGET' },
-  { key: 'tendencies', label: 'TENDENCIES' },
-  { key: 'playbook', label: 'PLAYBOOK' },
-  { key: 'history', label: 'TEAM HISTORY' }
+/** Nine tabs at full width need ~1200px; `short` is the label the strip
+ *  falls back to when the page is too narrow for the full set. */
+const TABS: { key: Tab; label: string; short: string }[] = [
+  { key: 'program', label: 'PROGRAM DASHBOARD', short: 'DASHBOARD' },
+  { key: 'matchup', label: "THIS WEEK'S MATCHUP", short: 'MATCHUP' },
+  { key: 'roster', label: 'ROSTER', short: 'ROSTER' },
+  { key: 'depth', label: 'DEPTH CHART', short: 'DEPTH' },
+  { key: 'targets', label: 'RECRUITING OFFICE', short: 'RECRUITING' },
+  { key: 'budget', label: 'NIL & BUDGET', short: 'NIL' },
+  { key: 'tendencies', label: 'TENDENCIES', short: 'TENDENCIES' },
+  { key: 'playbook', label: 'PLAYBOOK', short: 'PLAYBOOK' },
+  { key: 'history', label: 'TEAM HISTORY', short: 'HISTORY' }
 ];
 
 export default function TeamHQ() {
@@ -179,14 +181,18 @@ export default function TeamHQ() {
         {dc && <StaffHeadCard role="Defensive Coordinator" staff={dc} lines={[defLine]} />}
       </div>
 
-      <div className="tabs">
+      <div className="tabs hq-tabs">
         {TABS.map((t) => (
           <button
             key={t.key}
             className={`tab ${tab === t.key ? 'active' : ''}`}
             onClick={() => setTab(t.key)}
+            title={t.short !== t.label ? t.label : undefined}
           >
-            {t.label}
+            <span className="tab-full">{t.label}</span>
+            <span className="tab-short" aria-hidden="true">
+              {t.short}
+            </span>
           </button>
         ))}
       </div>
