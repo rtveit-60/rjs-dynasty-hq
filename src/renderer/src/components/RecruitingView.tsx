@@ -232,11 +232,14 @@ export default function RecruitingView() {
   const th = (label: string, key: SortKey, opts?: { num?: boolean; defaultAsc?: boolean; cls?: string }) => (
     <th
       className={`${opts?.num ? 'num ' : ''}${opts?.cls ? `${opts.cls} ` : ''}${sortKey === key ? 'sorted' : ''}`}
+      aria-sort={sortKey === key ? (asc ? 'ascending' : 'descending') : 'none'}
       onClick={() => sortBy(key, opts?.defaultAsc ?? false)}
       title={`Sort by ${label}`}
     >
-      {label}
-      {sortKey === key && <span className="sort-caret">{asc ? '▲' : '▼'}</span>}
+      <button type="button" className="th-sort">
+        {label}
+        {sortKey === key && <span className="sort-caret">{asc ? '▲' : '▼'}</span>}
+      </button>
     </th>
   );
 
@@ -338,6 +341,7 @@ export default function RecruitingView() {
           className="search"
           style={{ width: 230, padding: '5px 10px' }}
           placeholder="Search name, state, pipeline…"
+          aria-label="Search recruits by name, state, or pipeline"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -346,6 +350,7 @@ export default function RecruitingView() {
           value={pos}
           onChange={(e) => setPos(e.target.value)}
           title="Position"
+          aria-label="Position"
         >
           <option value="ALL">All positions</option>
           {RECRUIT_POS_OPTIONS.map((o) => (
@@ -456,7 +461,7 @@ export default function RecruitingView() {
                         )}
                       </td>
                       <td>
-                        <span className="stars-cell" title={`${r.stars} stars`}>
+                        <span className="stars-cell" role="img" aria-label={`${r.stars} stars`} title={`${r.stars} stars`}>
                           {stars(r.stars).slice(0, r.stars)}
                           <span className="off">{stars(r.stars).slice(r.stars)}</span>
                         </span>
@@ -479,6 +484,7 @@ export default function RecruitingView() {
                         {r.edgeCall === 'up' && <span className="edge-up">▲</span>}
                         {r.edgeCall === 'down' && <span className="edge-dn">▼</span>}
                         {r.edgeCall === 'even' && <span className="edge-ev">—</span>}
+                        {r.edgeWhy && <span className="sr-only">{r.edgeWhy}</span>}
                       </td>
                       <td className="num">{r.offers}</td>
                     </tr>

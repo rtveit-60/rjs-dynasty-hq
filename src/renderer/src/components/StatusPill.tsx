@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import { relTime } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 
+/**
+ * The titlebar's save status. One persistent live region, so a reader hears
+ * "Reading save" and "Live, synced just now" as they happen without the pill
+ * being re-created between states.
+ */
 export default function StatusPill() {
   const status = useHQ((s) => s.status);
   const [, tick] = useState(0);
@@ -12,31 +17,26 @@ export default function StatusPill() {
     return () => clearInterval(id);
   }, []);
 
+  let cls = 'pill';
+  let title: string | undefined;
+  let body: React.ReactNode;
   if (status.kind === 'idle') {
-    return (
-      <span className="pill">
-        <span className="dot" /> No save selected
-      </span>
-    );
+    body = 'No save selected';
+  } else if (status.kind === 'parsing') {
+    cls = 'pill parsing';
+    body = 'Reading save…';
+  } else if (status.kind === 'error') {
+    cls = 'pill error';
+    title = status.message;
+    body = status.message.length > 48 ? status.message.slice(0, 48) + '…' : status.message;
+  } else {
+    cls = 'pill live';
+    body = `Live${status.lastUpdate ? ` · synced ${relTime(status.lastUpdate)}` : ''}`;
   }
-  if (status.kind === 'parsing') {
-    return (
-      <span className="pill parsing">
-        <span className="dot" /> Reading save…
-      </span>
-    );
-  }
-  if (status.kind === 'error') {
-    return (
-      <span className="pill error" title={status.message}>
-        <span className="dot" /> {status.message.length > 48 ? status.message.slice(0, 48) + '…' : status.message}
-      </span>
-    );
-  }
+
   return (
-    <span className="pill live">
-      <span className="dot" /> Live
-      {status.lastUpdate ? ` · synced ${relTime(status.lastUpdate)}` : ''}
+    <span className={cls} role="status" aria-live="polite" title={title}>
+      <span className="dot" /> {body}
     </span>
   );
 }
