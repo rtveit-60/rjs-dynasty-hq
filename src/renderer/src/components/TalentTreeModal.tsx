@@ -15,14 +15,11 @@ import { Stepper } from './EditPlayerModal.tsx';
 export default function TalentTreeModal({
   tree,
   owned,
-  locked,
   onChange,
   onClose
 }: {
   tree: CoachTalentSubTree;
   owned: Set<number>;
-  /** The save holds the archetype node Locked (prerequisite unmet) and nothing is staged. */
-  locked: boolean;
   onChange: (next: Set<number>) => void;
   onClose: () => void;
 }) {
@@ -80,7 +77,7 @@ export default function TalentTreeModal({
             </span>
             <small>
               {root?.desc && root.desc !== '---' ? root.desc : 'Unlocks the tree.'}
-              {locked && tree.prereq?.desc ? ` The save holds it locked: ${tree.prereq.desc}.` : ''}
+              {tree.prereq?.desc ? ` In-game unlock: ${tree.prereq.desc}.` : ''}
             </small>
           </label>
           <span className="tt-ledger">

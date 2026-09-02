@@ -12,7 +12,7 @@
  *   - Job-security status follows the percentage using this save's own bands.
  *   - A role change swaps with the same staff's holder of the target role; a
  *     coordinator promoted to head coach gets the two head-coach specialty
- *     subtrees provisioned locked, as the game's own create-coach templates do.
+ *     subtrees provisioned open (archetype node purchasable, nothing owned).
  *   - Talent statuses are rewritten per subtree from the wanted owned set,
  *     keeping the game's invariants; the subtree's paid ledger moves by the
  *     cost delta, the coach's spendable points do not.
@@ -21,7 +21,7 @@ import { existsSync } from 'node:fs';
 import { basename } from 'node:path';
 import type { CoachEditChanges, CoachEditForm, CoachTalentSlotState } from '../shared/types.ts';
 import { COACH_ARCHETYPE_NAMES, COACH_BACKSTORY_NAMES, coachTalentTree, type CoachTalentSubTree } from '../shared/coach-talents.ts';
-import { TALENT_LOCKED, costDelta, ownedSet, ownedSetIsClosed, statusesFor } from '../shared/coach-talent-logic.ts';
+import { TALENT_NOT_OWNED, costDelta, ownedSet, ownedSetIsClosed, statusesFor } from '../shared/coach-talent-logic.ts';
 import { editedPathFor, enumMembers, fieldMax, firstEmptyRow, refString, stringCap, writeEditedSave } from './editor.ts';
 import { ensureCoachSchema } from './parser/coach-schema.ts';
 import { isNullRef, mainTable, refFromRecord, tableById, val } from './parser/franchise.ts';
@@ -297,13 +297,17 @@ function validate(rec: any, c: CoachEditChanges, form: CoachEditForm): string | 
   );
 }
 
-/** Provision a locked, unspent status row (the game's own template for a gated subtree). */
-function provisionLockedRow(statusTable: any, nodeCount: number): number {
+/**
+ * Provision an open, unspent status row: archetype node purchasable, the rest
+ * not owned. The editor is a sandbox, so it never writes a Locked gate; the
+ * game re-evaluates prerequisites itself.
+ */
+function provisionOpenRow(statusTable: any, nodeCount: number): number {
   const row = firstEmptyRow(statusTable);
   const rec = statusTable.records[row];
   rec.CoachPointsSpent = 0;
   rec.Version = 0;
-  for (let i = 0; i < MAX_TALENT_STATUS; i++) rec[`TalentStatus${i}`] = i < nodeCount ? 'Locked' : 'NotOwned';
+  for (let i = 0; i < MAX_TALENT_STATUS; i++) rec[`TalentStatus${i}`] = i === 0 && nodeCount > 0 ? 'Purchasable' : 'NotOwned';
   return row;
 }
 
@@ -319,7 +323,7 @@ async function ensureHeadCoachSlots(franchise: any, rec: any): Promise<void> {
   const statusTable = template.table;
   if (!h.listFields[full.length - 1]) throw new Error('The talent list cannot hold the head-coach specialties.');
   for (let slot = size; slot < full.length; slot++) {
-    const row = provisionLockedRow(statusTable, full[slot].nodes.length);
+    const row = provisionOpenRow(statusTable, full[slot].nodes.length);
     h.listRec[h.listFields[slot]] = refString(statusTable.header.tableId, row);
   }
   await franchise.recalculateEmptyRecordReferences?.(statusTable);
@@ -369,7 +373,7 @@ export async function applyCoachEdit(
   if (changes.archetype !== undefined && changes.archetype !== form.archetype) {
     const sub = treeAfterRole.find((s) => s.archetype === changes.archetype);
     const written = treeWrites.find((w) => sub && w.slot === sub.slot);
-    const status0 = written ? written.status[0] : sub && handles ? (slotState(handles, sub.slot)?.status[0] ?? TALENT_LOCKED) : TALENT_LOCKED;
+    const status0 = written ? written.status[0] : sub && handles ? (slotState(handles, sub.slot)?.status[0] ?? TALENT_NOT_OWNED) : TALENT_NOT_OWNED;
     if (!sub || status0 !== 2) {
       throw new Error(`Own the ${COACH_ARCHETYPE_NAMES[changes.archetype] ?? 'chosen'} archetype node before making it dominant.`);
     }

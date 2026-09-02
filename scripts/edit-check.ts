@@ -559,8 +559,9 @@ check('form: skill points within the field ceiling',
     String(val(ct3.records[hcRow], 'Position')) === 'OffensiveCoordinator' && String(val(ct3.records[ocRow], 'Position')) === 'HeadCoach' &&
     String(val(ct3.records[hcRow], 'PrevPosition')) === 'HeadCoach');
   const promoted = await buildCoachEditForm(cr2, ocRow, swap.editedPath);
-  check('coach swap: promoted OC has the two head-coach specialties provisioned locked',
-    promoted.tree!.length === 13 && promoted.tree![11].status[0] === 3 && promoted.tree![12].status[0] === 3 && promoted.tree![12].spent === 0,
+  check('coach swap: promoted OC has the two head-coach specialties provisioned open (no lock written)',
+    promoted.tree!.length === 13 && promoted.tree![11].status[0] === 1 && promoted.tree![12].status[0] === 1 &&
+    promoted.tree![12].status.slice(1).every((v) => v === 0) && promoted.tree![12].spent === 0,
     `${promoted.tree!.length} slots`);
 
   const beforeRej = sha(swap.editedPath);
