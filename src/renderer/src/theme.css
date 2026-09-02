@@ -4517,6 +4517,36 @@ table.tbl.tbl-wide {
   color: var(--bad);
 }
 
+/* Sortable column headers, aligned to the row grid below. */
+.mt-cols {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 48px 28px 16px;
+  gap: 6px;
+  padding: 4px 10px 2px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.mt-colbtn {
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: var(--ink-3);
+  font: 700 10px var(--font-ui);
+  letter-spacing: 0.1em;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mt-colbtn:nth-child(4) {
+  text-align: right;
+}
+
+.mt-colbtn:hover,
+.mt-colbtn.active {
+  color: var(--ink);
+}
+
 .mt-list {
   max-height: 46vh;
   overflow-y: auto;

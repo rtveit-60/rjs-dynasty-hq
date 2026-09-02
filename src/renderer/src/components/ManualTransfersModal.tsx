@@ -9,6 +9,17 @@ import InfoDot from './InfoDot.tsx';
 const ROSTER_CAP = 85;
 
 type Side = 'left' | 'right';
+type SortKey = 'position' | 'name' | 'year' | 'overall';
+const SORT_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'position', label: 'POS' },
+  { key: 'name', label: 'NAME' },
+  { key: 'year', label: 'YR' },
+  { key: 'overall', label: 'OVR' }
+];
+const YEAR_ORDER: Record<string, number> = { Freshman: 0, Sophomore: 1, Junior: 2, Senior: 3 };
+/** Class order for sorting; a redshirt sorts just behind the same class. */
+const yearRank = (p: RosterPlayer): number =>
+  (YEAR_ORDER[p.schoolYear] ?? 4) * 2 + (p.redshirt && p.redshirt !== 'None' ? 1 : 0);
 
 /**
  * Manual Transfers: pick two schools, browse both rosters, and move rostered
@@ -79,8 +90,25 @@ export default function ManualTransfersModal({ onClose }: { onClose: () => void 
   const other = (side: Side): Side => (side === 'left' ? 'right' : 'left');
   const teamName = (row: number): string => teams.find((t) => t.row === row)?.longName ?? `Row ${row}`;
 
+  /** Column sort shared by both sides; click a header to flip direction. */
+  const [sortKey, setSortKey] = useState<SortKey>('position');
+  const [sortDir, setSortDir] = useState<1 | -1>(1);
+  const sortBy = (key: SortKey): void => {
+    if (key === sortKey) setSortDir((d) => (d === 1 ? -1 : 1));
+    else {
+      setSortKey(key);
+      setSortDir(key === 'overall' ? -1 : 1);
+    }
+  };
   const sortRoster = (list: RosterPlayer[]): RosterPlayer[] =>
-    [...list].sort((a, b) => a.position.localeCompare(b.position) || b.overall - a.overall);
+    [...list].sort((a, b) => {
+      let c = 0;
+      if (sortKey === 'position') c = a.position.localeCompare(b.position) || b.overall - a.overall;
+      else if (sortKey === 'name') c = a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName);
+      else if (sortKey === 'year') c = yearRank(a) - yearRank(b) || b.overall - a.overall;
+      else c = a.overall - b.overall || a.lastName.localeCompare(b.lastName);
+      return c * sortDir;
+    });
 
   /** What each side shows: its own roster minus outgoing, plus incoming (marked). */
   const shown = (side: Side): { p: RosterPlayer; incoming: boolean }[] => {
@@ -148,6 +176,21 @@ export default function ManualTransfersModal({ onClose }: { onClose: () => void 
           <span className={`mt-count ${n > ROSTER_CAP ? 'over' : ''}`}>
             {list ? n : '…'}/{ROSTER_CAP}
           </span>
+        </div>
+        <div className="mt-cols" role="row">
+          {SORT_COLUMNS.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              className={`mt-colbtn ${sortKey === c.key ? 'active' : ''}`}
+              onClick={() => sortBy(c.key)}
+              aria-sort={sortKey === c.key ? (sortDir === 1 ? 'ascending' : 'descending') : 'none'}
+              title={`Sort by ${c.label.toLowerCase()}`}
+            >
+              {c.label}
+              {sortKey === c.key && <span aria-hidden="true">{sortDir === 1 ? ' ▲' : ' ▼'}</span>}
+            </button>
+          ))}
         </div>
         {list === null || list === undefined ? (
           <div className="pf-wait">Reading the roster…</div>
