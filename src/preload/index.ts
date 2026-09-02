@@ -29,6 +29,7 @@ import type {
   WatchStatus
 } from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
+import type { CfpBracket } from '../shared/cfp-bracket.ts';
 
 const subscribe = <T>(channel: string) => {
   return (cb: (data: T) => void): (() => void) => {
@@ -56,6 +57,7 @@ export interface HQBridge {
   getRecruitCard: (playerRow: number) => Promise<RecruitCard | null>;
   getLeagueLeaders: () => Promise<LeagueLeaders | null>;
   getMatchupExtras: (homeRow: number, awayRow: number) => Promise<MatchupExtras | null>;
+  getBankedCfpBracket: () => Promise<CfpBracket | null>;
   getProfile: (req: ProfileRequest) => Promise<Profile | null>;
   getEditForm: (playerRow: number) => Promise<PlayerEditForm | null>;
   editPlayer: (changes: PlayerEditChanges) => Promise<PlayerEditResult>;
@@ -107,6 +109,7 @@ const bridge: HQBridge = {
   getRecruitCard: (playerRow) => ipcRenderer.invoke('recruit:card', playerRow),
   getLeagueLeaders: () => ipcRenderer.invoke('league:leaders'),
   getMatchupExtras: (homeRow, awayRow) => ipcRenderer.invoke('matchup:extras', homeRow, awayRow),
+  getBankedCfpBracket: () => ipcRenderer.invoke('cfp:banked'),
   getProfile: (req) => ipcRenderer.invoke('profile:get', req),
   getEditForm: (playerRow) => ipcRenderer.invoke('player:editform', playerRow),
   editPlayer: (changes) => ipcRenderer.invoke('player:edit', changes),

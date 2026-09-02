@@ -6106,3 +6106,160 @@ table.tbl.tbl-wide {
   vertical-align: -3px;
   margin-left: 6px;
 }
+
+/* ————————————————————————————————————————————————
+   CFP BRACKET — the playoff as a broadcast bracket board. Four round columns
+   flow left to right into the championship; winners carry the team accent. */
+.cfp-wrap {
+  margin-top: 16px;
+}
+
+.cfp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.cfp-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.cfp-past {
+  color: var(--ink-3);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cfp-champ {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px 7px 10px;
+  border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--hot) 40%, var(--line));
+  box-shadow: var(--elev-tile, none);
+}
+
+.cfp-champ-kicker {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hot);
+}
+
+.cfp-champ-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+/* The board scrolls horizontally on narrow windows rather than squeezing. */
+.cfp-board {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.cfp-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 172px;
+  flex: 1;
+  padding: 0 8px;
+}
+
+.cfp-col-head {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 6px;
+}
+
+/* Each column spreads its games evenly, so later rounds center against the
+   games that feed them — a bracket without drawn connectors. */
+.cfp-col-games {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 10px;
+  flex: 1;
+}
+
+.cfp-game {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+  overflow: hidden;
+  box-shadow: var(--elev-tile, none);
+}
+
+.cfp-game.pending {
+  opacity: 0.7;
+  border-style: dashed;
+}
+
+.cfp-slot {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  font-size: 12.5px;
+}
+
+/* Winner reads by weight and full contrast; the loser recedes. The row tint is
+   neutral (never the page team's color — this is a league-wide view). */
+.cfp-slot.won {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  font-weight: 800;
+}
+
+.cfp-slot.won .cfp-team,
+.cfp-slot.won .cfp-score {
+  color: var(--ink);
+}
+
+.cfp-slot:not(.won) .cfp-team,
+.cfp-slot:not(.won) .cfp-score {
+  color: var(--ink-3);
+}
+
+.cfp-divide {
+  height: 1px;
+  background: var(--line-soft);
+}
+
+.cfp-team {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfp-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 20px;
+  text-align: right;
+}
+
+.cfp-champ-mark {
+  flex: none;
+}

@@ -280,6 +280,10 @@ function registerIpc(): void {
       : null,
   );
 
+  // The latest banked season's CFP bracket — the Media HQ bracket tab's
+  // fallback before the current season reaches the playoff.
+  handle('cfp:banked', () => pipeline.bankedCfpBracket());
+
   // Attribute search over the recruiting class. Runs against the cached parse,
   // so it is cheap enough to re-run as the user types a threshold.
   handle('recruit:scout', (_e, criteria: unknown) =>

@@ -40,6 +40,7 @@ import {
 import { log, reportError } from './log.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
+import { buildCfpBracket } from '../shared/cfp-bracket.ts';
 import { extractMatchupExtras } from './parser/matchup.ts';
 import { extractCoachProfile, extractPlayerProfile, extractSchoolProfile } from './parser/profile.ts';
 import { scoutRecruits } from './parser/recruit-scout.ts';
@@ -160,6 +161,22 @@ export class Pipeline {
   async matchupExtras(homeRow: number, awayRow: number): Promise<import('../shared/types.ts').MatchupExtras | null> {
     if (!this.franchise) return null;
     return extractMatchupExtras(this.franchise, homeRow, awayRow, readBankedGames(this.lastDynastyId));
+  }
+
+  /**
+   * The most recent banked season that ran a playoff, for the Media HQ bracket
+   * tab's fallback when the current season hasn't reached the CFP yet. The
+   * current-season bracket is built in the renderer from the live snapshot; this
+   * only reaches back to past years, which live in the schedule bank.
+   */
+  async bankedCfpBracket(): Promise<import('../shared/cfp-bracket.ts').CfpBracket | null> {
+    const banked = readBankedGames(this.lastDynastyId);
+    const years = [...banked.keys()].sort((a, b) => b - a);
+    for (const year of years) {
+      const bracket = buildCfpBracket(banked.get(year)!, year, false);
+      if (bracket) return bracket;
+    }
+    return null;
   }
 
   /** League stat leaders for Media HQ — swept once per parse, then cached. */
