@@ -146,7 +146,7 @@ export default function BudgetView({ school, browsing = false }: { school: Schoo
                         <NameLink req={{ kind: 'player', row: t.playerRow }}>{t.name}</NameLink>
                       </td>
                       <td>
-                        <span className="stars-cell" title={`${t.stars} stars`}>
+                        <span className="stars-cell" role="img" aria-label={`${t.stars} stars`} title={`${t.stars} stars`}>
                           {stars(t.stars).slice(0, t.stars)}
                           <span className="off">{stars(t.stars).slice(t.stars)}</span>
                         </span>

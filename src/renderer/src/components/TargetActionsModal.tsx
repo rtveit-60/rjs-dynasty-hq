@@ -224,7 +224,7 @@ export default function TargetActionsModal({
 
         {state === 'loading' && <div className="pf-wait">Reading the save…</div>}
         {state === 'missing' && <div className="pf-wait">That recruit is not on your board.</div>}
-        {state === 'saved' && <div className="ed-saved">{savedNote}</div>}
+        {state === 'saved' && <div className="ed-saved" role="status">{savedNote}</div>}
 
         {form && (state === 'ready' || state === 'writing') && (
           <>
@@ -389,7 +389,7 @@ export default function TargetActionsModal({
             </div>
 
             {(error || overPool) && (
-              <div className="ed-error">
+              <div className="ed-error" role="alert">
                 {error ?? `That assignment leaves the weekly pool over-assigned (${poolAfter} of ${form.poolTotal}).`}
               </div>
             )}

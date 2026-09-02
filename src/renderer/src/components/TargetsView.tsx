@@ -167,10 +167,13 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
   const th = (label: string, key: SortKey, opts?: { num?: boolean; defaultAsc?: boolean }) => (
     <th
       className={`${opts?.num ? 'num ' : ''}${sortKey === key ? 'sorted' : ''}`}
+      aria-sort={sortKey === key ? (asc ? 'ascending' : 'descending') : 'none'}
       onClick={() => sortBy(key, opts?.defaultAsc ?? false)}
     >
-      {label}
-      {sortKey === key ? (asc ? ' ↑' : ' ↓') : ''}
+      <button type="button" className="th-sort">
+        {label}
+        {sortKey === key ? (asc ? ' ↑' : ' ↓') : ''}
+      </button>
     </th>
   );
 
@@ -191,6 +194,9 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
         title={`Also chasing ${rivals.join(', ')} — everyone here wants playing time at the same spot.`}
       >
         <span className="dot" /> {label}
+        <span className="sr-only">
+          . Playing-time clash: also chasing {rivals.join(', ')} at the same spot.
+        </span>
       </span>
     );
   };
@@ -309,7 +315,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
                   <span className="pos-tag">{t.position}</span>
                 </td>
                 <td>
-                  <span className="stars-cell" title={`${t.stars} stars`}>
+                  <span className="stars-cell" role="img" aria-label={`${t.stars} stars`} title={`${t.stars} stars`}>
                     {stars(t.stars).slice(0, t.stars)}
                     <span className="off">{stars(t.stars).slice(t.stars)}</span>
                   </span>

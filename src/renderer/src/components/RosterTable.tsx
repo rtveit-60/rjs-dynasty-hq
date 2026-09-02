@@ -114,10 +114,13 @@ export default function RosterTable({
   const th = (label: string, key: SortKey, opts?: { num?: boolean; defaultAsc?: boolean }) => (
     <th
       className={`${opts?.num ? 'num ' : ''}${sortKey === key ? 'sorted' : ''}`}
+      aria-sort={sortKey === key ? (asc ? 'ascending' : 'descending') : 'none'}
       onClick={() => sortBy(key, opts?.defaultAsc ?? false)}
     >
-      {label}
-      {sortKey === key ? (asc ? ' ↑' : ' ↓') : ''}
+      <button type="button" className="th-sort">
+        {label}
+        {sortKey === key ? (asc ? ' ↑' : ' ↓') : ''}
+      </button>
     </th>
   );
 

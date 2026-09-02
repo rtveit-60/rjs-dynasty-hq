@@ -31,7 +31,10 @@ function TrophyCard({ r, school }: { r: RivalrySeries; school: School }) {
   return (
     <div className={`th-trophy${held ? ' held' : ''}`} title={`${r.name} — vs ${r.rivalName}`}>
       <img src={url} alt={r.secondaryName || r.name} loading="lazy" />
-      <div className="th-trophy-name">{r.secondaryName || r.name}</div>
+      <div className="th-trophy-name">
+        {r.secondaryName || r.name}
+        <span className="sr-only"> vs {r.rivalName}</span>
+      </div>
       <div className={`th-trophy-rec${held ? ' good' : ''}`}>
         {r.usWins}–{r.themWins}
         {r.streakOurs !== null && r.streakLength > 0 && (

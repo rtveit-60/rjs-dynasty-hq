@@ -5231,7 +5231,7 @@ table.tbl.tbl-wide {
 }
 
 .wp-big.over {
-  color: #d9534f;
+  color: var(--bad);
 }
 
 .wp-cap {
@@ -6295,6 +6295,66 @@ table.tbl.tbl-wide {
 
 [role='dialog']:focus {
   outline: none;
+}
+
+/* Sortable column headers: the label is a real button so the keyboard can
+   sort, styled as the header text it sits in. The th keeps the click. */
+.th-sort {
+  all: unset;
+  cursor: pointer;
+}
+
+.th-sort:focus-visible {
+  outline: 2px solid var(--hot);
+  outline-offset: 1px;
+}
+
+/* Depth chart keyboard twin of the drag: move buttons that only appear while
+   the row has keyboard focus, so the mouse layout never changes. */
+.dc-move {
+  display: none;
+  gap: 2px;
+  flex: none;
+}
+
+.dc-row:focus-within .dc-move {
+  display: inline-flex;
+}
+
+.dc-move button {
+  all: unset;
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+.dc-move button:hover {
+  color: var(--ink);
+}
+
+.dc-move button:focus-visible {
+  outline: 2px solid var(--hot);
+  outline-offset: 1px;
+}
+
+.dc-move button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Text for readers only: meaning that sighted users get from a mark or a
+   hover title, kept out of the layout. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 ::selection {

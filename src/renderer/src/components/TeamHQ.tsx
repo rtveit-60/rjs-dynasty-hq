@@ -91,6 +91,7 @@ export default function TeamHQ() {
   const switcher = (
     <select
       className="hq-browse-select"
+      aria-label="View another team"
       value={browseRow ?? -1}
       onChange={(e) => {
         const row = Number(e.target.value);

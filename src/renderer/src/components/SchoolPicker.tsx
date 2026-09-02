@@ -63,6 +63,7 @@ export default function SchoolPicker() {
               <input
                 className="search"
                 placeholder="Search schools or coaches…"
+                aria-label="Search schools or coaches"
                 value={q}
                 autoFocus
                 onChange={(e) => setQ(e.target.value)}

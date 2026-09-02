@@ -164,7 +164,7 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
 
         {state === 'loading' && <div className="pf-wait">Reading the save…</div>}
         {state === 'missing' && <div className="pf-wait">No class to add a recruit to in this save.</div>}
-        {state === 'saved' && <div className="ed-saved">{savedNote}</div>}
+        {state === 'saved' && <div className="ed-saved" role="status">{savedNote}</div>}
 
         {form && (state === 'ready' || state === 'writing') && (
           <>
@@ -310,7 +310,7 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
             />
 
             {(error || (nameProblem && (firstName || lastName))) && (
-              <div className="ed-error">{error ?? nameProblem}</div>
+              <div className="ed-error" role="alert">{error ?? nameProblem}</div>
             )}
 
             <div className="ed-foot">

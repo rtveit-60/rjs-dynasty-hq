@@ -318,7 +318,7 @@ export default function EditPlayerModal({
         {state === 'loading' && <div className="pf-wait">Reading the save…</div>}
         {state === 'missing' && <div className="pf-wait">Nothing editable in the save for this one.</div>}
         {state === 'saved' && (
-          <div className="ed-saved">
+          <div className="ed-saved" role="status">
             <div className="ed-saved-name">{savedTo}</div>
             Saved. The dashboard now follows the edited copy — load it in the game to play
             with the change.
@@ -511,7 +511,7 @@ export default function EditPlayerModal({
               faceOnly={form.look === null}
             />
 
-            {(error || nameProblem) && <div className="ed-error">{error ?? nameProblem}</div>}
+            {(error || nameProblem) && <div className="ed-error" role="alert">{error ?? nameProblem}</div>}
 
             <div className="ed-foot">
               <span className="ed-target">

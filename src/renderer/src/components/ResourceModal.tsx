@@ -136,7 +136,7 @@ export default function ResourceModal({
               : 'Nothing readable in the save for this one.'}
           </div>
         )}
-        {state === 'saved' && <div className="ed-saved">{savedNote}</div>}
+        {state === 'saved' && <div className="ed-saved" role="status">{savedNote}</div>}
 
         {form && (state === 'ready' || state === 'writing') && (
           <>
@@ -209,7 +209,7 @@ export default function ResourceModal({
               )}
             </div>
 
-            {error && <div className="ed-error">{error}</div>}
+            {error && <div className="ed-error" role="alert">{error}</div>}
 
             <div className="ed-foot">
               <span className="ed-target">

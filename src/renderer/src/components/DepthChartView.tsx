@@ -92,11 +92,11 @@ export default function DepthChartView({ school, browsing = false }: { school: S
       {!browsing && (changes.length > 0 || note || error) && (
         <div className="dc-savebar">
           {error ? (
-            <span className="dc-save-error">{error}</span>
+            <span className="dc-save-error" role="alert">{error}</span>
           ) : note && !changes.length ? (
-            <span className="dc-save-note">{note}</span>
+            <span className="dc-save-note" role="status">{note}</span>
           ) : (
-            <span className="dc-save-note">
+            <span className="dc-save-note" role="status">
               {changes.length} window{changes.length === 1 ? '' : 's'} changed — writes a{' '}
               <strong>_RJsEdited</strong> copy; the original save is never touched.
             </span>
@@ -148,6 +148,20 @@ export default function DepthChartView({ school, browsing = false }: { school: S
                           key={`${row}-${i}`}
                           className={`dc-row ${i === 0 ? 'starter' : ''} ${moved ? 'moved' : ''} ${isOver ? 'dragover' : ''} ${isDragged ? 'dragging' : ''}`}
                           draggable={!browsing}
+                          tabIndex={browsing ? undefined : 0}
+                          aria-label={`${pos} ${i + 1}, ${p ? `${p.firstName} ${p.lastName}` : 'off roster'}${browsing ? '' : '. Alt plus arrow keys move this slot.'}`}
+                          onKeyDown={(e) => {
+                            // Keyboard twin of the drag: Alt+Arrow swaps with the neighbour and
+                            // follows the slot to its new row so the next press keeps moving it.
+                            if (browsing || !e.altKey) return;
+                            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                            const j = e.key === 'ArrowUp' ? i - 1 : i + 1;
+                            if (j < 0 || j >= rows.length) return;
+                            e.preventDefault();
+                            const card = e.currentTarget.parentElement;
+                            swap({ pos, index: i }, { pos, index: j });
+                            requestAnimationFrame(() => card?.querySelectorAll<HTMLElement>('.dc-row')[j]?.focus());
+                          }}
                           onDragStart={(e) => {
                             if (browsing) return;
                             setDragging({ pos, index: i });
@@ -188,6 +202,26 @@ export default function DepthChartView({ school, browsing = false }: { school: S
                             )}
                           </span>
                           {p && <span className={ovrTier(p.overall)}>{p.overall}</span>}
+                          {!browsing && (
+                            <span className="dc-move">
+                              <button
+                                type="button"
+                                aria-label="Move up"
+                                disabled={i === 0}
+                                onClick={() => swap({ pos, index: i }, { pos, index: i - 1 })}
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="Move down"
+                                disabled={i === rows.length - 1}
+                                onClick={() => swap({ pos, index: i }, { pos, index: i + 1 })}
+                              >
+                                ▼
+                              </button>
+                            </span>
+                          )}
                         </div>
                       );
                     })}

@@ -42,11 +42,11 @@ export default function BoardSaveBar() {
   return (
     <div className="dc-savebar">
       {error ? (
-        <span className="dc-save-error">{error}</span>
+        <span className="dc-save-error" role="alert">{error}</span>
       ) : !entries.length ? (
-        <span className="dc-save-note">{note}</span>
+        <span className="dc-save-note" role="status">{note}</span>
       ) : (
-        <span className="dc-save-note">
+        <span className="dc-save-note" role="status">
           Board changes staged: {adds > 0 && <strong>{adds} to add</strong>}
           {adds > 0 && removes > 0 && ' · '}
           {removes > 0 && <strong>{removes} to remove</strong>} — writes a{' '}

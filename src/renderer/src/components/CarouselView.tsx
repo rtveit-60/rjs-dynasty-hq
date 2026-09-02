@@ -85,6 +85,7 @@ function SecurityCell({ pct, status }: { pct: number; status: string }) {
         />
       </span>
       <b style={{ color: s.color, fontSize: 12, width: 34, textAlign: 'right' }}>{pct}%</b>
+      <span className="sr-only">, {s.label}</span>
     </div>
   );
 }
@@ -213,10 +214,13 @@ export default function CarouselView() {
   const th = (label: string, key: SortKey, opts?: { num?: boolean; defaultAsc?: boolean }) => (
     <th
       className={`${opts?.num ? 'num ' : ''}${sortKey === key ? 'sorted' : ''}`}
+      aria-sort={sortKey === key ? (asc ? 'ascending' : 'descending') : 'none'}
       onClick={() => sortBy(key, opts?.defaultAsc ?? true)}
     >
-      {label}
-      {sortKey === key ? (asc ? ' ↑' : ' ↓') : ''}
+      <button type="button" className="th-sort">
+        {label}
+        {sortKey === key ? (asc ? ' ↑' : ' ↓') : ''}
+      </button>
     </th>
   );
 
@@ -234,12 +238,15 @@ export default function CarouselView() {
         )}
         <span className="chip" title="The game's own hot-seat designation">
           <span className="k">HC LIKELY OPEN</span> <b>{likelyHC}</b>
+          <span className="sr-only">, the game's own hot-seat designation</span>
         </span>
         <span className="chip" title="Low security plus an expiring deal or an impatient/reactionary AD">
           <span className="k">HC AT RISK</span> <b>{atRiskHC}</b>
+          <span className="sr-only">, low security plus an expiring deal or an impatient or reactionary AD</span>
         </span>
         <span className="chip" title="Coordinators on the hot seat with security at or under 20%">
           <span className="k">COORDINATORS LIKELY OUT</span> <b>{coordOut}</b>
+          <span className="sr-only">, coordinators on the hot seat with security at or under 20 percent</span>
         </span>
       </div>
 
@@ -499,7 +506,7 @@ function FireDialog({
           </button>
         </div>
         {state === 'saved' ? (
-          <div className="ed-saved">{message}</div>
+          <div className="ed-saved" role="status">{message}</div>
         ) : (
           <>
             <p className="fire-copy">
@@ -519,7 +526,7 @@ function FireDialog({
                 </>
               )}
             </p>
-            {error && <div className="ed-error">{error}</div>}
+            {error && <div className="ed-error" role="alert">{error}</div>}
             <div className="ed-foot">
               <span className="ed-target">
                 Writes a <strong>_RJsEdited</strong> copy — the original save is never touched.

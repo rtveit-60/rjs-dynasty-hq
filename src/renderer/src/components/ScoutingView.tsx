@@ -195,6 +195,7 @@ export default function ScoutingView({
               className="scout-select"
               value={c.field}
               onChange={(e) => setC(i, { field: e.target.value })}
+              aria-label={`Criterion ${i + 1} rating`}
             >
               {optionGroups.map((g) =>
                 g.label ? (
@@ -267,6 +268,7 @@ export default function ScoutingView({
         <select
           className="scout-select pos-select"
           value={pos}
+          aria-label="Position"
           onChange={(e) => {
             setPos(e.target.value);
             setArchetype('ALL');
@@ -286,6 +288,7 @@ export default function ScoutingView({
           onChange={(e) => setArchetype(e.target.value)}
           style={{ minWidth: 190 }}
           title="Archetype"
+          aria-label="Archetype"
         >
           <option value="ALL">Any archetype ({archetypeOptions.length})</option>
           {archetypeOptions.map((a) => (
@@ -350,13 +353,22 @@ export default function ScoutingView({
                     <th
                       key={f}
                       className={`num ${sortField === f || (!sortField && f === active[0]?.field) ? 'sorted' : ''}`}
+                      aria-sort={
+                        sortField === f || (!sortField && f === active[0]?.field)
+                          ? asc
+                            ? 'ascending'
+                            : 'descending'
+                          : 'none'
+                      }
                       onClick={() => sortBy(f)}
                       title={RATING_BY_FIELD.get(f)?.name}
                     >
-                      {RATING_BY_FIELD.get(f)?.label ?? f}
-                      {(sortField === f || (!sortField && f === active[0]?.field)) && (
-                        <span className="sort-caret">{asc ? '▲' : '▼'}</span>
-                      )}
+                      <button type="button" className="th-sort" aria-label={`Sort by ${RATING_BY_FIELD.get(f)?.name ?? f}`}>
+                        {RATING_BY_FIELD.get(f)?.label ?? f}
+                        {(sortField === f || (!sortField && f === active[0]?.field)) && (
+                          <span className="sort-caret">{asc ? '▲' : '▼'}</span>
+                        )}
+                      </button>
                     </th>
                   ))}
                   <th>Status</th>
@@ -379,7 +391,7 @@ export default function ScoutingView({
                       onClick={() => setOpenRow(openRow === r.row ? null : r.row)}
                     >
                       <td>
-                        <span className="stars-cell" title={`${r.stars} stars`}>
+                        <span className="stars-cell" role="img" aria-label={`${r.stars} stars`} title={`${r.stars} stars`}>
                           {stars(r.stars).slice(0, r.stars)}
                           <span className="off">{stars(r.stars).slice(r.stars)}</span>
                         </span>
