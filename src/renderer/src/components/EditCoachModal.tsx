@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CoachEditChanges, CoachEditForm } from '../../../shared/types.ts';
 import { coachTalentTree, type CoachTalentSubTree } from '../../../shared/coach-talents.ts';
 import {
-  TALENT_LOCKED,
   costDelta,
   ownedSet,
   withNodeOwned,
@@ -435,7 +434,7 @@ export default function EditCoachModal({ coachRow, onClose }: { coachRow: number
                 {position !== form.position && (
                   <p className="ed-warn" role="status">
                     {swapPartner
-                      ? `Role change: ${swapPartner.name} moves to ${ROLE_LABEL[form.position] ?? form.position} in the same save. Talent trees differ between head coaches and coordinators; a coordinator promoted to head coach gets the two head-coach specialties locked until their prerequisites are met. Play or sim a week afterwards to confirm the staff took.`
+                      ? `Role change: ${swapPartner.name} moves to ${ROLE_LABEL[form.position] ?? form.position} in the same save. Talent trees differ between head coaches and coordinators; a coordinator promoted to head coach gets the two head-coach specialty subtrees added, open to edit. Play or sim a week afterwards to confirm the staff took.`
                       : `Role change with no one to swap: this staff has no ${ROLE_LABEL[position] ?? position}. The role is written directly.`}
                   </p>
                 )}
@@ -501,12 +500,11 @@ export default function EditCoachModal({ coachRow, onClose }: { coachRow: number
                       {tree.map((s) => {
                         const st = slotState(s.slot);
                         const cur = owned[s.slot] ?? new Set<number>();
-                        const locked = !!st && st.status[0] === TALENT_LOCKED && !cur.has(0);
                         return (
                           <button
                             key={s.slot}
                             type="button"
-                            className={`tt-sub ${cur.has(0) ? 'lit' : ''} ${locked ? 'locked' : ''}`}
+                            className={`tt-sub ${cur.has(0) ? 'lit' : ''}`}
                             disabled={!st}
                             onClick={() => setOpenSlot(s.slot)}
                             title={s.desc}
@@ -517,7 +515,7 @@ export default function EditCoachModal({ coachRow, onClose }: { coachRow: number
                             </span>
                             <span className="tt-sub-meta">
                               {s.type}
-                              {locked ? ' · locked' : cur.has(0) ? ' · unlocked' : ''}
+                              {cur.has(0) ? ' · unlocked' : ''}
                             </span>
                             {s.prereq?.desc && <span className="tt-sub-prereq">{s.prereq.desc}</span>}
                           </button>
@@ -528,7 +526,6 @@ export default function EditCoachModal({ coachRow, onClose }: { coachRow: number
                       <TalentTreeModal
                         tree={tree[openSlot]}
                         owned={owned[openSlot] ?? new Set<number>()}
-                        locked={slotState(openSlot)!.status[0] === TALENT_LOCKED && !(owned[openSlot]?.has(0) ?? false)}
                         onChange={(next) => setOwned((prev) => ({ ...prev, [openSlot]: next }))}
                         onClose={() => setOpenSlot(null)}
                       />
