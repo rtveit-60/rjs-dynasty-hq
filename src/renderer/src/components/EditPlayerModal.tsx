@@ -28,11 +28,26 @@ export function Stepper({
   const repeat = useRef<{ t: number | null; i: number | null }>({ t: null, i: null });
   const latest = useRef({ value, onChange });
   latest.current = { value, onChange };
+  /**
+   * What the box shows while it is being typed into. Clamping every keystroke
+   * would snap "4" to an age floor of 20 before the "5" could follow, so the
+   * text is free while focused; an in-range number applies at once, anything
+   * else is clamped and applied on blur or Enter.
+   */
+  const [draft, setDraft] = useState<string | null>(null);
 
   const clamp = (n: number): number => Math.max(min, Math.min(max, n));
   const step = (dir: 1 | -1): void => {
+    setDraft(null);
     const { value: v, onChange: fire } = latest.current;
     const next = clamp(v + dir);
+    if (next !== v) fire(next);
+  };
+  const commit = (): void => {
+    if (draft === null) return;
+    const { value: v, onChange: fire } = latest.current;
+    const next = draft === '' ? v : clamp(Number(draft));
+    setDraft(null);
     if (next !== v) fire(next);
   };
   const stopRepeat = (): void => {
@@ -65,12 +80,15 @@ export function Stepper({
       </button>
       <input
         inputMode="numeric"
-        value={value}
+        value={draft ?? String(value)}
         aria-label={label}
         onChange={(e) => {
           const digits = e.target.value.replace(/\D/g, '').slice(0, String(max).length);
-          onChange(clamp(Number(digits || 0)));
+          setDraft(digits);
+          const n = Number(digits);
+          if (digits !== '' && n >= min && n <= max && n !== value) onChange(n);
         }}
+        onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === 'ArrowUp') {
             e.preventDefault();
@@ -78,6 +96,9 @@ export function Stepper({
           } else if (e.key === 'ArrowDown') {
             e.preventDefault();
             step(-1);
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
           }
         }}
         onFocus={(e) => e.target.select()}
