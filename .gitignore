@@ -23,3 +23,7 @@ Thumbs.db
 # Game-extracted UI textures (personal use; run scripts/extract-game-icons.ts)
 resources/game-icons/*
 !resources/game-icons/.gitkeep
+
+# Design-detector local state (shared config.json is committed)
+.impeccable/hook.cache.json
+.impeccable/config.local.json
