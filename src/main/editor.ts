@@ -101,7 +101,7 @@ async function playerRecord(franchise: any, playerRow: number): Promise<any> {
 }
 
 /** Whether a Recruit row points at this player (recruits carry no jersey in game). */
-async function isRecruitRow(franchise: any, playerRow: number): Promise<boolean> {
+export async function isRecruitRow(franchise: any, playerRow: number): Promise<boolean> {
   try {
     const playerTableId = mainTable(franchise, 'Player').header?.tableId;
     const recruits = mainTable(franchise, 'Recruit');

@@ -21,6 +21,7 @@ import { useHQ } from '../store.ts';
 import BoardMark from './BoardMark.tsx';
 import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
 import CreateRecruitModal from './CreateRecruitModal.tsx';
+import ManualTransfersModal from './ManualTransfersModal.tsx';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
@@ -89,6 +90,7 @@ export default function RecruitingView() {
   const [edgeOnly, setEdgeOnly] = useState(false);
   const [openOnly, setOpenOnly] = useState(false);
   const [boardOnly, setBoardOnly] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('natlrk');
   const [asc, setAsc] = useState(true);
   const [page, setPage] = useState(0);
@@ -387,7 +389,17 @@ export default function RecruitingView() {
         >
           Create Recruit
         </button>
+        {board === 'portal' && (
+          <button
+            className="filter"
+            onClick={() => setTransferring(true)}
+            title="Move rostered players between two schools (writes a _RJsEdited copy)"
+          >
+            Manual Transfers
+          </button>
+        )}
       </div>
+      {transferring && <ManualTransfersModal onClose={() => setTransferring(false)} />}
 
       {board === 'portal' && portalCount === 0 ? (
         <div className="empty" style={{ marginTop: 18 }}>

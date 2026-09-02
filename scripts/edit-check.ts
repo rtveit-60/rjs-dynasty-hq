@@ -579,6 +579,105 @@ check('form: skill points within the field ceiling',
   check('coach rejections left the edited file unchanged', sha(swap.editedPath) === beforeRej);
 }
 
+// --- 7c. manual transfers: swap round-trip, cap + recruit + wrong-team rejections ---
+{
+  const { applyRosterTransfers, rosterCap } = await import('../src/main/transfers.ts');
+  const { refsFromArrayRecord, tableById, isNullRef } = await import('../src/main/parser/franchise.ts');
+  const twork = path.join(dir, 'DYNASTY-TRANSFERCHECK');
+  copyFileSync(work, twork);
+  const fr = await loadFranchise(twork);
+  const teams = mainTable(fr, 'Team');
+  await teams.readRecords(['TeamIndex', 'LongName', 'Roster', 'TEAM_TYPE', 'ActiveRosterSize']);
+  const pl = mainTable(fr, 'Player');
+  await pl.readRecords(['TeamIndex', 'FirstName', 'LastName']);
+  const pid = pl.header?.tableId;
+  const rosterOf = async (f: any, teamRow: number): Promise<number[]> => {
+    const t = mainTable(f, 'Team');
+    await t.readRecords(['Roster', 'TeamIndex']);
+    const ref = refFromRecord(t.records[teamRow], 'Roster');
+    if (!ref || isNullRef(ref)) return [];
+    const at = await tableById(f, ref.tableId);
+    if (at && !at.recordsRead) await at.readRecords();
+    return refsFromArrayRecord(at.records[ref.row]).filter((r: any) => r.tableId === pid).map((r: any) => r.row);
+  };
+  // two real programs with full rosters
+  const real: number[] = [];
+  for (let i = 0; i < teams.records.length && real.length < 2; i++) {
+    const r = teams.records[i];
+    if (r.isEmpty || String(val(r, 'TEAM_TYPE')) !== 'Current') continue;
+    if ((await rosterOf(fr, i)).length >= 80) real.push(i);
+  }
+  const [teamA, teamB] = real;
+  check('transfer: two real programs with rosters', real.length === 2, `rows ${real.join('/')}`);
+  const cap = await rosterCap(fr);
+  check('transfer: roster cap read from RosterInfo', cap === 85, String(cap));
+  const rosterA = await rosterOf(fr, teamA);
+  const rosterB = await rosterOf(fr, teamB);
+  const pA = rosterA[0];
+  const pB = rosterB[0];
+  const nameOf = (row: number): string => `${val(pl.records[row], 'FirstName')} ${val(pl.records[row], 'LastName')}`;
+  const tiA = Number(val(teams.records[teamA], 'TeamIndex'));
+  const tiB = Number(val(teams.records[teamB], 'TeamIndex'));
+  const activeA = Number(val(teams.records[teamA], 'ActiveRosterSize'));
+
+  // a straight swap keeps both rosters inside the cap
+  const res = await applyRosterTransfers(fr, twork, {
+    moves: [
+      { playerRow: pA, fromTeamRow: teamA, toTeamRow: teamB },
+      { playerRow: pB, fromTeamRow: teamB, toTeamRow: teamA }
+    ]
+  }, dir);
+  check('transfer: source file bytes untouched', sha(twork) === sourceHash && sha(work) === sourceHash);
+  check('transfer: two moves reported', res.moved === 2 && res.summary.includes(nameOf(pA)), res.summary);
+  const fr2 = await loadFranchise(res.editedPath);
+  const pl2 = mainTable(fr2, 'Player');
+  await pl2.readRecords(['TeamIndex', 'PrevTeamIndex', 'PLYR_CONSECYEARSWITHTEAM']);
+  const a2 = pl2.records[pA];
+  const b2 = pl2.records[pB];
+  check('transfer: team indexes swapped, previous team recorded, years reset',
+    Number(val(a2, 'TeamIndex')) === tiB && Number(val(a2, 'PrevTeamIndex')) === tiA && Number(val(a2, 'PLYR_CONSECYEARSWITHTEAM')) === 0 &&
+    Number(val(b2, 'TeamIndex')) === tiA && Number(val(b2, 'PrevTeamIndex')) === tiB);
+  const rosterA2 = await rosterOf(fr2, teamA);
+  const rosterB2 = await rosterOf(fr2, teamB);
+  check('transfer: roster lists exchanged the players, sizes held',
+    rosterA2.includes(pB) && !rosterA2.includes(pA) && rosterB2.includes(pA) && !rosterB2.includes(pB) &&
+    rosterA2.length === rosterA.length && rosterB2.length === rosterB.length,
+    `${rosterA.length}->${rosterA2.length}, ${rosterB.length}->${rosterB2.length}`);
+  const t2 = mainTable(fr2, 'Team');
+  await t2.readRecords(['ActiveRosterSize']);
+  check('transfer: active-roster counter net zero on a swap',
+    Number(val(t2.records[teamA], 'ActiveRosterSize')) === activeA, `${activeA} -> ${val(t2.records[teamA], 'ActiveRosterSize')}`);
+  {
+    // no window on the old team still names the moved player
+    const dc = refFromRecord(t2.records[teamA], 'DepthChart');
+    let stale = 0;
+    if (dc && !isNullRef(dc)) {
+      const dcT = await tableById(fr2, dc.tableId);
+      if (dcT && !dcT.recordsRead) await dcT.readRecords();
+      const dcRec = dcT.records[dc.row];
+      for (const k of Object.keys(dcRec._fields)) {
+        if (k === 'LockedEntries') continue;
+        const wr = refFromRecord(dcRec, k);
+        if (!wr || isNullRef(wr)) continue;
+        const wt = await tableById(fr2, wr.tableId);
+        if (wt && !wt.recordsRead) await wt.readRecords();
+        if (refsFromArrayRecord(wt.records[wr.row]).some((r: any) => r.tableId === pid && r.row === pA)) stale++;
+      }
+    }
+    check('transfer: old depth chart windows no longer reference the player', stale === 0, `${stale} stale`);
+  }
+  const beforeRej = sha(res.editedPath);
+  await rejects('transfer reject: over the roster cap (one-way move into a full roster)', () =>
+    applyRosterTransfers(fr2, res.editedPath, { moves: [{ playerRow: rosterA2[1], fromTeamRow: teamA, toTeamRow: teamB }] }, dir));
+  await rejects('transfer reject: prospect (not rostered)', () =>
+    applyRosterTransfers(fr2, res.editedPath, { moves: [{ playerRow: recruitRow, fromTeamRow: teamA, toTeamRow: teamB }, { playerRow: rosterB2[1], fromTeamRow: teamB, toTeamRow: teamA }] }, dir));
+  await rejects('transfer reject: player not on the named school', () =>
+    applyRosterTransfers(fr2, res.editedPath, { moves: [{ playerRow: rosterA2[1], fromTeamRow: teamB, toTeamRow: teamA }] }, dir));
+  await rejects('transfer reject: same school both sides', () =>
+    applyRosterTransfers(fr2, res.editedPath, { moves: [{ playerRow: rosterA2[1], fromTeamRow: teamA, toTeamRow: teamA }] }, dir));
+  check('transfer rejections left the edited file unchanged', sha(res.editedPath) === beforeRej);
+}
+
 // --- 8. board membership: remove + add round-trips + rejections ---
 {
   const fr = await loadFranchise(editedPath);

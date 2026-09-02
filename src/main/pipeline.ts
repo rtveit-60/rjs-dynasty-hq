@@ -13,6 +13,7 @@ import type {
   CoachEditChanges,
   CoachEditForm,
   CoachFireRequest,
+  TransferRequest,
   CreateRecruitForm,
   CreateRecruitRequest,
   TargetActionChanges,
@@ -41,6 +42,7 @@ import {
 } from './editor.ts';
 import { applyCoachEdit, buildCoachEditForm } from './coach-editor.ts';
 import { log, reportError } from './log.ts';
+import { applyRosterTransfers } from './transfers.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
 import { buildCfpBracket } from '../shared/cfp-bracket.ts';
@@ -414,6 +416,21 @@ export class Pipeline {
         app.getPath('userData')
       );
       return { editedPath, message: `${coachName} saved to ${basename(editedPath)}.` };
+    });
+  }
+
+  async transferPlayers(req: TransferRequest, savePath: string): Promise<PlayerEditResult> {
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, moved, summary } = await applyRosterTransfers(
+        this.franchise,
+        savePath,
+        req,
+        app.getPath('userData')
+      );
+      return {
+        editedPath,
+        message: `${moved} transfer${moved === 1 ? '' : 's'} saved to ${basename(editedPath)}: ${summary}.`
+      };
     });
   }
 
