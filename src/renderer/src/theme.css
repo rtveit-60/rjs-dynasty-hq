@@ -410,6 +410,9 @@ body {
 .page {
   padding: clamp(16px, 2.2vw, 26px) clamp(16px, 2.6vw, 30px) 40px;
   max-width: 1240px;
+  /* Tab strips size themselves against the page, not the window: the rail
+     and the page padding are already spent. */
+  container: page / inline-size;
 }
 
 /* ——— Team HQ title card ——— */
@@ -3467,6 +3470,31 @@ table.tbl.tbl-wide {
   .tab {
     padding: 7px 15px 6px 10px;
     font-size: 12.5px;
+  }
+}
+
+/* Team HQ's nine tabs need ~1200px at the shared tab size, more than the
+   page ever offers (1180px at its widest), so that strip runs tighter than
+   the three- and four-tab strips elsewhere. Below ~1020px of page it falls
+   back to short labels, so the last tab is never clipped behind the hidden
+   scrollbar. */
+.hq-tabs .tab {
+  padding: 8px 12px 7px;
+  font-size: 12.5px;
+  letter-spacing: 0.09em;
+}
+
+.tab-short {
+  display: none;
+}
+
+@container page (max-width: 1020px) {
+  .hq-tabs .tab-full {
+    display: none;
+  }
+
+  .hq-tabs .tab-short {
+    display: inline;
   }
 }
 
