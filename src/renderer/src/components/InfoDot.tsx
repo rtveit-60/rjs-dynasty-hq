@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useDialog } from '../lib/dialog.ts';
 
 /**
  * A small circled "i" that opens a dialog explaining the block it sits in.
@@ -22,6 +23,9 @@ export default function InfoDot({ title, children }: { title: string; children: 
     return () => window.removeEventListener('keydown', onKey, true);
   }, [open]);
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialog(panelRef, open);
+
   return (
     <>
       <button
@@ -42,7 +46,15 @@ export default function InfoDot({ title, children }: { title: string; children: 
            clip — fixed-position boxes still clip under an ancestor clip-path. */
         createPortal(
           <div className="info-overlay" onClick={() => setOpen(false)}>
-            <div className="info-dialog" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
+            <div
+              className="info-dialog"
+              ref={panelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label={title}
+              tabIndex={-1}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="info-head">
                 <span className="info-title">{title}</span>
                 <button type="button" className="info-close" onClick={() => setOpen(false)} aria-label="Close">

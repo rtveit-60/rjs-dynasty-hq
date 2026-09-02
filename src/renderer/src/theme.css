@@ -1149,7 +1149,6 @@ table.tbl {
   padding: 9px 12px;
   font-size: 13px;
   font-family: var(--font-ui);
-  outline: none;
 }
 
 .search:focus {
@@ -3606,6 +3605,7 @@ table.tbl.tbl-wide {
   font: 700 11.5px var(--font-display);
   letter-spacing: 0.14em;
   padding: 7px 16px 6px 12px;
+  border: 0;
   clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
   cursor: pointer;
   user-select: none;
@@ -6262,4 +6262,26 @@ table.tbl.tbl-wide {
 
 .cfp-champ-mark {
   flex: none;
+}
+
+/* ————————————————————————————————————————————————
+   Browser surfaces — keyboard focus and text selection in the package's own
+   colors. The ring is the hot highlight on every control, keyboard-only
+   (:focus-visible), offset so it clears a plate's rim light. Dialog panels
+   take focus on open so readers announce them, but never wear the ring.
+   Selection is a team wash on the page ground.
+   ———————————————————————————————————————————————— */
+
+:where(a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex='-1'])):focus-visible {
+  outline: 2px solid var(--hot);
+  outline-offset: 2px;
+}
+
+[role='dialog']:focus {
+  outline: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--team, var(--hot)) 30%, var(--paper));
+  color: var(--ink);
 }

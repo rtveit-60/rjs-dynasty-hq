@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { MediaEvent } from '../../../shared/types.ts';
+import { useDialog } from '../lib/dialog.ts';
 import { Masthead, weekLabel } from './Story.tsx';
 
 /** Full-article reader: the quick write-up behind every wire headline. */
@@ -15,9 +16,20 @@ export default function ArticleModal({ e, onClose }: { e: MediaEvent; onClose: (
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialog(panelRef);
+
   return (
     <div className="art-overlay" onClick={onClose}>
-      <div className="art-modal" onClick={(ev) => ev.stopPropagation()}>
+      <div
+        className="art-modal"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={e.headline}
+        tabIndex={-1}
+        onClick={(ev) => ev.stopPropagation()}
+      >
         <div className="art-top">
           <Masthead outlet={e.outlet} />
           <button className="art-close" onClick={onClose} aria-label="Close article">

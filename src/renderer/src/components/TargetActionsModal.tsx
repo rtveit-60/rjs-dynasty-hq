@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialog } from '../lib/dialog.ts';
 import type { TargetActionChanges, TargetActionFlags, TargetActionForm } from '../../../shared/types.ts';
 import { stars } from '../lib/format.ts';
 import { ACTION_HOURS, ACTION_LABELS as GAME_ACTION_LABELS } from '../../../shared/recruiting-actions.ts';
@@ -78,6 +79,9 @@ export default function TargetActionsModal({
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialog(panelRef);
 
   // Hours are the sum of the game's fixed action prices, not a free number.
   const derivedHours = form
@@ -171,7 +175,15 @@ export default function TargetActionsModal({
 
   return (
     <div className="ed-overlay" onMouseDown={onClose}>
-      <div className="ed-panel rs-panel" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="ed-panel rs-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={form ? `Weekly plan for ${form.name}` : 'Weekly plan'}
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="ed-head">
           <span className="ed-title">Weekly Plan</span>
           {form && (

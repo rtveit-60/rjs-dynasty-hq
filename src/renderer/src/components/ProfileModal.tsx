@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDialog } from '../lib/dialog.ts';
 import type {
   CoachProfile,
   GameLogRow,
@@ -144,11 +145,21 @@ export default function ProfileModal() {
     panelRef.current?.scrollTo({ top: 0 });
   }, [profile]);
 
+  useDialog(panelRef, !!top);
+
   if (!top) return null;
 
   return (
     <div className="pf-overlay" onMouseDown={close}>
-      <div className="pf-panel" ref={panelRef} onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="pf-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Profile"
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="pf-controls">
           {stack.length > 1 && (
             <button type="button" className="pf-btn" onClick={back}>
