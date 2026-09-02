@@ -199,8 +199,7 @@ export async function buildEditForm(
           ...g.primary.map((s) => ({ ...s, tier: 'primary' as const })),
           ...g.secondary.map((s) => ({ ...s, tier: 'secondary' as const })),
           ...g.tertiary.map((s) => ({ ...s, tier: 'tertiary' as const }))
-        ],
-        spCost: g.spCost
+        ]
       }))
     : null;
 

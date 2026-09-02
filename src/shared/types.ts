@@ -736,8 +736,6 @@ export interface EditSkillCap {
   rgb: [number, number, number];
   /** The ratings this group levels, in the game's own weighting tiers. */
   skills: { name: string; field: string; tier: 'primary' | 'secondary' | 'tertiary' }[];
-  /** Skill points the game charges per level (index = level − 1); empty when unread. */
-  spCost: number[];
 }
 
 /** Everything the edit dialog needs, read straight from the record and its schema. */
