@@ -439,6 +439,21 @@ function registerIpc(): void {
     return result;
   });
 
+  // Manual transfers between two schools: mirrors the game's own sign-player choreography.
+  handle('roster:transfer', async (_e, req: unknown) => {
+    const r = req as { moves?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !r || !Array.isArray(r.moves) || !r.moves.length) {
+      return { ok: false, message: 'Nothing to transfer.' };
+    }
+    const result = await pipeline.transferPlayers(r as never, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // View-only browse of another school's full Team HQ, from the cached parse.
   handle('hq:browse', (_e, teamRow: number) => {
     const { savePath } = getSettings();

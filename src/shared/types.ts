@@ -918,6 +918,17 @@ export interface CoachEditChanges {
   talents?: { slot: number; owned: number[] }[];
 }
 
+/** One rostered player changing schools; rows are Team/Player table rows. */
+export interface TransferMove {
+  playerRow: number;
+  fromTeamRow: number;
+  toTeamRow: number;
+}
+
+export interface TransferRequest {
+  moves: TransferMove[];
+}
+
 export interface PlayerEditResult {
   ok: boolean;
   message: string;

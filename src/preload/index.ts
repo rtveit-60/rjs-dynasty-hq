@@ -6,6 +6,7 @@ import type {
   CoachEditChanges,
   CoachEditForm,
   CoachFireRequest,
+  TransferRequest,
   CreateRecruitForm,
   CreateRecruitRequest,
   DepthChartEditRequest,
@@ -70,6 +71,7 @@ export interface HQBridge {
   fireCoach: (req: CoachFireRequest) => Promise<PlayerEditResult>;
   getCoachEditForm: (coachRow: number) => Promise<CoachEditForm | null>;
   editCoach: (changes: CoachEditChanges) => Promise<PlayerEditResult>;
+  transferPlayers: (req: TransferRequest) => Promise<PlayerEditResult>;
   editBoard: (req: BoardEditRequest) => Promise<PlayerEditResult>;
   getCreateForm: () => Promise<CreateRecruitForm | null>;
   createRecruit: (req: CreateRecruitRequest) => Promise<PlayerEditResult>;
@@ -124,6 +126,7 @@ const bridge: HQBridge = {
   fireCoach: (req) => ipcRenderer.invoke('coach:fire', req),
   getCoachEditForm: (coachRow) => ipcRenderer.invoke('coach:editform', coachRow),
   editCoach: (changes) => ipcRenderer.invoke('coach:edit', changes),
+  transferPlayers: (req) => ipcRenderer.invoke('roster:transfer', req),
   editBoard: (req) => ipcRenderer.invoke('board:edit', req),
   getCreateForm: () => ipcRenderer.invoke('create:form'),
   createRecruit: (req) => ipcRenderer.invoke('create:recruit', req),
