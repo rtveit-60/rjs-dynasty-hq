@@ -89,9 +89,8 @@ const COACH_FIELDS = [
   'CareerStats',
   'OffensivePlaybook',
   'DefensivePlaybook',
-  // AD mandate + job security. All sit at schema indices 116-126, inside the
-  // range the drift-padded Coach layout decodes correctly (see coach-schema.ts).
-  // SeasonStartJobSecurityStatus (index 134) is past that and reads undefined.
+  // AD mandate + job security (schema indices 116-126). The whole Coach layout
+  // decodes since the drift pad moved to its true slot (see coach-schema.ts).
   'ContractLength',
   'ContractStatus',
   'ContractYearsRemaining',
