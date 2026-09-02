@@ -2,14 +2,8 @@ import { useEffect, useState } from 'react';
 import type { RecruitCard } from '../../../shared/types.ts';
 import { PITCHES } from '../../../shared/pitches.ts';
 import { RATINGS } from '../../../shared/ratings.ts';
-import { archetypeLabel, devClass, devLabel, heightFt, ovrTier, recruitPos, spaceOut } from '../lib/format.ts';
+import { archetypeLabel, devClass, devLabel, heightFt, medalColor, ovrTier, recruitPos, spaceOut } from '../lib/format.ts';
 
-const RANK_COLOR: Record<string, string> = {
-  Bronze: '#a9713f',
-  Silver: '#9aa3ad',
-  Gold: '#c9a227',
-  Platinum: '#6fd3d0'
-};
 
 /** "SPD" → "Speed", for the tile tooltips. */
 const SKILL_NAME = new Map(RATINGS.map((r) => [r.label, r.name]));
@@ -96,7 +90,7 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                           {a.rank && (
                             <>
                               &nbsp;
-                              <b style={{ color: RANK_COLOR[a.rank] ?? 'var(--ink-3)' }}>{a.rank}</b>
+                              <b style={{ color: medalColor(a.rank) }}>{a.rank}</b>
                             </>
                           )}
                         </span>
@@ -109,7 +103,7 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                       {card.physical.map((a, i) => (
                         <span key={i} className="chip">
                           {a.name || `Slot ${i + 1}`}&nbsp;
-                          <b style={{ color: RANK_COLOR[a.rank] ?? 'var(--ink-3)' }}>{a.rank}</b>
+                          <b style={{ color: medalColor(a.rank) }}>{a.rank}</b>
                         </span>
                       ))}
                     </div>

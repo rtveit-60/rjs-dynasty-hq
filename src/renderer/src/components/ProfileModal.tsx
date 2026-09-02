@@ -18,6 +18,7 @@ import {
   devClass,
   devLabel,
   heightFt,
+  medalColor,
   ovrTier,
   prestigeLabel,
   recruitPosPool,
@@ -29,12 +30,6 @@ import { useHQ } from '../store.ts';
 import EditPlayerModal from './EditPlayerModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 
-const RANK_COLOR: Record<string, string> = {
-  Bronze: '#a9713f',
-  Silver: '#9aa3ad',
-  Gold: '#c9a227',
-  Platinum: '#6fd3d0'
-};
 
 /** "SPD" → "Speed", for the ratings-sheet tooltips. */
 const SKILL_NAME = new Map(RATINGS.map((r) => [r.label, r.name]));
@@ -587,7 +582,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
                 {spaceOut(a.name)}
                 {a.rank && (
                   <>
-                    &nbsp;<b style={{ color: RANK_COLOR[a.rank] ?? 'var(--ink-3)' }}>{a.rank}</b>
+                    &nbsp;<b style={{ color: medalColor(a.rank) }}>{a.rank}</b>
                   </>
                 )}
               </span>
@@ -595,7 +590,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
             {p.physical.map((a, i) => (
               <span key={i} className="chip">
                 {a.name || <span className="k">PHYS</span>}&nbsp;
-                <b style={{ color: RANK_COLOR[a.rank] ?? 'var(--ink-3)' }}>{a.rank}</b>
+                <b style={{ color: medalColor(a.rank) }}>{a.rank}</b>
               </span>
             ))}
           </div>

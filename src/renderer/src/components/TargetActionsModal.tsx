@@ -242,7 +242,7 @@ export default function TargetActionsModal({
               <div className="wp-bar">
                 <div
                   className={`wp-fill ${overBudget ? 'over' : ''}`}
-                  style={{ width: `${Math.min(100, (derivedHours / Math.max(1, budgetCeiling)) * 100)}%` }}
+                  style={{ transform: `scaleX(${Math.min(1, derivedHours / Math.max(1, budgetCeiling))})` }}
                 />
                 {form.budgetBonus > 0 && (
                   <div
