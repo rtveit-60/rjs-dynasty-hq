@@ -3,6 +3,8 @@ import type {
   AppState,
   BrandPack,
   BoardEditRequest,
+  CoachEditChanges,
+  CoachEditForm,
   CoachFireRequest,
   CreateRecruitForm,
   CreateRecruitRequest,
@@ -66,6 +68,8 @@ export interface HQBridge {
   editDepthChart: (req: DepthChartEditRequest) => Promise<PlayerEditResult>;
   browseHQ: (teamRow: number) => Promise<Snapshot['school'] | null>;
   fireCoach: (req: CoachFireRequest) => Promise<PlayerEditResult>;
+  getCoachEditForm: (coachRow: number) => Promise<CoachEditForm | null>;
+  editCoach: (changes: CoachEditChanges) => Promise<PlayerEditResult>;
   editBoard: (req: BoardEditRequest) => Promise<PlayerEditResult>;
   getCreateForm: () => Promise<CreateRecruitForm | null>;
   createRecruit: (req: CreateRecruitRequest) => Promise<PlayerEditResult>;
@@ -118,6 +122,8 @@ const bridge: HQBridge = {
   editDepthChart: (req) => ipcRenderer.invoke('depth:edit', req),
   browseHQ: (teamRow) => ipcRenderer.invoke('hq:browse', teamRow),
   fireCoach: (req) => ipcRenderer.invoke('coach:fire', req),
+  getCoachEditForm: (coachRow) => ipcRenderer.invoke('coach:editform', coachRow),
+  editCoach: (changes) => ipcRenderer.invoke('coach:edit', changes),
   editBoard: (req) => ipcRenderer.invoke('board:edit', req),
   getCreateForm: () => ipcRenderer.invoke('create:form'),
   createRecruit: (req) => ipcRenderer.invoke('create:recruit', req),

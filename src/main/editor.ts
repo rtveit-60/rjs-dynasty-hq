@@ -68,7 +68,7 @@ function allRatingFields(): string[] {
 }
 
 /** Real enum member names off a field, markers dropped, aliases deduped by value. */
-function enumMembers(rec: any, field: string): { name: string; value: number }[] {
+export function enumMembers(rec: any, field: string): { name: string; value: number }[] {
   const en = rec?._fields?.[field]?.offset?.enum;
   const members: any[] = en?._members ?? en?.members ?? [];
   const seen = new Set<number>();
@@ -85,7 +85,7 @@ function enumMembers(rec: any, field: string): { name: string; value: number }[]
   return out;
 }
 
-function stringCap(rec: any, field: string, fallback: number): number {
+export function stringCap(rec: any, field: string, fallback: number): number {
   const n = Number(rec?._fields?.[field]?.offset?.maxLength);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
@@ -392,7 +392,7 @@ async function saveWithRetry(franchise: any, target: string): Promise<void> {
  * the caller's cold verify against a fresh load of the written file, and roll
  * back (backup restored / new file removed) on any failure.
  */
-async function writeEditedSave(
+export async function writeEditedSave(
   franchise: any,
   savePath: string,
   backupDir: string,
@@ -1268,7 +1268,7 @@ async function boardHandles(franchise: any, teamRow: number): Promise<BoardHandl
   return { board, arr, arrCapacity, targetTable, pitchTable, recruitTable, recruitTableId, slotOf };
 }
 
-function firstEmptyRow(table: any): number {
+export function firstEmptyRow(table: any): number {
   for (let i = 0; i < table.records.length; i++) if (table.records[i].isEmpty) return i;
   return -1;
 }
@@ -1918,7 +1918,7 @@ const BUDGET_FIELDS = [
   'TeamIndex'
 ];
 
-function fieldMax(rec: any, field: string, fallback: number): number {
+export function fieldMax(rec: any, field: string, fallback: number): number {
   const n = Number(rec?._fields?.[field]?.offset?.maxValue);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
@@ -1989,7 +1989,7 @@ export async function buildResourceForm(
 const REF_BITS = /^[01]{32}$/;
 
 /** 32-bit binary ref string (15-bit table id + 17-bit row), the array-field write format. */
-function refString(tableId: number, row: number): string {
+export function refString(tableId: number, row: number): string {
   return tableId.toString(2).padStart(15, '0') + row.toString(2).padStart(17, '0');
 }
 

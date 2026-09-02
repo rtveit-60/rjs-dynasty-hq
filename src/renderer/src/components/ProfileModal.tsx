@@ -28,6 +28,7 @@ import {
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
 import EditPlayerModal from './EditPlayerModal.tsx';
+import EditCoachModal from './EditCoachModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
 
 
@@ -161,12 +162,12 @@ export default function ProfileModal() {
               ‹ Back
             </button>
           )}
-          {state === 'ready' && profile?.kind === 'player' && (
+          {state === 'ready' && (profile?.kind === 'player' || profile?.kind === 'coach') && (
             <button
               type="button"
               className="pf-btn pf-edit"
               onClick={() => setEditing(true)}
-              title="Edit this player (writes a separate copy of the save)"
+              title={`Edit this ${profile.kind} (writes a separate copy of the save)`}
             >
               ✎ EDIT
             </button>
@@ -182,6 +183,9 @@ export default function ProfileModal() {
         {state === 'ready' && profile?.kind === 'school' && <SchoolBody s={profile} />}
         {editing && profile?.kind === 'player' && (
           <EditPlayerModal playerRow={profile.row} onClose={() => setEditing(false)} />
+        )}
+        {editing && profile?.kind === 'coach' && (
+          <EditCoachModal coachRow={profile.row} onClose={() => setEditing(false)} />
         )}
       </div>
     </div>

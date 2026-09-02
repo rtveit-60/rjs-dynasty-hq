@@ -436,6 +436,149 @@ check('form: skill points within the field ceiling',
   check('source still untouched after fire edits', sha(work) === sourceHash);
 }
 
+// --- 7b. coach editor: form truth, base/profile/progression round-trips, role swap, rejections ---
+{
+  const { applyCoachEdit, buildCoachEditForm } = await import('../src/main/coach-editor.ts');
+  const { coachTalentTree } = await import('../src/shared/coach-talents.ts');
+  const { ownedSet, withNodeOwned } = await import('../src/shared/coach-talent-logic.ts');
+  // Its own scratch copy: a role swap changes a staff's recruiting perks, which
+  // would shrink the weekly hour pool the later target-action checks rely on.
+  const cwork = path.join(dir, 'DYNASTY-COACHCHECK');
+  copyFileSync(work, cwork);
+  const fr = await loadFranchise(cwork);
+  const ct = mainTable(fr, 'Coach');
+  await ensureCoachSchema(fr, ct);
+  await ct.readRecords();
+  // a CPU head coach on a real team with a tree, plus that team's OC
+  let hcRow = -1;
+  let ocRow = -1;
+  for (let i = 0; i < ct.records.length; i++) {
+    const r = ct.records[i];
+    if (r.isEmpty || val(r, 'IsUserControlled') === true) continue;
+    if (String(val(r, 'Position')) !== 'HeadCoach' || Number(val(r, 'TeamIndex')) === 255) continue;
+    const ti = Number(val(r, 'TeamIndex'));
+    const oc = (ct.records as any[]).findIndex((c) => !c.isEmpty && Number(val(c, 'TeamIndex')) === ti && String(val(c, 'Position')) === 'OffensiveCoordinator');
+    if (oc < 0) continue;
+    const f = await buildCoachEditForm(fr, i, cwork);
+    if (!f.tree) continue;
+    hcRow = i;
+    ocRow = oc;
+    break;
+  }
+  check('coach: found a CPU head coach with a tree and an OC', hcRow >= 0 && ocRow >= 0, `rows ${hcRow}/${ocRow}`);
+  const cf = await buildCoachEditForm(fr, hcRow, cwork);
+  check('coach form: schema caps + role options', cf.maxFirstLen === 17 && cf.maxLastLen === 21 && cf.positionOptions.length === 3);
+  check('coach form: measurables decoded (coach weight = raw + 150)',
+    cf.heightIn >= 60 && cf.heightIn <= 84 && cf.weightLb >= 150 && cf.weightLb <= 420, `${cf.heightIn}in ${cf.weightLb}lb`);
+  check('coach form: enum options from the schema',
+    cf.homeStateOptions.includes('Texas') && cf.demeanorOptions.includes('Intense') && cf.stanceOptions.includes('PlaySheet') &&
+    cf.hatOptions.includes('Visor') && cf.bodyTypeOptions.includes('Heavy'),
+    `${cf.homeStateOptions.length} states`);
+  check('coach form: archetype names from the game (value 1 = Tactician), three backstories',
+    cf.archetypeOptions.find((o) => o.value === 1)?.name === 'Tactician' && cf.backstoryOptions.length === 3);
+  check('coach form: 13 head-coach subtrees with 33-node status vectors',
+    cf.tree!.length === 13 && cf.tree!.every((s) => s.status.length === 33), `${cf.tree!.length} slots`);
+  check('coach form: security bands from this save', cf.securityBands.hotSeat < cf.securityBands.low && cf.securityBands.low < cf.securityBands.safeForNow,
+    JSON.stringify(cf.securityBands));
+  check('coach form: staff lists the OC', cf.staff.some((s) => s.row === ocRow && s.position === 'OffensiveCoordinator'));
+
+  // own a level-2 node in the Motivator tree (owning its parent chain too); make CEO's root owned
+  const tree = coachTalentTree('HeadCoach');
+  const motivator = tree[0];
+  const level2 = motivator.nodes.find((n) => n.level === 2)!;
+  const before0 = ownedSet(cf.tree![0].status);
+  const want0 = withNodeOwned(motivator, before0, level2.index);
+  const ceo = tree[12];
+  const want12 = withNodeOwned(ceo, ownedSet(cf.tree![12].status), 0);
+  const edited1 = await applyCoachEdit(fr, cwork, {
+    coachRow: hcRow,
+    firstName: 'Harness',
+    lastName: 'Coach',
+    coachPoints: 123,
+    level: 33,
+    prestigeScore: 2222,
+    xp: 777,
+    securityPct: 20,
+    age: 47,
+    heightIn: 70,
+    weightLb: 215,
+    homeState: 'Texas',
+    demeanor: 'Intense',
+    stance: 'PlaySheet',
+    hat: 'Visor',
+    bodyType: 'Heavy',
+    backstory: 1,
+    expertScout: true,
+    talents: [
+      { slot: 0, owned: [...want0] },
+      { slot: 12, owned: [...want12] }
+    ],
+    archetype: 12
+  }, dir);
+  check('coach write: source file bytes untouched', sha(cwork) === sourceHash && sha(work) === sourceHash);
+  const cr = await loadFranchise(edited1.editedPath);
+  const ct2 = mainTable(cr, 'Coach');
+  await ensureCoachSchema(cr, ct2);
+  await ct2.readRecords();
+  const w = ct2.records[hcRow];
+  check('coach write: names + rebuilt display name',
+    String(val(w, 'FirstName')) === 'Harness' && String(val(w, 'LastName')) === 'Coach' && String(val(w, 'Name')) === 'H. Coach',
+    String(val(w, 'Name')));
+  check('coach write: base values persisted',
+    Number(val(w, 'CoachPoints')) === 123 && Number(val(w, 'Level')) === 33 && Number(val(w, 'CoachPrestigeScore')) === 2222 &&
+    Number(val(w, 'ExperiencePoints')) === 777);
+  check('coach write: security % + band-derived status',
+    Number(val(w, 'CurrentJobSecurityPercentage')) === 20 && String(val(w, 'CurrentJobSecurityStatus')) === 'HotSeat',
+    `${val(w, 'CurrentJobSecurityPercentage')} ${val(w, 'CurrentJobSecurityStatus')}`);
+  check('coach write: profile fields persisted (weight raw = lb − 150)',
+    Number(val(w, 'Age')) === 47 && Number(val(w, 'Height')) === 70 && Number(val(w, 'Weight')) === 65 &&
+    String(val(w, 'HomeState')) === 'Texas' && String(val(w, 'COACH_DEMEANOR')) === 'Intense' &&
+    String(val(w, 'COACH_STANCE')) === 'PlaySheet' && String(val(w, 'HatType')) === 'Visor' &&
+    String(val(w, 'CharacterBodyType')) === 'Heavy',
+    `raw weight ${val(w, 'Weight')}`);
+  check('coach write: archetype / backstory / expert scout',
+    String(val(w, 'DominantArchetype')) === 'CEO' && String(val(w, 'CoachBackstory')) === 'Strategist' && val(w, 'TraitExpertScout') === true);
+  const cf2 = await buildCoachEditForm(cr, hcRow, edited1.editedPath);
+  const s0 = cf2.tree![0];
+  const s12 = cf2.tree![12];
+  check('coach write: owned chain persisted, children purchasable, ledger moved by cost',
+    [...want0].every((i) => s0.status[i] === 2) &&
+    motivator.nodes[level2.index].children.every((c) => s0.status[c] === 1) &&
+    s0.spent === cf.tree![0].spent + [...want0].filter((i) => !before0.has(i)).reduce((a, i) => a + motivator.nodes[i].cost, 0),
+    `spent ${cf.tree![0].spent} -> ${s0.spent}`);
+  check('coach write: CEO archetype node owned, its nodes purchasable',
+    s0.status[0] === 2 && s12.status[0] === 2 && ceo.nodes.slice(1).every((n) => s12.status[n.index] === 1));
+
+  // role swap HC <-> OC on the same staff
+  const swap = await applyCoachEdit(cr, edited1.editedPath, { coachRow: hcRow, position: 'OffensiveCoordinator' }, dir);
+  const cr2 = await loadFranchise(swap.editedPath);
+  const ct3 = mainTable(cr2, 'Coach');
+  await ensureCoachSchema(cr2, ct3);
+  await ct3.readRecords();
+  check('coach swap: roles exchanged with the same staff\'s OC',
+    String(val(ct3.records[hcRow], 'Position')) === 'OffensiveCoordinator' && String(val(ct3.records[ocRow], 'Position')) === 'HeadCoach' &&
+    String(val(ct3.records[hcRow], 'PrevPosition')) === 'HeadCoach');
+  const promoted = await buildCoachEditForm(cr2, ocRow, swap.editedPath);
+  check('coach swap: promoted OC has the two head-coach specialties provisioned locked',
+    promoted.tree!.length === 13 && promoted.tree![11].status[0] === 3 && promoted.tree![12].status[0] === 3 && promoted.tree![12].spent === 0,
+    `${promoted.tree!.length} slots`);
+
+  const beforeRej = sha(swap.editedPath);
+  await rejects('coach reject: archetype whose node is not owned', () =>
+    applyCoachEdit(cr2, swap.editedPath, { coachRow: ocRow, archetype: 12 }, dir));
+  await rejects('coach reject: owning a node without its parent', () =>
+    applyCoachEdit(cr2, swap.editedPath, { coachRow: ocRow, talents: [{ slot: 0, owned: [0, 4] }] }, dir));
+  await rejects('coach reject: coach points past the field', () =>
+    applyCoachEdit(cr2, swap.editedPath, { coachRow: ocRow, coachPoints: 5000 }, dir));
+  await rejects('coach reject: unnamed backstory', () =>
+    applyCoachEdit(cr2, swap.editedPath, { coachRow: ocRow, backstory: 7 }, dir));
+  await rejects('coach reject: weight below the schema floor', () =>
+    applyCoachEdit(cr2, swap.editedPath, { coachRow: ocRow, weightLb: 140 }, dir));
+  await rejects('coach reject: unknown home state', () =>
+    applyCoachEdit(cr2, swap.editedPath, { coachRow: ocRow, homeState: 'Narnia' }, dir));
+  check('coach rejections left the edited file unchanged', sha(swap.editedPath) === beforeRej);
+}
+
 // --- 8. board membership: remove + add round-trips + rejections ---
 {
   const fr = await loadFranchise(editedPath);

@@ -819,6 +819,105 @@ export interface PlayerEditChanges {
   gear?: Record<string, string>;
 }
 
+/** One subtree of a coach's talent tree as the save stores it. */
+export interface CoachTalentSlotState {
+  /** Index into the role's tree (TalentSubTreeStatus[slot]); null row = the save has no row for it. */
+  slot: number;
+  /** TalentStatus per node index: 0 NotOwned, 1 Purchasable, 2 Owned, 3 Locked. */
+  status: number[];
+  /** The save's paid-points ledger for the subtree. */
+  spent: number;
+}
+
+/** Everything the coach editor needs, read from the Coach record and its schema. */
+export interface CoachEditForm {
+  coachRow: number;
+  name: string;
+  firstName: string;
+  lastName: string;
+  maxFirstLen: number;
+  maxLastLen: number;
+  /** Save Position member. */
+  position: string;
+  positionOptions: string[];
+  teamName: string | null;
+  isUser: boolean;
+  /** Who holds each other role on the same staff (a role change swaps with them). */
+  staff: { position: string; row: number; name: string }[];
+  // Base values
+  coachPoints: number;
+  coachPointsMax: number;
+  level: number;
+  levelMax: number;
+  prestigeScore: number;
+  prestigeScoreMax: number;
+  /** The save's letter (the game re-derives it from the score). */
+  prestigeLetter: string;
+  xp: number;
+  xpMax: number;
+  securityPct: number;
+  securityStatus: string;
+  /** Percentage ceilings for HotSeat / Low / SafeForNow, from this save's own coaches. */
+  securityBands: { hotSeat: number; low: number; safeForNow: number };
+  // Profile
+  age: number;
+  ageMax: number;
+  heightIn: number;
+  weightLb: number;
+  weightMin: number;
+  weightMax: number;
+  homeState: string;
+  homeStateOptions: string[];
+  demeanor: string;
+  demeanorOptions: string[];
+  stance: string;
+  stanceOptions: string[];
+  hat: string;
+  hatOptions: string[];
+  bodyType: string;
+  bodyTypeOptions: string[];
+  // Progression
+  /** CoachTalentArcheType value. */
+  archetype: number;
+  archetypeOptions: { value: number; member: string; name: string }[];
+  /** CoachBackstory value; only the three the game names are offered. */
+  backstory: number;
+  backstoryOptions: { value: number; member: string; name: string }[];
+  expertScout: boolean;
+  /** Per-slot statuses for the role's tree; null when the coach has no tree in the save. */
+  tree: CoachTalentSlotState[] | null;
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+/** Changed values only. */
+export interface CoachEditChanges {
+  coachRow: number;
+  firstName?: string;
+  lastName?: string;
+  /** New role; the same staff's holder of that role takes this coach's current one. */
+  position?: string;
+  coachPoints?: number;
+  level?: number;
+  prestigeScore?: number;
+  xp?: number;
+  /** 0–100; the status band follows from the save's own bands. */
+  securityPct?: number;
+  age?: number;
+  heightIn?: number;
+  weightLb?: number;
+  homeState?: string;
+  demeanor?: string;
+  stance?: string;
+  hat?: string;
+  bodyType?: string;
+  archetype?: number;
+  backstory?: number;
+  expertScout?: boolean;
+  /** Per changed subtree: the node indices that should end up owned. */
+  talents?: { slot: number; owned: number[] }[];
+}
+
 export interface PlayerEditResult {
   ok: boolean;
   message: string;

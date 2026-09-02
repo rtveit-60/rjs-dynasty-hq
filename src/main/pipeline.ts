@@ -10,6 +10,8 @@ import type {
   PlayerEditResult,
   Profile,
   BoardEditRequest,
+  CoachEditChanges,
+  CoachEditForm,
   CoachFireRequest,
   CreateRecruitForm,
   CreateRecruitRequest,
@@ -37,6 +39,7 @@ import {
   buildResourceForm,
   buildTargetForm
 } from './editor.ts';
+import { applyCoachEdit, buildCoachEditForm } from './coach-editor.ts';
 import { log, reportError } from './log.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
 import { extractRecruitCard } from './parser/recruit-card.ts';
@@ -392,6 +395,28 @@ export class Pipeline {
   }
 
   /** Mark a CPU coach PendingFire (or restore Signed), via the guarded shell. */
+  async coachEditForm(coachRow: number, savePath: string): Promise<CoachEditForm | null> {
+    if (!this.franchise || !savePath) return null;
+    try {
+      return await buildCoachEditForm(this.franchise, coachRow, savePath);
+    } catch (err) {
+      reportError('coach-editform', err);
+      return null;
+    }
+  }
+
+  async editCoach(changes: CoachEditChanges, savePath: string): Promise<PlayerEditResult> {
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, coachName } = await applyCoachEdit(
+        this.franchise,
+        savePath,
+        changes,
+        app.getPath('userData')
+      );
+      return { editedPath, message: `${coachName} saved to ${basename(editedPath)}.` };
+    });
+  }
+
   async fireCoach(req: CoachFireRequest, savePath: string): Promise<PlayerEditResult> {
     return this.guardedEdit(savePath, async () => {
       const { editedPath, coachName } = await applyCoachFire(
