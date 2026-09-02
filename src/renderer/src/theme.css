@@ -848,11 +848,13 @@ table.tbl {
 /* OVR chips: monochrome intensity scale — broadcast style, theme safe */
 .ovr {
   display: inline-block;
+  vertical-align: middle;
   min-width: 30px;
   text-align: center;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 14px;
+  line-height: 1.25;
   padding: 1px 5px;
   border-radius: 2px;
   border: 1px solid transparent;
@@ -882,11 +884,14 @@ table.tbl {
 }
 
 .dev {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
   font-size: 10.5px;
+  line-height: 1.3;
   font-weight: 600;
   letter-spacing: 0.05em;
-  padding: 1px 7px;
+  padding: 2px 7px;
   border-radius: 2px;
   border: 1px solid var(--line);
   color: var(--ink-3);
@@ -1064,7 +1069,10 @@ table.tbl {
 }
 
 .tag {
+  display: inline-block;
+  vertical-align: middle;
   font-size: 10px;
+  line-height: 1.4;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--ink-3);
@@ -1219,18 +1227,25 @@ table.tbl {
 
 .grade {
   display: inline-block;
+  vertical-align: middle;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 12px;
+  line-height: 17px;
   padding: 0 6px;
   border-radius: 2px;
-  border: 1px solid var(--line);
+  /* Every grade wears the same visible box: on the dark set a hairline at
+     --line all but vanished, so a plain C read as a bare letter beside the
+     fully boxed green A and the two looked different sizes. */
+  border: 1px solid color-mix(in srgb, var(--ink) 24%, transparent);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
   color: var(--ink-2);
 }
 
 .grade.good {
   color: var(--good);
   border-color: color-mix(in srgb, var(--good) 45%, transparent);
+  background: color-mix(in srgb, var(--good) 10%, transparent);
 }
 
 .split-bar {
@@ -2021,6 +2036,25 @@ table.tbl.tbl-wide {
   gap: 16px;
 }
 
+/* Each ability group is a wrapping chip row under its label: chips keep a
+   steady gap on one line or several, and a second group (motivations, ideal
+   pitch) sits a clear step below the first instead of on its heels. */
+.rc-abilities > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+}
+
+.rc-abilities .rc-sub {
+  flex-basis: 100%;
+  margin-bottom: 0;
+}
+
+.rc-abilities + .rc-abilities {
+  margin-top: 14px;
+}
+
 @media (max-width: 900px) {
   .rc-abilities {
     grid-template-columns: 1fr;
@@ -2050,12 +2084,14 @@ table.tbl.tbl-wide {
 
 .btag {
   display: inline-block;
+  vertical-align: middle;
   font-family: var(--font-display);
   font-weight: 700;
   font-size: 10px;
+  line-height: 1.4;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 2px 7px 1px;
+  padding: 2px 7px;
   margin-right: 4px;
   background: color-mix(in srgb, var(--team) 22%, transparent);
   color: var(--hot);
@@ -3792,7 +3828,14 @@ table.tbl.tbl-wide {
   font: 700 10.5px/1.4 var(--font-ui);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  vertical-align: 1px;
+  vertical-align: middle;
+}
+
+/* A poll row aligns its text on the baseline; a row whose value is a mover
+   chip centers the chip instead, so the tinted box sits on the row's middle. */
+.hqm-row .v:has(.mv) {
+  align-self: center;
+  display: inline-flex;
 }
 
 .mv.up {
