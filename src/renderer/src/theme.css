@@ -1231,13 +1231,18 @@ table.tbl {
   line-height: 17px;
   padding: 0 6px;
   border-radius: 2px;
-  border: 1px solid var(--line);
+  /* Every grade wears the same visible box: on the dark set a hairline at
+     --line all but vanished, so a plain C read as a bare letter beside the
+     fully boxed green A and the two looked different sizes. */
+  border: 1px solid color-mix(in srgb, var(--ink) 24%, transparent);
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
   color: var(--ink-2);
 }
 
 .grade.good {
   color: var(--good);
   border-color: color-mix(in srgb, var(--good) 45%, transparent);
+  background: color-mix(in srgb, var(--good) 10%, transparent);
 }
 
 .split-bar {
