@@ -158,10 +158,21 @@ export default function Ticker({
   const duration = Math.max(24, items.length * 4);
 
   return (
-    <div className="ticker">
-      <span className="tk-cap" onClick={() => setMenuOpen((o) => !o)}>
+    <div
+      className="ticker"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && menuOpen) setMenuOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        className="tk-cap"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((o) => !o)}
+      >
         {MODE_LABEL[mode]} <span className="car">▾</span>
-      </span>
+      </button>
       {menuOpen && (
         <>
           <div className="tk-menu-veil" onClick={() => setMenuOpen(false)} />

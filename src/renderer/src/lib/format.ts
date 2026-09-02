@@ -118,6 +118,19 @@ export function initials(name: string): string {
 }
 
 /** Perceived luminance → readable text color on a team color. */
+/** Ability-tier text color: the theme's medal token, or muted ink for an unknown tier. */
+export function medalColor(tier: string): string {
+  switch (tier) {
+    case 'Bronze':
+    case 'Silver':
+    case 'Gold':
+    case 'Platinum':
+      return `var(--medal-${tier.toLowerCase()})`;
+    default:
+      return 'var(--ink-3)';
+  }
+}
+
 export function contrastOn(hex: string): string {
   const m = hex.match(/^#([0-9a-f]{6})$/i);
   if (!m) return '#ffffff';

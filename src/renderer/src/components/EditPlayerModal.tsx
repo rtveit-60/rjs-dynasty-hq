@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EditMentalSlot, FaceOption, PlayerEditChanges, PlayerEditForm } from '../../../shared/types.ts';
 import InfoDot from './InfoDot.tsx';
+import { useDialog } from '../lib/dialog.ts';
 import LookSection, { effectiveLook } from './LookSection.tsx';
 
 /**
@@ -162,13 +163,17 @@ export default function EditPlayerModal({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (document.querySelector('.info-overlay')) return;
+      // An open info dialog or face picker owns the key; its own handler closes it.
+      if (document.querySelector('.info-overlay, .fp-overlay')) return;
       e.stopPropagation();
       onClose();
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialog(panelRef);
 
   /** Only what actually changed goes over the wire — and into the save. */
   const changes: PlayerEditChanges | null = useMemo(() => {
@@ -277,7 +282,15 @@ export default function EditPlayerModal({
 
   return (
     <div className="ed-overlay" onMouseDown={onClose}>
-      <div className="ed-panel" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="ed-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={form ? `Edit ${form.name}` : 'Edit player'}
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="ed-head">
           <span className="ed-title">
             {form ? `Edit ${form.isRecruit ? 'Recruit' : 'Player'}` : 'Edit Player'}

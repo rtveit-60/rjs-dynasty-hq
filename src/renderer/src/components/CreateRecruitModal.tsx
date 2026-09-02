@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialog } from '../lib/dialog.ts';
 import type { CreateRecruitForm, FaceOption } from '../../../shared/types.ts';
 import { archetypeLabel, devLabel, heightFt, recruitPos, spaceOut } from '../lib/format.ts';
 import { Stepper } from './EditPlayerModal.tsx';
@@ -66,13 +67,17 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (document.querySelector('.info-overlay')) return;
+      // An open info dialog or face picker owns the key; its own handler closes it.
+      if (document.querySelector('.info-overlay, .fp-overlay')) return;
       e.stopPropagation();
       onClose();
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialog(panelRef);
 
   const positions = useMemo(
     () => (form ? Object.keys(form.archetypesByPosition).sort() : []),
@@ -125,7 +130,15 @@ export default function CreateRecruitModal({ onClose }: { onClose: () => void })
 
   return (
     <div className="ed-overlay" onMouseDown={onClose}>
-      <div className="ed-panel rs-panel" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="ed-panel rs-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create recruit"
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="ed-head">
           <span className="ed-title">Create Recruit</span>
           <span className="ed-who">joins this year's high-school class</span>

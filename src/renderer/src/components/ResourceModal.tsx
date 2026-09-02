@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useDialog } from '../lib/dialog.ts';
 import type { ResourceForm } from '../../../shared/types.ts';
 import InfoDot from './InfoDot.tsx';
 
@@ -59,6 +60,9 @@ export default function ResourceModal({
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialog(panelRef);
+
   const headroom = form ? (isNil ? form.budget.headroom : (form.hours?.headroom ?? 0)) : 0;
   const current = form ? (isNil ? form.budget.total : (form.hours?.total ?? 0)) : 0;
   const applied = Math.min(amount, headroom);
@@ -86,7 +90,15 @@ export default function ResourceModal({
 
   return (
     <div className="ed-overlay" onMouseDown={onClose}>
-      <div className="ed-panel rs-panel" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="ed-panel rs-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="ed-head">
           <span className="ed-title">{title}</span>
           {form && <span className="ed-who">{form.school}</span>}

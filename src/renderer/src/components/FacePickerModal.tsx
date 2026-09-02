@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { FaceOption } from '../../../shared/types.ts';
+import { useDialog } from '../lib/dialog.ts';
 
 /** One headshot tile; the image comes from the portrait pack, absent quietly. */
 function FaceTile({
@@ -57,9 +58,20 @@ export default function FacePickerModal({
   const tones = useMemo(() => [...new Set(faces.map((f) => f.tone))].sort((a, b) => a - b), [faces]);
   const shown = tone ? faces.filter((f) => f.tone === tone) : faces;
 
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialog(panelRef, true, onClose);
+
   return (
     <div className="ed-overlay fp-overlay" onMouseDown={onClose}>
-      <div className="ed-panel fp-panel" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="ed-panel fp-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose face"
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="ed-head">
           <span className="ed-title">Choose Face</span>
           <span className="ed-who">

@@ -17,7 +17,7 @@
   --sunken: #e2e5e9;
   --ink: #16181d;
   --ink-2: #4c5361;
-  --ink-3: #7d8492;
+  --ink-3: #666e7d;
   --line: rgba(22, 24, 29, 0.16);
   --line-soft: rgba(22, 24, 29, 0.07);
 
@@ -35,6 +35,15 @@
   --dev-impact: #1f6f54;
   --dev-star: #4553b8;
   --dev-elite: #a06a00;
+
+  /* Ability tiers, as text on the page ground. */
+  --medal-bronze: #8a5a2b;
+  --medal-silver: #5f6b78;
+  --medal-gold: #8f6400;
+  --medal-platinum: #1f7f7c;
+
+  /* The board mark beside a targeted recruit's name. */
+  --board-mark: #2a72a3;
 }
 
 /* Night studio — the primary broadcast set: dark stage, lit modules. */
@@ -57,6 +66,13 @@
   --dev-impact: #4fae86;
   --dev-star: #8b96e8;
   --dev-elite: #d9a53e;
+
+  --medal-bronze: #a9713f;
+  --medal-silver: #9aa3ad;
+  --medal-gold: #c9a227;
+  --medal-platinum: #6fd3d0;
+
+  --board-mark: #7cc4ef;
 }
 
 * {
@@ -279,7 +295,7 @@ body {
 
 .soon {
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--ink-3);
@@ -443,7 +459,7 @@ body {
   top: -3px;
   bottom: -3px;
   width: 12px;
-  background: #c9c7c2;
+  background: var(--paper);
   transform: translateX(-50%) skewX(-24deg);
 }
 
@@ -462,7 +478,7 @@ body {
 }
 
 .staff-role {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1045,7 +1061,7 @@ table.tbl {
 }
 
 .tag {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--ink-3);
@@ -1149,7 +1165,6 @@ table.tbl {
   padding: 9px 12px;
   font-size: 13px;
   font-family: var(--font-ui);
-  outline: none;
 }
 
 .search:focus {
@@ -1286,7 +1301,7 @@ table.tbl {
 }
 
 .pct-pair .lg {
-  font-size: 9.5px;
+  font-size: 10px;
   color: var(--ink-3);
   white-space: nowrap;
 }
@@ -1305,7 +1320,7 @@ table.tbl {
 .meter .poles {
   display: flex;
   justify-content: space-between;
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1580,15 +1595,12 @@ table.tbl {
 
 .board-mark {
   display: inline-block;
-  color: #2f7fb5;
+  color: var(--board-mark);
   margin-left: 7px;
   vertical-align: -1px;
   flex: none;
 }
 
-[data-theme='dark'] .board-mark {
-  color: #7cc4ef;
-}
 
 .team-logo {
   object-fit: contain;
@@ -1878,7 +1890,7 @@ table.tbl.tbl-wide {
   display: inline-block;
   width: 12px;
   color: var(--ink-3);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .pager {
@@ -1943,7 +1955,7 @@ table.tbl.tbl-wide {
 }
 
 .rc-ovr-k {
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.16em;
   font-weight: 700;
   color: var(--ink-3);
@@ -2037,7 +2049,7 @@ table.tbl.tbl-wide {
   display: inline-block;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 2px 7px 1px;
@@ -2067,7 +2079,7 @@ table.tbl.tbl-wide {
    the horizontal scroll starts. */
 .tbl.tbl-wide thead th {
   padding: 7px 6px;
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.07em;
 }
 
@@ -2091,12 +2103,12 @@ table.tbl.tbl-wide {
 .tbl.tbl-wide .pos-tag,
 .tbl.tbl-wide .q,
 .tbl.tbl-wide .edge {
-  font-size: 9.5px;
+  font-size: 10px;
   padding: 1px 5px;
 }
 
 .tbl.tbl-wide .dev {
-  font-size: 9.5px;
+  font-size: 10px;
   padding: 1px 6px;
 }
 
@@ -2637,7 +2649,7 @@ table.tbl.tbl-wide {
   object-fit: cover;
   border: 1px solid var(--line);
   border-radius: 3px;
-  background: #e9e9e9;
+  background: var(--sunken);
   flex: none;
 }
 
@@ -2703,7 +2715,7 @@ table.tbl.tbl-wide {
 
 .pf-prev-tile .k {
   display: block;
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   color: var(--ink-3);
   font-weight: 700;
@@ -2924,7 +2936,7 @@ table.tbl.tbl-wide {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font: 600 9.5px var(--font-ui);
+  font: 600 10px var(--font-ui);
   color: var(--ink-3);
 }
 
@@ -3044,7 +3056,7 @@ table.tbl.tbl-wide {
 }
 
 .nd-extra {
-  font: 700 9px/1 var(--font-ui);
+  font: 700 10px/1 var(--font-ui);
   color: var(--ink-3);
   padding-left: 1px;
 }
@@ -3095,7 +3107,7 @@ table.tbl.tbl-wide {
 }
 
 .nd-open {
-  font: 700 9px/1 var(--font-ui);
+  font: 700 10px/1 var(--font-ui);
   letter-spacing: 0.03em;
   color: color-mix(in srgb, var(--bad) 82%, var(--ink-2));
   flex: 0 0 auto;
@@ -3526,8 +3538,8 @@ table.tbl.tbl-wide {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #fff;
-  background: #c0392b;
+  color: var(--paper);
+  background: var(--bad);
   padding: 3px 10px;
   clip-path: polygon(0 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
 }
@@ -3606,6 +3618,7 @@ table.tbl.tbl-wide {
   font: 700 11.5px var(--font-display);
   letter-spacing: 0.14em;
   padding: 7px 16px 6px 12px;
+  border: 0;
   clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
   cursor: pointer;
   user-select: none;
@@ -3725,7 +3738,7 @@ table.tbl.tbl-wide {
 }
 
 .tk-item .proj {
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.14em;
   color: var(--ink-3);
   border: 1px solid var(--line);
@@ -3776,7 +3789,7 @@ table.tbl.tbl-wide {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     inset 0 0 0 1px color-mix(in srgb, var(--hot) 30%, transparent);
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.08em;
 }
 
@@ -3813,7 +3826,7 @@ table.tbl.tbl-wide {
 .mv.sm {
   gap: 2px;
   padding: 0 4px 0 3px;
-  font-size: 9.5px;
+  font-size: 10px;
 }
 
 .mv.sm .mv-g {
@@ -3929,7 +3942,7 @@ table.tbl.tbl-wide {
 }
 
 .hqm-sub {
-  font: 700 9.5px var(--font-display);
+  font: 700 10px var(--font-display);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -4136,7 +4149,7 @@ table.tbl.tbl-wide {
 
 .hq-headline .o {
   flex: none;
-  font: 700 9.5px var(--font-display);
+  font: 700 10px var(--font-display);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -4634,8 +4647,8 @@ table.tbl.tbl-wide {
 .ed-error {
   margin-top: 14px;
   padding: 8px 10px;
-  border: 1px solid rgba(200, 60, 50, 0.5);
-  color: #d05a4b;
+  border: 1px solid color-mix(in srgb, var(--bad) 50%, transparent);
+  color: var(--bad);
   font: 600 12px var(--font-ui);
 }
 
@@ -5106,7 +5119,7 @@ table.tbl.tbl-wide {
   gap: 3px;
   height: 100%;
   color: var(--ink-3);
-  font: 600 9px var(--font-ui);
+  font: 600 10px var(--font-ui);
   word-break: break-all;
   padding: 4px;
   text-align: center;
@@ -5179,7 +5192,7 @@ table.tbl.tbl-wide {
 
 .ta-total.over,
 .cr-note.over {
-  color: #d9534f;
+  color: var(--bad);
 }
 
 /* --- Weekly Plan: broadcast pass ------------------------------------------ */
@@ -5238,7 +5251,7 @@ table.tbl.tbl-wide {
 }
 
 .wp-pool.over {
-  color: #d9534f;
+  color: var(--bad);
 }
 
 .wp-bar {
@@ -5251,10 +5264,13 @@ table.tbl.tbl-wide {
 }
 
 .wp-fill {
+  width: 100%;
   height: 100%;
   background: var(--team);
   border-radius: 2px;
-  transition: width 120ms ease;
+  /* Scaled, not resized: the fill animates on the compositor. */
+  transform-origin: left center;
+  transition: transform 120ms ease;
 }
 
 .wp-fill.warn {
@@ -5262,7 +5278,7 @@ table.tbl.tbl-wide {
 }
 
 .wp-fill.over {
-  background: #d9534f;
+  background: var(--bad);
 }
 
 .wp-tick {
@@ -5856,7 +5872,7 @@ table.tbl.tbl-wide {
 }
 
 .mu-tag {
-  font-size: 9.5px;
+  font-size: 10px;
   letter-spacing: 0.1em;
   color: var(--hot);
   white-space: nowrap;
@@ -6149,7 +6165,7 @@ table.tbl.tbl-wide {
 }
 
 .cfp-champ-kicker {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -6262,4 +6278,26 @@ table.tbl.tbl-wide {
 
 .cfp-champ-mark {
   flex: none;
+}
+
+/* ————————————————————————————————————————————————
+   Browser surfaces — keyboard focus and text selection in the package's own
+   colors. The ring is the hot highlight on every control, keyboard-only
+   (:focus-visible), offset so it clears a plate's rim light. Dialog panels
+   take focus on open so readers announce them, but never wear the ring.
+   Selection is a team wash on the page ground.
+   ———————————————————————————————————————————————— */
+
+:where(a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex='-1'])):focus-visible {
+  outline: 2px solid var(--hot);
+  outline-offset: 2px;
+}
+
+[role='dialog']:focus {
+  outline: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--team, var(--hot)) 30%, var(--paper));
+  color: var(--ink);
 }
