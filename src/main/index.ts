@@ -867,6 +867,12 @@ function createWindow(): void {
   }
 }
 
+// Dev-only: HQ_USERDATA=<dir> runs against a separate profile (settings, media,
+// logs) so capture runs never collide with — or write into — the live app's.
+if (!app.isPackaged && process.env['HQ_USERDATA']) {
+  app.setPath('userData', process.env['HQ_USERDATA']);
+}
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();

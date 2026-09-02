@@ -18,6 +18,7 @@ import type {
   FaceOption,
   GearSlotOptions,
   EditMentalSlot,
+  EditSkillCap,
   PlayerEditChanges,
   PlayerEditForm,
   ResourceForm,
@@ -31,6 +32,7 @@ import { RECRUITING_TUNABLES } from '../shared/recruiting-tunables.ts';
 import { POSITION_TO_GROUP, POS_GROUP_NAMES } from '../shared/talent-groups.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
+import { SKILL_GROUP_CAP_MAX, skillGroupsFor } from '../shared/skill-groups.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
 import { loadFranchise, mainTable, refFromRecord, tableById, val } from './parser/franchise.ts';
 
@@ -182,6 +184,26 @@ export async function buildEditForm(
 
   const cities = await cityCatalog(franchise);
 
+  // Measurables: inches as stored; the save keeps weight as pounds − 160.
+  const heightIn = Number(val(rec, 'Height')) || 0;
+  const weightLb = (Number(val(rec, 'Weight')) || 0) + 160;
+  // Skill-group caps: six levels whose meaning the archetype fixes.
+  const groups = skillGroupsFor(String(val(rec, 'PlayerType') ?? ''));
+  const skillCaps: EditSkillCap[] | null = groups
+    ? groups.map((g, i) => ({
+        slot: i + 1,
+        name: g.name,
+        cap: Number(val(rec, `SkillGroupCap${i + 1}`)) || 0,
+        rgb: g.rgb,
+        skills: [
+          ...g.primary.map((s) => ({ ...s, tier: 'primary' as const })),
+          ...g.secondary.map((s) => ({ ...s, tier: 'secondary' as const })),
+          ...g.tertiary.map((s) => ({ ...s, tier: 'tertiary' as const }))
+        ],
+        spCost: g.spCost
+      }))
+    : null;
+
   const target = editedPathFor(savePath);
   const jerseyRaw = Number(val(rec, 'JerseyNum'));
   return {
@@ -202,6 +224,16 @@ export async function buildEditForm(
     mentalOptions,
     rankOptions,
     physical,
+    heightIn,
+    weightLb,
+    heightMin: Math.min(66, heightIn || 66),
+    heightMax: Math.max(Math.min(84, fieldMax(rec, 'Height', 127)), heightIn),
+    weightMin: Math.min(160, weightLb || 160),
+    weightMax: Math.max(160 + Math.min(240, fieldMax(rec, 'Weight', 255)), weightLb),
+    skillCaps,
+    skillCapMax: SKILL_GROUP_CAP_MAX,
+    skillPoints: Number(val(rec, 'SkillPoints')) || 0,
+    skillPointsMax: fieldMax(rec, 'SkillPoints', 16383),
     homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
     homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? '').trim(),
     cities,
@@ -249,6 +281,36 @@ function validate(rec: any, changes: PlayerEditChanges): string | null {
       }
     }
   }
+  if (changes.heightIn !== undefined) {
+    const hi = Math.min(84, fieldMax(rec, 'Height', 127));
+    if (!Number.isInteger(changes.heightIn) || changes.heightIn < 66 || changes.heightIn > hi) {
+      return `Height must be 5'6" to ${Math.floor(hi / 12)}'${hi % 12}".`;
+    }
+  }
+  if (changes.weightLb !== undefined) {
+    const hi = 160 + Math.min(240, fieldMax(rec, 'Weight', 255));
+    if (!Number.isInteger(changes.weightLb) || changes.weightLb < 160 || changes.weightLb > hi) {
+      return `Weight must be 160–${hi} lb.`;
+    }
+  }
+  if (changes.skillCaps) {
+    if (!skillGroupsFor(String(val(rec, 'PlayerType') ?? ''))) {
+      return 'The game defines no skill groups for this archetype.';
+    }
+    for (const [slotKey, cap] of Object.entries(changes.skillCaps)) {
+      const slot = Number(slotKey);
+      if (![1, 2, 3, 4, 5, 6].includes(slot) || !rec._fields?.[`SkillGroupCap${slot}`]) return 'Bad skill-group slot.';
+      if (!Number.isInteger(cap) || cap < 0 || cap > SKILL_GROUP_CAP_MAX) {
+        return `Skill caps run 0–${SKILL_GROUP_CAP_MAX}.`;
+      }
+    }
+  }
+  if (changes.skillPoints !== undefined) {
+    const hi = fieldMax(rec, 'SkillPoints', 16383);
+    if (!Number.isInteger(changes.skillPoints) || changes.skillPoints < 0 || changes.skillPoints > hi) {
+      return `Skill points must be 0–${hi}.`;
+    }
+  }
   const rankNames = new Set(enumMembers(rec, 'MentalAbilityRank1').map((m) => m.name));
   if (changes.mental) {
     const abilityNames = new Set(enumMembers(rec, 'MentalAbility1').map((m) => m.name));
@@ -282,6 +344,10 @@ function apply(rec: any, changes: PlayerEditChanges): void {
   for (const p of changes.physical ?? []) {
     rec[`PhysicalAbility${p.slot}`] = p.rank;
   }
+  if (changes.heightIn !== undefined) rec.Height = changes.heightIn;
+  if (changes.weightLb !== undefined) rec.Weight = changes.weightLb - 160;
+  for (const [slot, cap] of Object.entries(changes.skillCaps ?? {})) rec[`SkillGroupCap${slot}`] = cap;
+  if (changes.skillPoints !== undefined) rec.SkillPoints = changes.skillPoints;
 }
 
 function backUp(target: string, backupDir: string): string | null {
@@ -435,15 +501,25 @@ export async function applyPlayerEdit(
 
   return writeEditedSave(franchise, savePath, backupDir, async (check) => {
     const table = mainTable(check, 'Player');
-    await table.readRecords(['FirstName', 'LastName', 'JerseyNum', 'GenericHeadAssetName']);
+    await table.readRecords([
+      'FirstName', 'LastName', 'JerseyNum', 'GenericHeadAssetName', 'Height', 'Weight', 'SkillPoints',
+      'SkillGroupCap1', 'SkillGroupCap2', 'SkillGroupCap3', 'SkillGroupCap4', 'SkillGroupCap5', 'SkillGroupCap6'
+    ]);
     const written = table.records?.[changes.playerRow];
     const expectFirst = changes.firstName?.trim();
     const expectLast = changes.lastName?.trim();
+    const capsHeld = Object.entries(changes.skillCaps ?? {}).every(
+      ([slot, cap]) => written && Number(val(written, `SkillGroupCap${slot}`)) === cap
+    );
     if (
       !written ||
       (expectFirst !== undefined && String(val(written, 'FirstName')) !== expectFirst) ||
       (expectLast !== undefined && String(val(written, 'LastName')) !== expectLast) ||
       (changes.jersey !== undefined && Number(val(written, 'JerseyNum')) !== changes.jersey) ||
+      (changes.heightIn !== undefined && Number(val(written, 'Height')) !== changes.heightIn) ||
+      (changes.weightLb !== undefined && Number(val(written, 'Weight')) + 160 !== changes.weightLb) ||
+      (changes.skillPoints !== undefined && Number(val(written, 'SkillPoints')) !== changes.skillPoints) ||
+      !capsHeld ||
       (changes.face !== undefined &&
         String(val(written, 'GenericHeadAssetName')) !== changes.face.assetName)
     ) {

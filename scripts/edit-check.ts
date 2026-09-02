@@ -225,6 +225,48 @@ await rejects('reject: unknown body type', () =>
   applyPlayerEdit(readBack2, editedPath, { playerRow: rosterRow, bodyType: 9 }, dir));
 check('rejections left the edited file unchanged', sha(editedPath) === before);
 
+// --- 4b. measurables + skill caps: form truth, round-trip, rejections ---
+check('form: height/weight decoded (inches, pounds−160 offset undone)',
+  form.heightIn >= 60 && form.heightIn <= 90 && form.weightLb >= 150 && form.weightLb <= 420 &&
+  form.heightMin <= form.heightIn && form.heightIn <= form.heightMax &&
+  form.weightMin <= form.weightLb && form.weightLb <= form.weightMax,
+  `${form.heightIn}in ${form.weightLb}lb (${form.heightMin}–${form.heightMax} / ${form.weightMin}–${form.weightMax})`);
+check('form: six archetype-named skill caps on the 0–20 scale',
+  form.skillCaps !== null && form.skillCaps.length === 6 && form.skillCapMax === 20 &&
+  form.skillCaps.every((c) => c.name && c.cap >= 0 && c.cap <= 20 && c.skills.length > 0),
+  form.skillCaps?.map((c) => `${c.name}=${c.cap}`).join(' '));
+check('form: skill points within the field ceiling',
+  form.skillPoints >= 0 && form.skillPoints <= form.skillPointsMax, `${form.skillPoints}/${form.skillPointsMax}`);
+{
+  const capTarget = form.skillCaps![0].cap === 20 ? 19 : 20;
+  await applyPlayerEdit(readBack2, editedPath, {
+    playerRow: rosterRow, heightIn: 77, weightLb: 251, skillCaps: { 1: capTarget, 6: 3 }, skillPoints: 9
+  }, dir);
+  const rb3 = await loadFranchise(editedPath);
+  const pt = mainTable(rb3, 'Player');
+  await pt.readRecords(['Height', 'Weight', 'SkillGroupCap1', 'SkillGroupCap2', 'SkillGroupCap6', 'SkillPoints']);
+  const r = pt.records[rosterRow];
+  check('write: height + weight persisted (raw weight = lb − 160)',
+    Number(val(r, 'Height')) === 77 && Number(val(r, 'Weight')) === 91, `${val(r, 'Height')} / raw ${val(r, 'Weight')}`);
+  check('write: skill caps persisted, untouched slot intact',
+    Number(val(r, 'SkillGroupCap1')) === capTarget && Number(val(r, 'SkillGroupCap6')) === 3 &&
+    Number(val(r, 'SkillGroupCap2')) === form.skillCaps![1].cap,
+    `${val(r, 'SkillGroupCap1')} / ${val(r, 'SkillGroupCap2')} / ${val(r, 'SkillGroupCap6')}`);
+  check('write: skill points persisted', Number(val(r, 'SkillPoints')) === 9, String(val(r, 'SkillPoints')));
+  const before2 = sha(editedPath);
+  await rejects('reject: height past the dialog range', () =>
+    applyPlayerEdit(rb3, editedPath, { playerRow: rosterRow, heightIn: 100 }, dir));
+  await rejects('reject: weight below 160', () =>
+    applyPlayerEdit(rb3, editedPath, { playerRow: rosterRow, weightLb: 150 }, dir));
+  await rejects('reject: skill cap over the game ceiling', () =>
+    applyPlayerEdit(rb3, editedPath, { playerRow: rosterRow, skillCaps: { 1: 21 } }, dir));
+  await rejects('reject: skill cap slot 7', () =>
+    applyPlayerEdit(rb3, editedPath, { playerRow: rosterRow, skillCaps: { 7: 5 } }, dir));
+  await rejects('reject: negative skill points', () =>
+    applyPlayerEdit(rb3, editedPath, { playerRow: rosterRow, skillPoints: -1 }, dir));
+  check('cap/measurable rejections left the edited file unchanged', sha(editedPath) === before2);
+}
+
 // --- 5. program resources: Fundraising + recruiter hours ---
 // A user-controlled team row: find one via isUserTeam? The harness stays
 // save-agnostic — use the first team whose budget reads non-zero.

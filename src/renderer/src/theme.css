@@ -4540,6 +4540,7 @@ table.tbl.tbl-wide {
 
 .ed-identity {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -4547,11 +4548,21 @@ table.tbl.tbl-wide {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  flex: 1;
+  flex: 1 1 150px;
 }
 
 .ed-identity .ed-jersey {
   flex: 0 0 74px;
+}
+
+.ed-identity .ed-measure {
+  flex: 0 0 auto;
+}
+
+/* Stepper and its ft/in reading share one line. */
+.ed-identity .ed-measure > span:not(:first-child) {
+  display: inline-flex;
+  align-items: center;
 }
 
 .ed-identity span,
@@ -4713,6 +4724,103 @@ table.tbl.tbl-wide {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Editor tab strip: the page tab plate, tightened for the dialog. */
+.ed-tabs {
+  margin: 12px 0 2px;
+}
+
+.ed-tabs .tab {
+  padding: 6px 14px 5px;
+  font-size: 12.5px;
+}
+
+/* Height / weight sit beside the jersey; the ft/in reading rides the stepper. */
+.ed-identity .ed-measure .ed-step {
+  width: 96px;
+}
+
+.ed-ft {
+  margin-left: 8px;
+  font: 700 13px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* Skill caps: one row per group — colour key, name + the ratings it levels, cap. */
+.ed-caps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ed-cap {
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr) auto;
+  gap: 0 12px;
+  align-items: center;
+  padding: 7px 10px 7px 0;
+  background: var(--sunken);
+  border-radius: 3px;
+}
+
+.ed-cap-key {
+  align-self: stretch;
+  border-radius: 2px;
+}
+
+.ed-cap-name {
+  font: 700 12.5px var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.ed-cap-skills {
+  margin-top: 2px;
+  font: 500 11px var(--font-ui);
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+
+.ed-cap-skills .primary {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.ed-cap-level {
+  text-align: right;
+  font: 700 10px var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.ed-cap-level .ed-step,
+.ed-sp .ed-step {
+  margin-top: 3px;
+  width: 112px;
+}
+
+.ed-sp {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 8px 10px;
+  background: var(--sunken);
+  border-radius: 3px;
+}
+
+.ed-sp-label {
+  font: 700 12.5px var(--font-ui);
+  color: var(--ink);
+}
+
+.ed-sp-note {
+  font: 500 11px var(--font-ui);
+  color: var(--ink-3);
+  flex: 1;
 }
 
 .ed-error {
