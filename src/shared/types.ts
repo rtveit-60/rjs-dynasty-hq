@@ -726,6 +726,18 @@ export interface EditPhysicalSlot {
   rank: string;
 }
 
+/** One of the six skill-group cap slots, named per the player's archetype. */
+export interface EditSkillCap {
+  /** 1–6, the save's SkillGroupCap{slot}. */
+  slot: number;
+  name: string;
+  /** Current cap: a level on the 0–skillCapMax scale. */
+  cap: number;
+  rgb: [number, number, number];
+  /** The ratings this group levels, in the game's own weighting tiers. */
+  skills: { name: string; field: string; tier: 'primary' | 'secondary' | 'tertiary' }[];
+}
+
 /** Everything the edit dialog needs, read straight from the record and its schema. */
 export interface PlayerEditForm {
   playerRow: number;
@@ -746,6 +758,19 @@ export interface PlayerEditForm {
   /** Tier member names, None first. */
   rankOptions: string[];
   physical: EditPhysicalSlot[];
+  /** Height in inches and weight in pounds, with the dialog's limits. */
+  heightIn: number;
+  weightLb: number;
+  heightMin: number;
+  heightMax: number;
+  weightMin: number;
+  weightMax: number;
+  /** The six cap slots in archetype order; null when the game defines no groups for it. */
+  skillCaps: EditSkillCap[] | null;
+  skillCapMax: number;
+  /** Unspent skill points and the save's ceiling for the field. */
+  skillPoints: number;
+  skillPointsMax: number;
   homeState: string;
   homeTown: string;
   /** state -> the game's own hometowns there, each with its pipeline. */
@@ -777,6 +802,12 @@ export interface PlayerEditChanges {
   ratings?: Record<string, number>;
   mental?: EditMentalSlot[];
   physical?: { slot: number; rank: string }[];
+  /** Inches / pounds; the save stores weight as pounds − 160. */
+  heightIn?: number;
+  weightLb?: number;
+  /** slot (1–6) -> new cap level, 0–SKILL_GROUP_CAP_MAX. */
+  skillCaps?: Record<number, number>;
+  skillPoints?: number;
   /** A catalog face to put on the player (replaces a unique scan if present). */
   face?: FaceOption;
   /** Hometown moves as a pair; the pipeline follows the town. */

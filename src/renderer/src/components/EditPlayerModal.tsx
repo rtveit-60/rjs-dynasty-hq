@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EditMentalSlot, FaceOption, PlayerEditChanges, PlayerEditForm } from '../../../shared/types.ts';
 import InfoDot from './InfoDot.tsx';
 import { useDialog } from '../lib/dialog.ts';
+import { heightFt } from '../lib/format.ts';
 import LookSection, { effectiveLook } from './LookSection.tsx';
 
 /**
@@ -97,6 +98,15 @@ export function Stepper({
   );
 }
 
+type EditTab = 'identity' | 'ratings' | 'abilities' | 'caps' | 'look';
+const TABS: { key: EditTab; label: string }[] = [
+  { key: 'identity', label: 'IDENTITY' },
+  { key: 'ratings', label: 'RATINGS' },
+  { key: 'abilities', label: 'ABILITIES' },
+  { key: 'caps', label: 'SKILL CAPS' },
+  { key: 'look', label: 'APPEARANCE' }
+];
+
 /**
  * The Edit Player dialog, opened from a profile's EDIT control. Values and
  * limits come from the save schema over player:editform; the write goes to
@@ -114,15 +124,20 @@ export default function EditPlayerModal({
   const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'writing' | 'saved'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [savedTo, setSavedTo] = useState('');
+  const [tab, setTab] = useState<EditTab>('identity');
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [jersey, setJersey] = useState('0');
+  const [heightIn, setHeightIn] = useState(72);
+  const [weightLb, setWeightLb] = useState(200);
   const [homeState, setHomeState] = useState('');
   const [homeTown, setHomeTown] = useState('');
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [mental, setMental] = useState<EditMentalSlot[]>([]);
   const [physical, setPhysical] = useState<Record<number, string>>({});
+  const [caps, setCaps] = useState<Record<number, number>>({});
+  const [skillPoints, setSkillPoints] = useState(0);
   const [gear, setGear] = useState<Record<string, string>>({});
   const [skinTone, setSkinTone] = useState(0);
   const [bodyType, setBodyType] = useState(0);
@@ -142,11 +157,15 @@ export default function EditPlayerModal({
         setFirstName(f.firstName);
         setLastName(f.lastName);
         setJersey(String(f.jersey ?? 0));
+        setHeightIn(f.heightIn);
+        setWeightLb(f.weightLb);
         setHomeState(f.homeState);
         setHomeTown(f.homeTown);
         setRatings(Object.fromEntries(f.ratings.map((r) => [r.field, r.value])));
         setMental(f.mental.map((m) => ({ ...m })));
         setPhysical(Object.fromEntries(f.physical.map((p) => [p.slot, p.rank])));
+        setCaps(Object.fromEntries((f.skillCaps ?? []).map((c) => [c.slot, c.cap])));
+        setSkillPoints(f.skillPoints);
         setGear(effectiveLook(f.look ?? {}));
         setSkinTone(f.lookTone ?? 0);
         setBodyType(f.lookBody ?? 0);
@@ -192,6 +211,14 @@ export default function EditPlayerModal({
       out.jersey = Number(jersey);
       any = true;
     }
+    if (heightIn !== form.heightIn) {
+      out.heightIn = heightIn;
+      any = true;
+    }
+    if (weightLb !== form.weightLb) {
+      out.weightLb = weightLb;
+      any = true;
+    }
     if (homeState !== form.homeState || homeTown !== form.homeTown) {
       out.homeState = homeState;
       out.homeTown = homeTown;
@@ -219,6 +246,19 @@ export default function EditPlayerModal({
       .map((p) => ({ slot: p.slot, rank: physical[p.slot] }));
     if (changedPhysical.length) {
       out.physical = changedPhysical;
+      any = true;
+    }
+    const changedCaps: Record<number, number> = {};
+    for (const c of form.skillCaps ?? []) {
+      const v = caps[c.slot];
+      if (Number.isFinite(v) && v !== c.cap) changedCaps[c.slot] = v;
+    }
+    if (Object.keys(changedCaps).length) {
+      out.skillCaps = changedCaps;
+      any = true;
+    }
+    if (skillPoints !== form.skillPoints) {
+      out.skillPoints = skillPoints;
       any = true;
     }
     if (face) {
@@ -249,7 +289,10 @@ export default function EditPlayerModal({
       }
     }
     return any ? out : null;
-  }, [form, firstName, lastName, jersey, ratings, mental, physical, face, gear, skinTone, bodyType]);
+  }, [
+    form, firstName, lastName, jersey, heightIn, weightLb, homeState, homeTown, ratings, mental, physical,
+    caps, skillPoints, face, gear, skinTone, bodyType
+  ]);
 
   const nameProblem =
     !firstName.trim() || !lastName.trim()
@@ -259,6 +302,21 @@ export default function EditPlayerModal({
         : form && lastName.trim().length > form.maxLastLen
           ? `Last name is capped at ${form.maxLastLen} characters by the save format.`
           : null;
+
+  /** Which tabs hold an unsaved change, so a user on another tab can see it. */
+  const dirty = useMemo<Set<EditTab>>(() => {
+    const s = new Set<EditTab>();
+    if (!changes) return s;
+    if (
+      changes.firstName !== undefined || changes.lastName !== undefined || changes.jersey !== undefined ||
+      changes.heightIn !== undefined || changes.weightLb !== undefined || changes.homeState !== undefined
+    ) s.add('identity');
+    if (changes.ratings) s.add('ratings');
+    if (changes.mental || changes.physical) s.add('abilities');
+    if (changes.skillCaps || changes.skillPoints !== undefined) s.add('caps');
+    if (changes.face || changes.gear || changes.skinTone !== undefined || changes.bodyType !== undefined) s.add('look');
+    return s;
+  }, [changes]);
 
   const save = async (): Promise<void> => {
     if (!changes || nameProblem) return;
@@ -309,6 +367,11 @@ export default function EditPlayerModal({
               save, so it may lag here until then. Edit while the game is closed — an
               in-game save overwrites whichever file it has loaded.
             </p>
+            <p>
+              Skill caps are the levels each of the player's six skill groups can reach on
+              the game's Upgrade Player screen; which groups a player has depends on the
+              archetype. Skill points are the unspent balance the game shows there.
+            </p>
           </InfoDot>
           <button type="button" className="pf-btn ed-close" onClick={onClose} aria-label="Close">
             ✕
@@ -327,145 +390,172 @@ export default function EditPlayerModal({
 
         {form && (state === 'ready' || state === 'writing') && (
           <>
-            <div className="ed-sec">Identity</div>
-            <div className="ed-identity">
-              <label>
-                <span>First name</span>
-                <input
-                  value={firstName}
-                  maxLength={form.maxFirstLen}
-                  onChange={(e) => setFirstName(e.target.value)}
-                />
-              </label>
-              <label>
-                <span>Last name</span>
-                <input
-                  value={lastName}
-                  maxLength={form.maxLastLen}
-                  onChange={(e) => setLastName(e.target.value)}
-                />
-              </label>
-              {form.jersey !== null && (
-                <label className="ed-jersey">
-                  <span>Jersey</span>
-                  <Stepper
-                    value={Number(jersey)}
-                    min={0}
-                    max={99}
-                    changed={Number(jersey) !== form.jersey}
-                    label="Jersey"
-                    onChange={(n) => setJersey(String(n))}
-                  />
-                </label>
-              )}
-              <label>
-                <span>Home state</span>
-                <select
-                  value={homeState}
-                  onChange={(e) => {
-                    const st = e.target.value;
-                    setHomeState(st);
-                    setHomeTown(form.cities[st]?.[0]?.town ?? '');
-                  }}
+            <div className="tabs ed-tabs" role="tablist" aria-label="Edit sections">
+              {TABS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.key}
+                  className={`tab ${tab === t.key ? 'active' : ''}`}
+                  onClick={() => setTab(t.key)}
                 >
-                  {Object.keys(form.cities)
-                    .sort()
-                    .map((st) => (
-                      <option key={st} value={st}>
-                        {st.replace(/([a-z])([A-Z])/g, '$1 $2')}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label>
-                <span>Hometown</span>
-                <select value={homeTown} onChange={(e) => setHomeTown(e.target.value)}>
-                  {homeTown && !(form.cities[homeState] ?? []).some((c) => c.town === homeTown) && (
-                    <option value={homeTown}>{homeTown}</option>
-                  )}
-                  {(form.cities[homeState] ?? []).map((c) => (
-                    <option key={c.town} value={c.town}>
-                      {c.town}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="ed-sec">Ratings</div>
-            <div className="ed-grid">
-              {form.ratings.map((r) => (
-                <label key={r.field} className="ed-cell" title={r.field.replace(/Rating$/, '')}>
-                  <span>{r.label}</span>
-                  <Stepper
-                    value={ratings[r.field] ?? 0}
-                    min={0}
-                    max={99}
-                    changed={ratings[r.field] !== r.value}
-                    label={r.label}
-                    onChange={(n) => setRatings((prev) => ({ ...prev, [r.field]: n }))}
-                  />
-                </label>
+                  {t.label}
+                  {dirty.has(t.key) && <span className="tab-count" aria-label="unsaved changes"> •</span>}
+                </button>
               ))}
             </div>
 
-            <div className="ed-sec">Mental abilities</div>
-            <div className="ed-rows">
-              {mental.map((m, i) => (
-                <div key={m.slot} className="ed-row">
-                  <span className="ed-slot">{m.slot}</span>
-                  <select
-                    value={m.ability}
-                    onChange={(e) =>
-                      setMental((prev) =>
-                        prev.map((x, j) =>
-                          j === i
-                            ? {
-                                ...x,
-                                ability: e.target.value,
-                                rank: e.target.value === 'None' ? 'None' : x.rank === 'None' ? 'Bronze' : x.rank
-                              }
-                            : x
-                        )
-                      )
-                    }
-                  >
-                    <option value="None">—</option>
-                    {form.mentalOptions.map((o) => (
-                      <option key={o.id} value={o.id} title={o.desc ?? undefined}>
-                        {o.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={m.rank}
-                    disabled={m.ability === 'None'}
-                    onChange={(e) =>
-                      setMental((prev) => prev.map((x, j) => (j === i ? { ...x, rank: e.target.value } : x)))
-                    }
-                  >
-                    {form.rankOptions.map((r) => (
-                      <option key={r} value={r}>
-                        {r === 'None' ? '—' : r}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-
-            {form.physical.length > 0 && (
+            {tab === 'identity' && (
               <>
-                <div className="ed-sec">Physical abilities</div>
+                <div className="ed-sec">Identity</div>
+                <div className="ed-identity">
+                  <label>
+                    <span>First name</span>
+                    <input
+                      value={firstName}
+                      maxLength={form.maxFirstLen}
+                      onChange={(e) => setFirstName(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Last name</span>
+                    <input
+                      value={lastName}
+                      maxLength={form.maxLastLen}
+                      onChange={(e) => setLastName(e.target.value)}
+                    />
+                  </label>
+                  {form.jersey !== null && (
+                    <label className="ed-jersey">
+                      <span>Jersey</span>
+                      <Stepper
+                        value={Number(jersey)}
+                        min={0}
+                        max={99}
+                        changed={Number(jersey) !== form.jersey}
+                        label="Jersey"
+                        onChange={(n) => setJersey(String(n))}
+                      />
+                    </label>
+                  )}
+                  <label className="ed-measure">
+                    <span>Height (in)</span>
+                    <span>
+                      <Stepper
+                        value={heightIn}
+                        min={form.heightMin}
+                        max={form.heightMax}
+                        changed={heightIn !== form.heightIn}
+                        label="Height in inches"
+                        onChange={setHeightIn}
+                      />
+                      <span className="ed-ft" aria-live="polite">{heightFt(heightIn)}</span>
+                    </span>
+                  </label>
+                  <label className="ed-measure">
+                    <span>Weight (lb)</span>
+                    <Stepper
+                      value={weightLb}
+                      min={form.weightMin}
+                      max={form.weightMax}
+                      changed={weightLb !== form.weightLb}
+                      label="Weight in pounds"
+                      onChange={setWeightLb}
+                    />
+                  </label>
+                  <label>
+                    <span>Home state</span>
+                    <select
+                      value={homeState}
+                      onChange={(e) => {
+                        const st = e.target.value;
+                        setHomeState(st);
+                        setHomeTown(form.cities[st]?.[0]?.town ?? '');
+                      }}
+                    >
+                      {Object.keys(form.cities)
+                        .sort()
+                        .map((st) => (
+                          <option key={st} value={st}>
+                            {st.replace(/([a-z])([A-Z])/g, '$1 $2')}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Hometown</span>
+                    <select value={homeTown} onChange={(e) => setHomeTown(e.target.value)}>
+                      {homeTown && !(form.cities[homeState] ?? []).some((c) => c.town === homeTown) && (
+                        <option value={homeTown}>{homeTown}</option>
+                      )}
+                      {(form.cities[homeState] ?? []).map((c) => (
+                        <option key={c.town} value={c.town}>
+                          {c.town}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </>
+            )}
+
+            {tab === 'ratings' && (
+              <>
+                <div className="ed-sec">Ratings</div>
+                <div className="ed-grid">
+                  {form.ratings.map((r) => (
+                    <label key={r.field} className="ed-cell" title={r.field.replace(/Rating$/, '')}>
+                      <span>{r.label}</span>
+                      <Stepper
+                        value={ratings[r.field] ?? 0}
+                        min={0}
+                        max={99}
+                        changed={ratings[r.field] !== r.value}
+                        label={r.label}
+                        onChange={(n) => setRatings((prev) => ({ ...prev, [r.field]: n }))}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {tab === 'abilities' && (
+              <>
+                <div className="ed-sec">Mental abilities</div>
                 <div className="ed-rows">
-                  {form.physical.map((p) => (
-                    <div key={p.slot} className="ed-row">
-                      <span className="ed-slot">{p.slot}</span>
-                      <span className="ed-phys-name">{p.name}</span>
+                  {mental.map((m, i) => (
+                    <div key={m.slot} className="ed-row">
+                      <span className="ed-slot">{m.slot}</span>
                       <select
-                        value={physical[p.slot] ?? p.rank}
+                        value={m.ability}
                         onChange={(e) =>
-                          setPhysical((prev) => ({ ...prev, [p.slot]: e.target.value }))
+                          setMental((prev) =>
+                            prev.map((x, j) =>
+                              j === i
+                                ? {
+                                    ...x,
+                                    ability: e.target.value,
+                                    rank: e.target.value === 'None' ? 'None' : x.rank === 'None' ? 'Bronze' : x.rank
+                                  }
+                                : x
+                            )
+                          )
+                        }
+                      >
+                        <option value="None">—</option>
+                        {form.mentalOptions.map((o) => (
+                          <option key={o.id} value={o.id} title={o.desc ?? undefined}>
+                            {o.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={m.rank}
+                        disabled={m.ability === 'None'}
+                        onChange={(e) =>
+                          setMental((prev) => prev.map((x, j) => (j === i ? { ...x, rank: e.target.value } : x)))
                         }
                       >
                         {form.rankOptions.map((r) => (
@@ -477,39 +567,124 @@ export default function EditPlayerModal({
                     </div>
                   ))}
                 </div>
+
+                {form.physical.length > 0 && (
+                  <>
+                    <div className="ed-sec">Physical abilities</div>
+                    <div className="ed-rows">
+                      {form.physical.map((p) => (
+                        <div key={p.slot} className="ed-row">
+                          <span className="ed-slot">{p.slot}</span>
+                          <span className="ed-phys-name">{p.name}</span>
+                          <select
+                            value={physical[p.slot] ?? p.rank}
+                            onChange={(e) =>
+                              setPhysical((prev) => ({ ...prev, [p.slot]: e.target.value }))
+                            }
+                          >
+                            {form.rankOptions.map((r) => (
+                              <option key={r} value={r}>
+                                {r === 'None' ? '—' : r}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </>
             )}
 
-            <div className="ed-sec">Appearance</div>
-            {form.look === null && (
-              <p className="cr-note">
-                The game dresses this prospect at enrollment — until then only the face
-                can be set. Gear, body type and skin tone unlock once they're rostered.
-              </p>
+            {tab === 'caps' && (
+              <>
+                <div className="ed-sec">Skill caps</div>
+                {form.skillCaps === null ? (
+                  <p className="cr-note">The game defines no skill groups for this archetype.</p>
+                ) : (
+                  <div className="ed-caps">
+                    {form.skillCaps.map((c) => (
+                      <div key={c.slot} className="ed-cap">
+                        <span
+                          className="ed-cap-key"
+                          style={{ background: `rgb(${c.rgb[0]}, ${c.rgb[1]}, ${c.rgb[2]})` }}
+                          aria-hidden="true"
+                        />
+                        <div>
+                          <div className="ed-cap-name">{c.name}</div>
+                          <div className="ed-cap-skills">
+                            {c.skills.map((s, i) => (
+                              <span key={s.field} className={s.tier}>
+                                {i > 0 ? ' · ' : ''}
+                                {s.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <label className="ed-cap-level">
+                          Cap
+                          <Stepper
+                            value={caps[c.slot] ?? c.cap}
+                            min={0}
+                            max={form.skillCapMax}
+                            changed={(caps[c.slot] ?? c.cap) !== c.cap}
+                            label={`${c.name} cap`}
+                            onChange={(n) => setCaps((prev) => ({ ...prev, [c.slot]: n }))}
+                          />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="ed-sp">
+                  <span className="ed-sp-label">Skill points</span>
+                  <span className="ed-sp-note">Unspent balance shown on the game's Upgrade Player screen.</span>
+                  <Stepper
+                    value={skillPoints}
+                    min={0}
+                    max={form.skillPointsMax}
+                    changed={skillPoints !== form.skillPoints}
+                    label="Skill points"
+                    onChange={setSkillPoints}
+                  />
+                </div>
+              </>
             )}
-            {form.currentFace.unique && (
-              <p className="cr-note">
-                This player has an individually scanned face. Picking a catalog face
-                replaces it in the edited copy; the original save keeps the scan.
-              </p>
+
+            {tab === 'look' && (
+              <>
+                <div className="ed-sec">Appearance</div>
+                {form.look === null && (
+                  <p className="cr-note">
+                    The game dresses this prospect at enrollment — until then only the face
+                    can be set. Gear, body type and skin tone unlock once they're rostered.
+                  </p>
+                )}
+                {form.currentFace.unique && (
+                  <p className="cr-note">
+                    This player has an individually scanned face. Picking a catalog face
+                    replaces it in the edited copy; the original save keeps the scan.
+                  </p>
+                )}
+                <LookSection
+                  gearSlots={form.gearSlots}
+                  helmetMasks={form.helmetMasks}
+                  skinTones={form.skinTones}
+                  faces={form.faces}
+                  base={effectiveLook(form.look ?? {})}
+                  gear={gear}
+                  setGear={setGear}
+                  skinTone={skinTone}
+                  setSkinTone={setSkinTone}
+                  face={face}
+                  setFace={setFace}
+                  bodyType={bodyType}
+                  setBodyType={setBodyType}
+                  currentPortraitId={form.currentFace.portraitId || undefined}
+                  faceOnly={form.look === null}
+                />
+              </>
             )}
-            <LookSection
-              gearSlots={form.gearSlots}
-              helmetMasks={form.helmetMasks}
-              skinTones={form.skinTones}
-              faces={form.faces}
-              base={effectiveLook(form.look ?? {})}
-              gear={gear}
-              setGear={setGear}
-              skinTone={skinTone}
-              setSkinTone={setSkinTone}
-              face={face}
-              setFace={setFace}
-              bodyType={bodyType}
-              setBodyType={setBodyType}
-              currentPortraitId={form.currentFace.portraitId || undefined}
-              faceOnly={form.look === null}
-            />
 
             {(error || nameProblem) && <div className="ed-error" role="alert">{error ?? nameProblem}</div>}
 
