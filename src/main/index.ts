@@ -805,7 +805,7 @@ function createWindow(): void {
               }
               // Prefix match tolerates count badges inside the control ("THE WIRE 133").
               await win!.webContents.executeJavaScript(
-                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button,.bd-btn,.fp-choose,.seg,.pb-form,.pb-play')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
+                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button,.bd-btn,.fp-choose,.seg,.pb-form,.pb-play,.mt-colbtn')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
               );
               await new Promise((r) => setTimeout(r, 700));
             }
