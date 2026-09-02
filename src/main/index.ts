@@ -419,6 +419,26 @@ function registerIpc(): void {
     return result;
   });
 
+  handle('coach:editform', (_e, coachRow: number) => {
+    const { savePath } = getSettings();
+    if (!Number.isInteger(coachRow) || coachRow < 0 || !savePath) return null;
+    return pipeline.coachEditForm(coachRow, savePath);
+  });
+
+  handle('coach:edit', async (_e, changes: unknown) => {
+    const c = changes as { coachRow?: unknown };
+    const { savePath } = getSettings();
+    if (!c || !Number.isInteger(c.coachRow) || (c.coachRow as number) < 0 || !savePath) {
+      return { ok: false, message: 'Nothing to edit.' };
+    }
+    const result = await pipeline.editCoach(c as never, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // View-only browse of another school's full Team HQ, from the cached parse.
   handle('hq:browse', (_e, teamRow: number) => {
     const { savePath } = getSettings();
@@ -844,7 +864,7 @@ function createWindow(): void {
                 continue;
               }
               await win!.webContents.executeJavaScript(
-                `[...document.querySelectorAll('.pf-panel button')].find((b) => b.textContent.trim() === ${JSON.stringify(label.trim())})?.click()`
+                `[...document.querySelectorAll('.pf-panel button')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
               );
               await new Promise((r) => setTimeout(r, 400));
             }

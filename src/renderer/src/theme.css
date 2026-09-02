@@ -4823,6 +4823,201 @@ table.tbl.tbl-wide {
   flex: 1;
 }
 
+/* Coach editor: a wider panel for the three-tab dialog and its trees. */
+.ed-panel-wide {
+  width: min(760px, 94vw);
+}
+
+/* The panel's input reset must not blank checkboxes (they'd never show a tick). */
+.ed-panel input[type='checkbox'] {
+  appearance: auto;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+}
+
+.ed-base {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.ed-base label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background: var(--sunken);
+  border-radius: 3px;
+}
+
+.ed-base label > span {
+  font: 600 10px var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+}
+
+.ed-base label small {
+  font: 500 11px var(--font-ui);
+  color: var(--ink-3);
+  line-height: 1.35;
+}
+
+.ed-base .ed-step {
+  width: 150px;
+}
+
+.ed-warn {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--warn);
+  background: var(--sunken);
+  font: 500 12px var(--font-ui);
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+
+.ed-toggles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.ed-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--sunken);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.ed-toggle input {
+  grid-row: span 2;
+  accent-color: var(--team, var(--hot));
+}
+
+.ed-toggle > span {
+  font: 700 12.5px var(--font-ui);
+  color: var(--ink);
+}
+
+.ed-toggle small {
+  font: 500 11px var(--font-ui);
+  color: var(--ink-3);
+}
+
+.ed-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ed-sub {
+  background: var(--sunken);
+  border-radius: 3px;
+}
+
+.ed-sub-head {
+  display: grid;
+  grid-template-columns: 150px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ed-sub-head:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ed-sub.open .ed-sub-head {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ed-sub-name {
+  font: 700 12.5px var(--font-ui);
+}
+
+.ed-sub-meta {
+  font: 500 11px var(--font-ui);
+  color: var(--ink-3);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-sub-count {
+  font: 700 12px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.ed-nodes {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px 8px;
+}
+
+.ed-node {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0 10px;
+  align-items: center;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.ed-node.lvl-1 { padding-left: 0; }
+.ed-node.lvl-2 { padding-left: 18px; }
+.ed-node.lvl-3 { padding-left: 36px; }
+.ed-node.lvl-4 { padding-left: 54px; }
+
+.ed-node input {
+  accent-color: var(--team, var(--hot));
+}
+
+.ed-node-name {
+  font: 600 12px var(--font-ui);
+  color: var(--ink-2);
+}
+
+.ed-node.owned .ed-node-name {
+  color: var(--ink);
+}
+
+.ed-node-name em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.ed-node-cost {
+  font: 700 11px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.ed-node-desc {
+  grid-column: 2 / span 2;
+  font: 500 11px var(--font-ui);
+  color: var(--ink-3);
+  line-height: 1.35;
+}
+
 .ed-error {
   margin-top: 14px;
   padding: 8px 10px;
