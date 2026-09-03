@@ -125,6 +125,12 @@ export interface GameInfo {
   attendance: number;
   /** Bowl name when the game is a bowl/CFP slot; null otherwise. */
   bowlName?: string | null;
+  /** Calendar date from the save (1-based month/day) and weekday name; null when unset. */
+  month?: number | null;
+  day?: number | null;
+  dayOfWeek?: string | null;
+  /** Kickoff as minutes from midnight (720 = noon); null when unset. */
+  timeOfDay?: number | null;
 }
 
 export interface RosterPlayer {

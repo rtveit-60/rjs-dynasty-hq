@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { abilityDesc } from '../../../shared/ability-descs.ts';
 import { useDialog } from '../lib/dialog.ts';
 import type {
   CoachProfile,
@@ -580,22 +581,30 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
       {(p.mental.length > 0 || p.physical.length > 0) && (
         <>
           <SectionTitle>Abilities</SectionTitle>
-          <div className="pf-chips">
+          <div className="pf-abilities">
             {p.mental.map((a) => (
-              <span key={a.name} className="chip">
-                {spaceOut(a.name)}
-                {a.rank && (
-                  <>
-                    &nbsp;<b style={{ color: medalColor(a.rank) }}>{a.rank}</b>
-                  </>
-                )}
-              </span>
+              <div key={a.name} className="pf-ability" title={abilityDesc(a.name) ?? undefined}>
+                <span className="chip">
+                  {spaceOut(a.name)}
+                  {a.rank && (
+                    <>
+                      &nbsp;<b style={{ color: medalColor(a.rank) }}>{a.rank}</b>
+                    </>
+                  )}
+                </span>
+                <span className="pf-ability-desc">{abilityDesc(a.name) ?? 'No description in the game data.'}</span>
+              </div>
             ))}
             {p.physical.map((a, i) => (
-              <span key={i} className="chip">
-                {a.name || <span className="k">PHYS</span>}&nbsp;
-                <b style={{ color: medalColor(a.rank) }}>{a.rank}</b>
-              </span>
+              <div key={i} className="pf-ability" title={abilityDesc(a.name) ?? undefined}>
+                <span className="chip">
+                  {a.name || <span className="k">PHYS</span>}&nbsp;
+                  <b style={{ color: medalColor(a.rank) }}>{a.rank}</b>
+                </span>
+                <span className="pf-ability-desc">
+                  {a.name ? (abilityDesc(a.name) ?? 'No description in the game data.') : 'Slot the game leaves unnamed for this archetype.'}
+                </span>
+              </div>
             ))}
           </div>
         </>

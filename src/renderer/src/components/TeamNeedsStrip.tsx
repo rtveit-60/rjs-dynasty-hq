@@ -63,10 +63,10 @@ function Tile({ n }: { n: TeamNeed }) {
   );
 }
 
-/** An offer is spent once made — Offered, Revoked, or the committed terminal state. */
+/** An offer is spent once made — Offered, the game's fresh New state (instant commits land there), Revoked, or the committed terminal state. */
 function offersOut(targets: RecruitTargetEntry[]): number {
   return targets.filter((t) =>
-    ['Offered', 'Revoked', 'Committed', 'Last_'].includes(t.scholarship)
+    ['Offered', 'New', 'Revoked', 'Committed', 'Last_'].includes(t.scholarship)
   ).length;
 }
 
