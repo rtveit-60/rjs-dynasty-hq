@@ -962,6 +962,21 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  /**
+   * A start that never finishes is worse than a crash: the process keeps the
+   * single-instance lock, so every later launch quits on the spot and the user
+   * sees nothing happen at all (observed 2026-09-03 — four processes, a window
+   * that was created but never shown, and not one line in the log). If the
+   * window has not been built shortly after launch, leave so the next attempt
+   * starts clean.
+   */
+  let started = false;
+  const startupWatchdog = setTimeout(() => {
+    if (started) return;
+    log.error('app', 'startup did not finish — exiting so the next launch can start clean');
+    app.exit(1);
+  }, 20000);
+
   // Launching again focuses the running copy. If that copy somehow has no
   // window left, build one instead of quitting silently — otherwise the app
   // sits in the background with nothing to click.
@@ -990,6 +1005,8 @@ if (!gotLock) {
     registerGameIconProtocol();
     registerIpc();
     createWindow();
+    started = true;
+    clearTimeout(startupWatchdog);
     startUpdateCheck();
     const { savePath, schoolTeamRow } = getSettings();
     if (savePath && existsSync(savePath)) {
