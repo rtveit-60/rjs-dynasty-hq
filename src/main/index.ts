@@ -419,6 +419,62 @@ function registerIpc(): void {
     return result;
   });
 
+  // Program grades / prestige — the _RJ path.
+  handle('grades:form', () => {
+    const { savePath } = getSettings();
+    return savePath ? pipeline.gradesForm(savePath) : null;
+  });
+  handle('grades:edit', async (_e, req: unknown) => {
+    const r = req as { grades?: unknown; prestige?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !r || (typeof r.grades !== 'object' && r.prestige === undefined)) {
+      return { ok: false, message: 'Nothing to save.' };
+    }
+    const result = await pipeline.editGrades(r as never, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
+  // Instant commit of a board recruit — the _RJ path.
+  handle('recruit:commit', async (_e, req: unknown) => {
+    const r = req as { recruitRow?: unknown; label?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !Number.isInteger(r?.recruitRow) || (r.recruitRow as number) < 0) {
+      return { ok: false, message: 'Nothing to commit.' };
+    }
+    const result = await pipeline.instantCommit(
+      { recruitRow: r.recruitRow as number, label: typeof r.label === 'string' ? r.label : undefined },
+      savePath
+    );
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
+  // Dynasty settings (gameplay / XP / league sliders) — the _RJ path.
+  handle('settings:form', () => {
+    const { savePath } = getSettings();
+    return savePath ? pipeline.settingsForm(savePath) : null;
+  });
+  handle('settings:edit', async (_e, req: unknown) => {
+    const r = req as { values?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !r?.values || typeof r.values !== 'object' || !Object.keys(r.values as object).length) {
+      return { ok: false, message: 'Nothing to save.' };
+    }
+    const result = await pipeline.editSettings({ values: r.values as never }, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   handle('coach:editform', (_e, coachRow: number) => {
     const { savePath } = getSettings();
     if (!Number.isInteger(coachRow) || coachRow < 0 || !savePath) return null;
@@ -820,7 +876,7 @@ function createWindow(): void {
               }
               // Prefix match tolerates count badges inside the control ("THE WIRE 133").
               await win!.webContents.executeJavaScript(
-                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button,.bd-btn,.fp-choose,.seg,.pb-form,.pb-play,.mt-colbtn')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
+                `[...document.querySelectorAll('.filter,.tab,.btn,.tk-cap,.tk-menu button,.bd-btn,.fp-choose,.seg,.pb-form,.pb-play,.mt-colbtn,.grade-edit')].find((b) => { const t = b.textContent.trim(); return t === ${JSON.stringify(label.trim())} || t.startsWith(${JSON.stringify(label.trim())}); })?.click()`
               );
               await new Promise((r) => setTimeout(r, 700));
             }

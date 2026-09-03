@@ -8,6 +8,7 @@ import RecruitCardRow from './RecruitCardRow.tsx';
 import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
 import ResourceModal from './ResourceModal.tsx';
 import TargetActionsModal from './TargetActionsModal.tsx';
+import InstantCommitModal from './InstantCommitModal.tsx';
 import TeamNeedsStrip from './TeamNeedsStrip.tsx';
 
 type School = NonNullable<Snapshot['school']>;
@@ -99,6 +100,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
   const [openRow, setOpenRow] = useState<number | null>(null);
   const [hiring, setHiring] = useState(false);
   const [planRow, setPlanRow] = useState<number | null>(null);
+  const [commitTarget, setCommitTarget] = useState<RecruitTargetEntry | null>(null);
 
   const conflicts = useMemo(
     () => playingTimeConflicts(board?.targets ?? []),
@@ -265,6 +267,9 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
       {planRow !== null && !browsing && (
         <TargetActionsModal recruitRow={planRow} onClose={() => setPlanRow(null)} />
       )}
+      {commitTarget && !browsing && (
+        <InstantCommitModal target={commitTarget} onClose={() => setCommitTarget(null)} />
+      )}
       <div className="tbl-wrap">
         <table className="tbl">
           <thead>
@@ -306,6 +311,17 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
                         }}
                       >
                         »
+                      </button>
+                      <button
+                        type="button"
+                        className="bd-btn commit"
+                        title="Instant commit — hard-commits this recruit to your program (asks first)"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCommitTarget(t);
+                        }}
+                      >
+                        ✓
                       </button>
                       <BoardToggle recruitRow={t.recruitRow} onBoard={true} />
                     </span>

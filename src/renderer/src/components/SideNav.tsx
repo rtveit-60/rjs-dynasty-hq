@@ -10,6 +10,7 @@ const ITEMS: { key: NavKey; label: string; abbr: string }[] = [
   { key: 'recruiting', label: 'RECRUITING', abbr: 'REC' },
   { key: 'media', label: 'DYNASTY MEDIA', abbr: 'MED' },
   { key: 'carousel', label: 'COACHING CAROUSEL', abbr: 'CAR' },
+  { key: 'settings', label: 'DYNASTY SETTINGS', abbr: 'DYN' },
   { key: 'setup', label: 'SETUP', abbr: 'SET' }
 ];
 

@@ -27,6 +27,11 @@ import type {
   Settings,
   Snapshot,
   TargetActionChanges,
+  GradesEditForm,
+  GradesEditChanges,
+  InstantCommitRequest,
+  DynastySettingsForm,
+  DynastySettingsChanges,
   TargetActionForm,
   ThemeMode,
   WatchStatus
@@ -77,6 +82,11 @@ export interface HQBridge {
   createRecruit: (req: CreateRecruitRequest) => Promise<PlayerEditResult>;
   getTargetForm: (recruitRow: number) => Promise<TargetActionForm | null>;
   editTarget: (req: TargetActionChanges) => Promise<PlayerEditResult>;
+  getGradesForm: () => Promise<GradesEditForm | null>;
+  editGrades: (req: GradesEditChanges) => Promise<PlayerEditResult>;
+  instantCommit: (req: InstantCommitRequest) => Promise<PlayerEditResult>;
+  getSettingsForm: () => Promise<DynastySettingsForm | null>;
+  editSettings: (req: DynastySettingsChanges) => Promise<PlayerEditResult>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
   gameStatus: () => Promise<GameDirStatus>;
@@ -134,6 +144,11 @@ const bridge: HQBridge = {
   createRecruit: (req) => ipcRenderer.invoke('create:recruit', req),
   getTargetForm: (recruitRow) => ipcRenderer.invoke('target:form', recruitRow),
   editTarget: (req) => ipcRenderer.invoke('target:edit', req),
+  getGradesForm: () => ipcRenderer.invoke('grades:form'),
+  editGrades: (req) => ipcRenderer.invoke('grades:edit', req),
+  instantCommit: (req) => ipcRenderer.invoke('recruit:commit', req),
+  getSettingsForm: () => ipcRenderer.invoke('settings:form'),
+  editSettings: (req) => ipcRenderer.invoke('settings:edit', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   gameStatus: () => ipcRenderer.invoke('game:status'),

@@ -14,9 +14,12 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { applyGradesEdit, buildGradesForm } from '../src/main/grades-editor.ts';
+import { applyDynastySettings, buildDynastySettingsForm } from '../src/main/dynasty-settings.ts';
 import {
   applyBoardEdit,
   applyCoachFire,
+  applyInstantCommit,
   applyCreateRecruit,
   applyTargetActions,
   buildCreateForm,
@@ -1101,6 +1104,195 @@ check('form: skill points within the field ceiling',
       face: { headId: face.headId, assetName: 'gen_head_madeup_001', portraitId: 99999, tone: face.tone }
     }, dir));
   check('source still untouched after face creation', sha(work) === sourceHash);
+}
+
+
+// --- 11. dev trait, program grades, instant commit, dynasty settings ----------
+{
+  const teamRowOf = async (f: any): Promise<number> => {
+    const t = mainTable(f, 'Team');
+    await t.readRecords(['ProgramPointBudget']);
+    for (let i = 0; i < t.records.length; i++) {
+      const r = t.records[i];
+      if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) return i;
+    }
+    return -1;
+  };
+
+  // 11a. dev trait on a rostered player
+  const frD = await loadFranchise(editedPath);
+  const dform = await buildEditForm(frD, rosterRow, editedPath);
+  check('edit form: dev trait carries the schema tiers under the game names',
+    dform.devTraitOptions.length === 4 && dform.devTraitOptions.every((o) => o.id !== 'Hidden') &&
+    dform.devTraitOptions.map((o) => o.name).join(',') === 'Normal,Impact,Star,Elite',
+    `${dform.devTrait} of ${dform.devTraitOptions.map((o) => o.id).join(',')}`);
+  const wantDev = dform.devTraitOptions.find((o) => o.id !== dform.devTrait)!.id;
+  await applyPlayerEdit(frD, editedPath, { playerRow: rosterRow, devTrait: wantDev }, dir);
+  const frD2 = await loadFranchise(editedPath);
+  const pTD = mainTable(frD2, 'Player');
+  await pTD.readRecords(['TraitDevelopment']);
+  check('edit: dev trait lands', String(val(pTD.records[rosterRow], 'TraitDevelopment')) === wantDev, wantDev);
+  await rejects('edit reject: Hidden dev trait', async () =>
+    applyPlayerEdit(frD2, editedPath, { playerRow: rosterRow, devTrait: 'Hidden' }, dir));
+  await rejects('edit reject: made-up dev trait', async () =>
+    applyPlayerEdit(frD2, editedPath, { playerRow: rosterRow, devTrait: 'Superstar' }, dir));
+
+  // 11b. program grades + prestige
+  const frG = await loadFranchise(editedPath);
+  const teamRow = await teamRowOf(frG);
+  const gform = await buildGradesForm(frG, teamRow, editedPath);
+  check('grades form: ten letters with lifetimes, letter options exclude Incomplete',
+    gform.grades.length === 10 && gform.gradeOptions.length === 13 && !gform.gradeOptions.includes('Incomplete') &&
+    gform.gradeOptions[0] === 'Aplus' && gform.gradeOptions[12] === 'F' &&
+    gform.grades.filter((g) => g.lifetime === 'Permanent').length === 2 &&
+    gform.grades.filter((g) => g.lifetime === 'Until offseason').length === 2,
+    `${gform.school}: ${gform.grades.map((g) => `${g.label}=${g.grade}`).join(' ')} prestige ${gform.prestige}/${gform.prestigeMax}`);
+  const flip = (g: string): string => (g === 'Aplus' ? 'F' : 'Aplus');
+  const gradeChanges = Object.fromEntries(gform.grades.slice(0, 3).map((g) => [g.field, flip(g.grade)]));
+  const wantPrestige = gform.prestige === gform.prestigeMax ? 0 : gform.prestige + 1;
+  await applyGradesEdit(frG, editedPath, { teamRow, grades: gradeChanges, prestige: wantPrestige }, dir);
+  const gform2 = await buildGradesForm(await loadFranchise(editedPath), teamRow, editedPath);
+  check('grades: letters + prestige land, the other seven untouched',
+    Object.entries(gradeChanges).every(([f, l]) => gform2.grades.find((g) => g.field === f)?.grade === l) &&
+    gform2.prestige === wantPrestige &&
+    gform.grades.slice(3).every((g) => gform2.grades.find((x) => x.field === g.field)?.grade === g.grade),
+    `${Object.entries(gradeChanges).map(([f, l]) => `${f}=${l}`).join(' ')} prestige ${gform2.prestige}`);
+  const frG2 = await loadFranchise(editedPath);
+  await rejects('grades reject: Incomplete', async () =>
+    applyGradesEdit(frG2, editedPath, { teamRow, grades: { AcademicPrestigeGrade: 'Incomplete' } }, dir));
+  await rejects('grades reject: unknown field', async () =>
+    applyGradesEdit(frG2, editedPath, { teamRow, grades: { ProPotentialGradeQB: 'A' } }, dir));
+  await rejects('grades reject: prestige past the schema', async () =>
+    applyGradesEdit(frG2, editedPath, { teamRow, prestige: gform.prestigeMax + 1 }, dir));
+  check('source still untouched after grade edits', sha(work) === sourceHash);
+
+  // 11c. instant commit of a board recruit that carries a real school list
+  //      (the game builds those as it recruits; a freshly added target may not have one yet)
+  const frC = await loadFranchise(editedPath);
+  const teamRowC = await teamRowOf(frC);
+  const commitRow = await (async (): Promise<number> => {
+    const t = mainTable(frC, 'Team');
+    await t.readRecords(['RecruitingBoard']);
+    const bRef = refFromRecord(t.records[teamRowC], 'RecruitingBoard')!;
+    const bT = frC.getTableById(bRef.tableId);
+    if (!bT.recordsRead) await bT.readRecords();
+    const lRef = refFromRecord(bT.records[bRef.row], 'Recruits')!;
+    const lT = frC.getTableById(lRef.tableId);
+    if (!lT.recordsRead) await lT.readRecords();
+    const arr = lT.records[lRef.row];
+    const rT = mainTable(frC, 'Recruit');
+    await rT.readRecords(['RecruitStage', 'TopSchoolsList']);
+    for (let i = 0; i < (arr.arraySize ?? 0); i++) {
+      const tr = refFromRecord(arr, `RecruitTarget${i}`);
+      if (!tr || (tr.tableId === 0 && tr.row === 0)) continue;
+      const tT = frC.getTableById(tr.tableId);
+      if (!tT.recordsRead) await tT.readRecords();
+      const rRef = refFromRecord(tT.records[tr.row], 'Recruit');
+      if (!rRef) continue;
+      const r = rT.records[rRef.row];
+      const stage = String(val(r, 'RecruitStage'));
+      if (stage.includes('Committed') || stage === 'Signed') continue;
+      const lr = refFromRecord(r, 'TopSchoolsList');
+      if (!lr || (lr.tableId === 0 && lr.row === 0)) continue;
+      return rRef.row;
+    }
+    return -1;
+  })();
+  check('commit: a board recruit with a school list exists', commitRow >= 0, `row ${commitRow}`);
+  const cform = await buildTargetForm(frC, teamRowC, commitRow, editedPath);
+  const offersBefore = cform.scholarshipsUsed;
+  const tTeam = mainTable(frC, 'Team');
+  await tTeam.readRecords(['TeamIndex']);
+  const userIdx = Number(val(tTeam.records[teamRowC], 'TeamIndex'));
+  const rTC = mainTable(frC, 'Recruit');
+  await rTC.readRecords(['RecruitStage', 'CommitScore', 'TotalScholarshipOffers']);
+  const stageBefore = String(val(rTC.records[commitRow], 'RecruitStage'));
+  const cs = Number(val(rTC.records[commitRow], 'CommitScore'));
+  const totalBefore = Number(val(rTC.records[commitRow], 'TotalScholarshipOffers'));
+  const season = mainTable(frC, 'SeasonInfo');
+  await season.readRecords(['IsScholarshipPeriodActive', 'IsCommittmentPeriodActive']);
+  const windowOpen =
+    val(season.records[0], 'IsScholarshipPeriodActive') === true && val(season.records[0], 'IsCommittmentPeriodActive') === true;
+  if (windowOpen) {
+    await applyInstantCommit(frC, editedPath, { teamRow: teamRowC, recruitRow: commitRow }, dir);
+    const frC2 = await loadFranchise(editedPath);
+    const rT2 = mainTable(frC2, 'Recruit');
+    await rT2.readRecords(['RecruitStage', 'TotalScholarshipOffers', 'TopSchoolsList']);
+    const w = rT2.records[commitRow];
+    const listRef = refFromRecord(w, 'TopSchoolsList')!;
+    const aT = frC2.getTableById(listRef.tableId);
+    if (!aT.recordsRead) await aT.readRecords();
+    const first = refFromRecord(aT.records[listRef.row], 'ProspectTargetSchool0')!;
+    const eT = frC2.getTableById(first.tableId);
+    if (!eT.recordsRead) await eT.readRecords();
+    const top = eT.records[first.row];
+    check('commit: stage HardCommitted, user first at CommitScore, offer counted',
+      String(val(w, 'RecruitStage')) === 'HardCommitted' &&
+      Number(val(top, 'TeamId')) === userIdx && Number(val(top, 'TeamInfluence')) === cs &&
+      Number(val(w, 'TotalScholarshipOffers')) === totalBefore + 1,
+      `${stageBefore} -> ${val(w, 'RecruitStage')}; top ${val(top, 'TeamId')}@${val(top, 'TeamInfluence')} (user ${userIdx}@${cs}); offers ${totalBefore} -> ${val(w, 'TotalScholarshipOffers')}`);
+    const cform2 = await buildTargetForm(frC2, teamRowC, commitRow, editedPath);
+    check('commit: scholarship New counts against the board cap',
+      cform2.scholarshipsUsed === offersBefore + 1, `${offersBefore} -> ${cform2.scholarshipsUsed}`);
+    await rejects('commit reject: already committed', async () =>
+      applyInstantCommit(await loadFranchise(editedPath), editedPath, { teamRow: teamRowC, recruitRow: commitRow }, dir));
+  } else {
+    await rejects('commit reject: commitment window closed in this save', async () =>
+      applyInstantCommit(frC, editedPath, { teamRow: teamRowC, recruitRow: commitRow }, dir));
+  }
+  check('source still untouched after instant commit', sha(work) === sourceHash);
+
+  // 11d. dynasty settings
+  const frS = await loadFranchise(editedPath);
+  const teamRowS = await teamRowOf(frS);
+  const sform = await buildDynastySettingsForm(frS, teamRowS, editedPath);
+  const all = sform.groups.flatMap((g) => g.sections.flatMap((s) => s.fields));
+  const byId = (suffix: string) => all.find((f) => f.id.endsWith(suffix));
+  check('settings form: three groups, every slider family present',
+    sform.groups.map((g) => g.key).join(',') === 'gameplay,xp,league' &&
+    !!byId(':QBAccuracy') && !!byId(':FGPower') && !!byId(':Injuries') && !!byId(':Offside') && !!byId('xp:0:QB') &&
+    !!byId(':SkillLevel') && !!byId(':SeasonExperience'),
+    `${all.length} fields; ${sform.groups.map((g) => `${g.key}=${g.sections.length} sections`).join(', ')}`);
+  check('settings form: enums carry real members, locked rows flagged, Quarter Length read-only',
+    byId(':SkillLevel')?.options?.map((o) => o.id).join(',') === 'FRESHMAN,VARSITY,ALL_AMERICAN,HEISMAN' &&
+    byId(':GameStyle')?.options?.map((o) => o.id).join(',') === 'Arcade,Simulation,Competitive' &&
+    byId(':IsCoachLevelsPurchaseEnabled')?.locked === true && byId(':QuarterLength')?.locked === true,
+    `${byId(':SkillLevel')?.value} / ${byId(':GameStyle')?.value} / QL ${byId(':QuarterLength')?.value}`);
+  const skillPlayer = all.filter((f) => f.id.startsWith('skill:1:')).length;
+  const skillCpu = all.filter((f) => f.id.startsWith('skill:0:')).length;
+  check('settings form: player and CPU skill rows both carry the nine sliders', skillPlayer === 9 && skillCpu === 9, `${skillPlayer}/${skillCpu}`);
+  const qb = byId(':QBAccuracy')!;
+  const wear = byId(':IsWearAndTearEnabled')!;
+  const level = byId(':SkillLevel')!;
+  const xpQB = byId('xp:0:QB')!;
+  const values: Record<string, number | boolean | string> = {
+    [qb.id]: Number(qb.value) === 37 ? 63 : 37,
+    [wear.id]: !(wear.value === true),
+    [level.id]: level.value === 'HEISMAN' ? 'FRESHMAN' : 'HEISMAN',
+    [xpQB.id]: Number(xpQB.value) === 250 ? 175 : 250
+  };
+  await applyDynastySettings(frS, editedPath, { teamRow: teamRowS, values }, dir);
+  const sform2 = await buildDynastySettingsForm(await loadFranchise(editedPath), teamRowS, editedPath);
+  const all2 = sform2.groups.flatMap((g) => g.sections.flatMap((s) => s.fields));
+  const got = (id: string) => all2.find((f) => f.id === id)?.value;
+  check('settings: int, bool, enum and XP writes land',
+    Object.entries(values).every(([id, v]) => got(id) === v),
+    Object.entries(values).map(([id, v]) => `${id.split(':')[2]}=${String(got(id))}(want ${String(v)})`).join(' '));
+  const untouched = all.filter((f) => !(f.id in values));
+  check('settings: every other field untouched',
+    untouched.every((f) => got(f.id) === f.value), `${untouched.length} fields`);
+  const frS2 = await loadFranchise(editedPath);
+  await rejects('settings reject: locked field', async () =>
+    applyDynastySettings(frS2, editedPath, { teamRow: teamRowS, values: { [byId(':IsCoachLevelsPurchaseEnabled')!.id]: false } }, dir));
+  await rejects('settings reject: Quarter Length', async () =>
+    applyDynastySettings(frS2, editedPath, { teamRow: teamRowS, values: { [byId(':QuarterLength')!.id]: 5 } }, dir));
+  await rejects('settings reject: out-of-range slider', async () =>
+    applyDynastySettings(frS2, editedPath, { teamRow: teamRowS, values: { [qb.id]: 101 } }, dir));
+  await rejects('settings reject: bad enum member', async () =>
+    applyDynastySettings(frS2, editedPath, { teamRow: teamRowS, values: { [level.id]: 'COUNT_' } }, dir));
+  await rejects('settings reject: unknown id', async () =>
+    applyDynastySettings(frS2, editedPath, { teamRow: teamRowS, values: { 'league:0:CoachStartingLevel': 5 } }, dir));
+  check('source still untouched after settings edits', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);
