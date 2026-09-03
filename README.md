@@ -48,7 +48,7 @@ Every player, coach and school name in the app opens an ESPN-style profile card.
 
 - **Players.** A Previous Game score bug with their line from that game as stat tiles, season-by-season and career stats (transfers show every stop), full game logs, all ratings, named abilities, and NCAA passer rating computed for every game, season and career line for quarterbacks.
 - **Recruits.** Stars and ranks, the full pursuit race with influence bars, their dealbreaker, and their three motivations with the ideal pitch that matches them, straight from the game's own pitch definitions.
-- **Coaches.** Bio, contract and job security, the career ledger, and their full coaching history.
+- **Coaches.** Bio, contract and job security, the career ledger, and their full coaching history, with **✎ Edit** opening the coach editor.
 - **Schools.** A season browser with schedules and results, team stat panels, records and coaches year by year, and the all-time program ledger.
 - **Real headshots.** Profiles show actual in-game player and coach portraits once you extract them from your own installed game (see below).
 
@@ -56,21 +56,33 @@ Every player, coach and school name in the app opens an ESPN-style profile card.
 
 ### Player Editor
 
-Every player and recruit profile opens into an editor. Hit **✎ Edit**.
+Every player and recruit profile opens into an editor. Hit **✎ Edit**. Five tabs: Identity, Ratings, Abilities, Skill Caps, Appearance.
 
-- Change names and jersey numbers, the position's full rating sheet, mental abilities and their tiers, and physical ability tiers, all validated against the save format's real limits before a single byte is written.
-- Edit a rostered player's whole appearance: their face (picked from the game's head catalog, with portrait previews), skin tone, body type, and all eleven gear slots, with helmet and facemask combinations restricted to pairs the game actually uses.
-- Your original save is never touched. Saving writes a separate copy named `<save>_RJsEdited` beside the original, and the dashboard follows that copy from then on. Load it in the game to play with your changes. Editing again updates the copy in place, after a timestamped backup.
+- **Identity.** Names, jersey number, height (edited in inches, read back as feet and inches) and weight, home state and hometown.
+- **Ratings and abilities.** The position's full rating sheet, mental abilities and their tiers, and physical ability tiers, all validated against the save format's real limits before a single byte is written.
+- **Skill Caps.** The six skill-group caps from the game's Upgrade Player screen, each named for the group your player's archetype actually assigns to that slot (the game's own tuning data; a corner's six are not a tackle's six), plus the unspent skill-point balance.
+- **Appearance.** A rostered player's face (picked from the game's head catalog, with portrait previews), skin tone, body type, and all eleven gear slots, with helmet and facemask combinations restricted to pairs the game actually uses.
+- Every number field takes typed input as well as its − / + buttons.
 - Overall recalculates in the game itself the next time it loads the save. The app never invents a number.
 
 ![Player editor](docs/screenshots/player-editor.png)
+
+### Coach Editor
+
+Every coach profile has the same **✎ Edit**, for your own coach or any CPU coach in the league. Three tabs.
+
+- **Base Values.** Coach points, level, prestige score (the game re-grades the letter from it), experience points, and job security percentage, whose status band follows the percentage using your save's own coaches as the yardstick.
+- **Coach Profile.** Names, role (changing it swaps with whoever holds that role on the same staff), age, height and weight, home state, demeanor, stance, hat and body type.
+- **Coach Progression.** Dominant archetype, backstory, the Expert Scout trait, the CEO and Program Builder unlocks, and every talent tree. Each subtree opens as its own pop-up: the archetype node as a switch, then a tile per perk branch with a stepper for its level, since every branch in the game's trees is a chain of perks. Nothing is ever locked here; the editor is a sandbox, and the game evaluates its own prerequisites when it loads.
+
+The tree definitions, names, costs and unlock chains all come from the game's own data files, not from a transcription.
 
 ### Recruiting
 
 Three boards over the national class, under the same Team Needs seats as the office.
 
 - **Highschool Recruiting.** Every prospect in the class with stars, true overall, height and weight, gem/bust, dev trait, pipeline, position and national rank, offers and commit tracking. A Scheme Fit dot shows how the recruit's archetype sits in your actual scheme, filled when your scheme starts that archetype, from the game's own per-scheme preferences. The Edge arrow scores your program against the strongest school actually pursuing them: green when you hold a real advantage, red when you're behind. Clicking any recruit expands their At a Glance card with the skills their position lives on, their mental and physical abilities, and their motivations and ideal pitch.
-- **Transfer Portal.** The same board for portal transfers, which fills once your save reaches the offseason window.
+- **Transfer Portal.** The same board for portal transfers, which fills once your save reaches the offseason window. **Manual Transfers** sits beside it: pick any two schools, see both rosters side by side (sortable by position, name, class or overall), and click players across in either direction. The write follows the game's own sign-player steps, roster lists and depth charts included, and neither school can end above the game's 85-man limit.
 - **Scouting Reports.** Search the class by attribute. *Receivers with 92+ speed. Quarterbacks with 94+ throw power. Tackles over 6'6" and 300 pounds.* Stack as many thresholds as you like, and each becomes its own sortable column.
 
 ![Recruiting board](docs/screenshots/recruiting-board.png)
@@ -131,6 +143,8 @@ Documents\EA SPORTS College Football 27\saves\
 
 The app auto-detects saves there (files starting with `DYNASTY-`) and lists them on first launch.
 
+One thing worth knowing about the game itself: it loads a save to a blank screen when the file name is longer than 32 characters. The app keeps its own edited copies within that limit and warns you in Setup if the file you have selected is over it.
+
 ## Portraits and game art
 
 Profiles can show the game's real player and coach headshots. Because that art belongs to your installed copy of the game, it never ships with the app. You extract it yourself, once:
@@ -156,7 +170,12 @@ Each reads your install (found automatically, or set in **Setup → Game install
 
 Yes. The app never modifies your save. It copies the file to its own cache folder before parsing and never opens the original for writing.
 
-The optional player editor follows the same rule by writing somewhere else entirely. Using **Edit** in a player's profile creates a separate copy of your dynasty named `<save>_RJsEdited` next to the original and puts the changes there. Your original file keeps its exact bytes. Re-editing an edited copy updates that copy in place, after a timestamped backup is stored in the app's data folder. Load the `_RJsEdited` save in the game to play with your changes. Every save-writing feature (the editor, depth chart drag-and-drop, board edits, weekly plans, resources, Fire Coach, Create Recruit) goes through this one path.
+The editors follow the same rule by writing somewhere else entirely. Using **Edit** creates a separate copy of your dynasty named `<save>_RJ` next to the original and puts the changes there. Your original file keeps its exact bytes. Re-editing an edited copy updates that copy in place, after a timestamped backup is stored in the app's data folder. Load the `_RJ` save in the game to play with your changes. Every save-writing feature (the player and coach editors, depth chart drag-and-drop, board edits, weekly plans, resources, Fire Coach, Create Recruit, Manual Transfers) goes through this one path.
+
+Two more safeguards:
+
+- **Vanilla backups.** Before the first edited copy of a save is written, the untouched original is also copied under the app's data folder. **Setup → Back up now** does the same for every game-written save in your saves folder at any time, skipping files whose bytes it already keeps, and **Open backups folder** takes you there.
+- **File names the game can load.** The game loads a save to a blank screen when its file name is longer than 32 characters. Edited copies are named to fit (an autosave's `-AUTOSAVE` marker is dropped and long names are shortened), and Setup warns if the file you have selected is over the limit. Copies made by earlier versions with the longer `_RJsEdited` suffix still work when they fit, and move to the short name on their next edit.
 
 ## Build from source
 
