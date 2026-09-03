@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { BowlAppearance, SeasonRecord, SeasonState, Snapshot } from '../../../shared/types.ts';
 import { spaceOut } from '../lib/format.ts';
 import BowlIcon, { BowlMarkGroup, CfpMarkGroup } from './BowlIcon.tsx';
 import ContractPanel from './ContractPanel.tsx';
+import EditGradesModal from './EditGradesModal.tsx';
 import FieldGraphic from './FieldGraphic.tsx';
+import { useHQ } from '../store.ts';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -242,6 +245,8 @@ export default function ProgramDashboard({
 }) {
   const rc = school.recruiting;
   const seasons = school.seasonHistory ?? [];
+  const browsing = useHQ((s) => s.browseRow) !== null;
+  const [editingGrades, setEditingGrades] = useState(false);
   if (!rc && !seasons.length && !school.contract) {
     return <div className="empty">Reading your dynasty save…</div>;
   }
@@ -307,7 +312,17 @@ export default function ProgramDashboard({
         </div>
       </div>
       <div className="panel">
-        <div className="panel-title">Program Grades</div>
+        <div className="panel-title grade-title">
+          <span>Program Grades</span>
+          {!browsing && (
+            <button type="button" className="pf-btn grade-edit" onClick={() => setEditingGrades(true)}>
+              ✎ EDIT
+            </button>
+          )}
+        </div>
+        {editingGrades && !browsing &&
+          // Portaled: the dashboard stage's backdrop filter would otherwise contain the fixed overlay.
+          createPortal(<EditGradesModal onClose={() => setEditingGrades(false)} />, document.body)}
         <div className="grade-grid">
           {(rc?.reportCard ?? []).map((g) => (
             <span key={g.label} className="chip grade-cell">

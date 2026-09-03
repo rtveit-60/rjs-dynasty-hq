@@ -7037,3 +7037,279 @@ table.tbl.tbl-wide {
   background: color-mix(in srgb, var(--team, var(--hot)) 30%, var(--paper));
   color: var(--ink);
 }
+
+/* --- Program grades editor ------------------------------------------------- */
+
+.grade-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.grade-edit {
+  font: 700 10px var(--font-cond);
+  letter-spacing: 0.08em;
+}
+
+.gr-panel {
+  width: min(560px, 94vw);
+}
+
+.gr-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+}
+
+.gr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px;
+  grid-template-areas: 'lbl sel' 'life sel';
+  align-items: center;
+  column-gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  background: var(--surface);
+}
+
+.gr-row.changed {
+  border-left-color: var(--hot);
+}
+
+.gr-lbl {
+  grid-area: lbl;
+  font: 600 12px var(--font-ui);
+  color: var(--ink);
+}
+
+.gr-row select {
+  grid-area: sel;
+  font: 700 15px var(--font-score);
+  text-align: center;
+}
+
+.gr-life {
+  grid-area: life;
+  font: 600 9px var(--font-cond);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-3);
+}
+
+.gr-life.perm {
+  color: var(--good);
+}
+
+.gr-stars {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gr-stars-v {
+  font: 400 20px var(--font-score);
+  color: var(--hot);
+}
+
+/* --- Instant commit --------------------------------------------------------- */
+
+.bd-btn.commit {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 45%, transparent);
+}
+
+.bd-btn.commit:hover {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+}
+
+.ic-panel {
+  width: min(480px, 94vw);
+}
+
+.ic-who {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 10px;
+}
+
+.ic-name {
+  font: 400 22px var(--font-score);
+  color: var(--ink);
+}
+
+.ic-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ic-stars {
+  color: var(--hot);
+  letter-spacing: 0.04em;
+}
+
+.ic-copy {
+  margin: 0 0 12px;
+  font: 400 13px/1.5 var(--font-ui);
+  color: var(--ink-2);
+}
+
+.ic-copy strong {
+  color: var(--ink);
+}
+
+/* --- Dynasty settings ------------------------------------------------------- */
+
+.ds-tabs {
+  margin-bottom: 12px;
+}
+
+.ds-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--hot);
+  vertical-align: middle;
+}
+
+.ds-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 12px;
+}
+
+.ds-section-note {
+  margin: -4px 0 8px;
+  font: 500 11px var(--font-ui);
+  color: var(--ink-3);
+}
+
+.ds-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.ds-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-left: 3px solid transparent;
+  background: var(--surface);
+}
+
+.ds-field.changed {
+  border-left-color: var(--hot);
+}
+
+.ds-field.locked {
+  opacity: 0.7;
+}
+
+.ds-lbl {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font: 600 12px var(--font-ui);
+  color: var(--ink);
+}
+
+.ds-note {
+  font: 500 10px var(--font-ui);
+  color: var(--ink-3);
+}
+
+.ds-ctl {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 120px;
+}
+
+.ds-ctl select {
+  max-width: 200px;
+}
+
+.ds-ro {
+  font: 600 12px var(--font-mono, var(--font-ui));
+  color: var(--ink-2);
+  padding: 0 6px;
+}
+
+.ds-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface-2, var(--surface));
+  color: var(--ink-3);
+  font: 700 10px var(--font-cond);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.ds-toggle:disabled {
+  cursor: default;
+}
+
+.ds-toggle .ds-knob {
+  width: 22px;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--line);
+  position: relative;
+}
+
+.ds-toggle .ds-knob::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  transition: left 120ms ease;
+}
+
+.ds-toggle.on {
+  color: var(--ink);
+  border-color: var(--team, var(--hot));
+}
+
+.ds-toggle.on .ds-knob {
+  background: var(--team, var(--hot));
+}
+
+.ds-toggle.on .ds-knob::after {
+  left: 12px;
+  background: var(--team-contrast, #fff);
+}
+
+.ds-savebar {
+  position: sticky;
+  bottom: 0;
+  top: auto;
+  margin-top: 16px;
+}
+
+.ds-savebar.live {
+  border-left-color: var(--hot);
+}
+
+.ed-error-inline {
+  color: var(--bad);
+  font-weight: 600;
+}

@@ -778,6 +778,9 @@ export interface PlayerEditForm {
   /** Unspent skill points and the save's ceiling for the field. */
   skillPoints: number;
   skillPointsMax: number;
+  /** Development trait (save member id) and the tiers the schema accepts. */
+  devTrait: string;
+  devTraitOptions: { id: string; name: string }[];
   homeState: string;
   homeTown: string;
   /** state -> the game's own hometowns there, each with its pipeline. */
@@ -815,6 +818,8 @@ export interface PlayerEditChanges {
   /** slot (1–6) -> new cap level, 0–SKILL_GROUP_CAP_MAX. */
   skillCaps?: Record<number, number>;
   skillPoints?: number;
+  /** Development trait member id (Normal / College_Impact / College_Star / College_Elite). */
+  devTrait?: string;
   /** A catalog face to put on the player (replaces a unique scan if present). */
   face?: FaceOption;
   /** Hometown moves as a pair; the pipeline follows the town. */
@@ -1087,7 +1092,7 @@ export interface TargetActionForm {
   actions: TargetActionFlags;
   /** Normalized: None | Revoked | New | Offered | Committed. */
   scholarship: string;
-  /** Offers already out on the board (Offered + Revoked — pulled offers stay spent). */
+  /** Offers already out on the board (Offered + New + Revoked — pulled offers stay spent). */
   scholarshipsUsed: number;
   /** The game's season cap on team scholarship offers (tuning: 35). */
   scholarshipsCap: number;
@@ -1478,4 +1483,87 @@ export interface DetectedSave {
   name: string;
   modified: number;
   isAutosave: boolean;
+}
+
+// --- Program grades editor ---------------------------------------------------
+
+/** How long a written letter survives before the game recomputes it. */
+export type GradeLifetime = 'Permanent' | 'Until next week' | 'Until offseason';
+
+export interface GradeEditEntry {
+  /** MySchoolTrackingTable field, e.g. AcademicPrestigeGrade. */
+  field: string;
+  label: string;
+  /** Save member id (Aplus … F). */
+  grade: string;
+  lifetime: GradeLifetime;
+}
+
+export interface GradesEditForm {
+  school: string;
+  grades: GradeEditEntry[];
+  /** Letter member ids the schema accepts, best first (Incomplete excluded). */
+  gradeOptions: string[];
+  /** Team.TeamPrestige: half-star steps, 0–10 = 0–5 stars; re-derived each offseason. */
+  prestige: number;
+  prestigeMax: number;
+  prestigeRank: number;
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+export interface GradesEditChanges {
+  /** field -> new letter member id. */
+  grades?: Record<string, string>;
+  prestige?: number;
+}
+
+// --- Instant commit ----------------------------------------------------------
+
+export interface InstantCommitRequest {
+  recruitRow: number;
+  /** Display name for the result message only. */
+  label?: string;
+}
+
+// --- Dynasty settings --------------------------------------------------------
+
+export type SettingKind = 'int' | 'bool' | 'enum';
+
+export interface SettingField {
+  /** Stable id the write path resolves: `<table>:<row>:<field>`. */
+  id: string;
+  label: string;
+  kind: SettingKind;
+  value: number | boolean | string;
+  min?: number;
+  max?: number;
+  /** Enum choices (member id + display label). */
+  options?: { id: string; name: string }[];
+  /** Read-only: the game fixes it after creation, or the app holds it back. */
+  locked?: boolean;
+  note?: string;
+}
+
+export interface SettingsSection {
+  title: string;
+  note?: string;
+  fields: SettingField[];
+}
+
+export interface SettingsGroup {
+  key: 'gameplay' | 'xp' | 'league';
+  title: string;
+  sections: SettingsSection[];
+}
+
+export interface DynastySettingsForm {
+  groups: SettingsGroup[];
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+export interface DynastySettingsChanges {
+  /** field id -> new value. */
+  values: Record<string, number | boolean | string>;
 }

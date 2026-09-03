@@ -3,6 +3,7 @@ import { contrastOn } from './lib/format.ts';
 import { useEffectiveTheme, useHQ } from './store.ts';
 import { SCALE_STEP, clampScale } from './components/ScaleControl.tsx';
 import CarouselView from './components/CarouselView.tsx';
+import DynastySettingsView from './components/DynastySettingsView.tsx';
 import MediaView from './components/MediaView.tsx';
 import Onboarding from './components/Onboarding.tsx';
 import ProfileModal from './components/ProfileModal.tsx';
@@ -77,6 +78,8 @@ export default function App() {
     body = <MediaView />;
   } else if (nav === 'carousel') {
     body = <CarouselView />;
+  } else if (nav === 'settings') {
+    body = <DynastySettingsView />;
   } else {
     body = <TeamHQ />;
   }

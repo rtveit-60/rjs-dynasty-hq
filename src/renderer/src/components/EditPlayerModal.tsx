@@ -152,6 +152,7 @@ export default function EditPlayerModal({
   const [jersey, setJersey] = useState('0');
   const [heightIn, setHeightIn] = useState(72);
   const [weightLb, setWeightLb] = useState(200);
+  const [devTrait, setDevTrait] = useState('Normal');
   const [homeState, setHomeState] = useState('');
   const [homeTown, setHomeTown] = useState('');
   const [ratings, setRatings] = useState<Record<string, number>>({});
@@ -180,6 +181,7 @@ export default function EditPlayerModal({
         setJersey(String(f.jersey ?? 0));
         setHeightIn(f.heightIn);
         setWeightLb(f.weightLb);
+        setDevTrait(f.devTrait);
         setHomeState(f.homeState);
         setHomeTown(f.homeTown);
         setRatings(Object.fromEntries(f.ratings.map((r) => [r.field, r.value])));
@@ -238,6 +240,10 @@ export default function EditPlayerModal({
     }
     if (weightLb !== form.weightLb) {
       out.weightLb = weightLb;
+      any = true;
+    }
+    if (devTrait !== form.devTrait) {
+      out.devTrait = devTrait;
       any = true;
     }
     if (homeState !== form.homeState || homeTown !== form.homeTown) {
@@ -311,7 +317,7 @@ export default function EditPlayerModal({
     }
     return any ? out : null;
   }, [
-    form, firstName, lastName, jersey, heightIn, weightLb, homeState, homeTown, ratings, mental, physical,
+    form, firstName, lastName, jersey, heightIn, weightLb, devTrait, homeState, homeTown, ratings, mental, physical,
     caps, skillPoints, face, gear, skinTone, bodyType
   ]);
 
@@ -330,7 +336,8 @@ export default function EditPlayerModal({
     if (!changes) return s;
     if (
       changes.firstName !== undefined || changes.lastName !== undefined || changes.jersey !== undefined ||
-      changes.heightIn !== undefined || changes.weightLb !== undefined || changes.homeState !== undefined
+      changes.heightIn !== undefined || changes.weightLb !== undefined || changes.homeState !== undefined ||
+      changes.devTrait !== undefined
     ) s.add('identity');
     if (changes.ratings) s.add('ratings');
     if (changes.mental || changes.physical) s.add('abilities');
@@ -484,6 +491,20 @@ export default function EditPlayerModal({
                       label="Weight in pounds"
                       onChange={setWeightLb}
                     />
+                  </label>
+                  <label>
+                    <span>Development trait</span>
+                    <select
+                      value={devTrait}
+                      className={devTrait !== form.devTrait ? 'changed' : ''}
+                      onChange={(e) => setDevTrait(e.target.value)}
+                    >
+                      {form.devTraitOptions.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label>
                     <span>Home state</span>

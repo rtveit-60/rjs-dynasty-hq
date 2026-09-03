@@ -3,6 +3,11 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type {
+  DynastySettingsChanges,
+  DynastySettingsForm,
+  GradesEditChanges,
+  GradesEditForm,
+  InstantCommitRequest,
   LeagueLeaders,
   MediaEvent,
   PlayerEditChanges,
@@ -41,6 +46,9 @@ import {
   buildTargetForm
 } from './editor.ts';
 import { applyCoachEdit, buildCoachEditForm } from './coach-editor.ts';
+import { applyInstantCommit } from './editor.ts';
+import { applyGradesEdit, buildGradesForm } from './grades-editor.ts';
+import { applyDynastySettings, buildDynastySettingsForm } from './dynasty-settings.ts';
 import { log, reportError } from './log.ts';
 import { applyRosterTransfers } from './transfers.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
@@ -393,6 +401,67 @@ export class Pipeline {
       );
       const parts = [added ? `${added} added` : '', removed ? `${removed} removed` : ''].filter(Boolean);
       return { editedPath, message: `Board updated (${parts.join(', ')}) — saved to ${basename(editedPath)}.` };
+    });
+  }
+
+  /** The user school's program letters + star prestige, for the dashboard's EDIT dialog. */
+  async gradesForm(savePath: string): Promise<GradesEditForm | null> {
+    if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
+    try {
+      return await buildGradesForm(this.franchise, this.lastSchoolRow, savePath);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Program grades / prestige, via the guarded shell. */
+  async editGrades(req: GradesEditChanges, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath } = await applyGradesEdit(this.franchise, savePath, { teamRow, ...req }, app.getPath('userData'));
+      return { editedPath, message: `Program grades saved to ${basename(editedPath)}.` };
+    });
+  }
+
+  /** Hard-commit a board recruit to the user's school, via the guarded shell. */
+  async instantCommit(req: InstantCommitRequest, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath } = await applyInstantCommit(
+        this.franchise,
+        savePath,
+        { teamRow, recruitRow: req.recruitRow },
+        app.getPath('userData')
+      );
+      const who = req.label ? `${req.label} committed` : 'Commitment';
+      return { editedPath, message: `${who} — saved to ${basename(editedPath)}.` };
+    });
+  }
+
+  /** The dynasty's gameplay / XP / league settings as the save stores them. */
+  async settingsForm(savePath: string): Promise<DynastySettingsForm | null> {
+    if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
+    try {
+      return await buildDynastySettingsForm(this.franchise, this.lastSchoolRow, savePath);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Dynasty settings, via the guarded shell. */
+  async editSettings(req: DynastySettingsChanges, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, changed } = await applyDynastySettings(
+        this.franchise,
+        savePath,
+        { teamRow, values: req.values },
+        app.getPath('userData')
+      );
+      return { editedPath, message: `${changed} setting${changed === 1 ? '' : 's'} saved to ${basename(editedPath)}.` };
     });
   }
 

@@ -35,7 +35,16 @@ import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
 import { SKILL_GROUP_CAP_MAX, skillGroupsFor } from '../shared/skill-groups.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
-import { loadFranchise, mainTable, refFromRecord, tableById, val } from './parser/franchise.ts';
+import { loadFranchise, mainTable, refFromRecord, refsFromArrayRecord, tableById, val } from './parser/franchise.ts';
+
+/** The game's development tiers, by save member id; Hidden is never offered fresh. */
+const DEV_TRAIT_NAMES: Record<string, string> = {
+  Normal: 'Normal',
+  College_Impact: 'Impact',
+  College_Star: 'Star',
+  College_Elite: 'Elite',
+  Hidden: 'Hidden'
+};
 
 export const EDIT_SUFFIX = '_RJ';
 /** The suffix edited copies carried before 2026-09-02; still recognized, still updated in place when it fits. */
@@ -184,6 +193,13 @@ export async function buildEditForm(
       rank: String(val(rec, `PhysicalAbility${slot}`) ?? 'None')
     }));
 
+  // Development trait: the schema's tiers under the game's names. Hidden is
+  // listed only when the player already carries it, so the select can show it.
+  const devTrait = String(val(rec, 'TraitDevelopment') ?? 'Normal');
+  const devTraitOptions = enumMembers(rec, 'TraitDevelopment')
+    .filter((m) => m.name !== 'Hidden' || devTrait === 'Hidden')
+    .map((m) => ({ id: m.name, name: DEV_TRAIT_NAMES[m.name] ?? m.name }));
+
   // Appearance: the player's own look (recruits are usually undressed until
   // enrollment), plus the same catalogs the create dialog offers.
   let look: Record<string, string> | null = null;
@@ -260,6 +276,8 @@ export async function buildEditForm(
     skillCapMax: SKILL_GROUP_CAP_MAX,
     skillPoints: Number(val(rec, 'SkillPoints')) || 0,
     skillPointsMax: fieldMax(rec, 'SkillPoints', 16383),
+    devTrait,
+    devTraitOptions,
     homeState: String(val(rec, 'PLYR_HOME_STATE') ?? ''),
     homeTown: String(val(rec, 'PLYR_HOME_TOWN') ?? '').trim(),
     cities,
@@ -337,6 +355,12 @@ function validate(rec: any, changes: PlayerEditChanges): string | null {
       return `Skill points must be 0–${hi}.`;
     }
   }
+  if (changes.devTrait !== undefined) {
+    const tiers = new Set(enumMembers(rec, 'TraitDevelopment').map((m) => m.name));
+    if (!tiers.has(changes.devTrait) || changes.devTrait === 'Hidden') {
+      return `Unknown development trait: ${changes.devTrait}`;
+    }
+  }
   const rankNames = new Set(enumMembers(rec, 'MentalAbilityRank1').map((m) => m.name));
   if (changes.mental) {
     const abilityNames = new Set(enumMembers(rec, 'MentalAbility1').map((m) => m.name));
@@ -374,6 +398,7 @@ function apply(rec: any, changes: PlayerEditChanges): void {
   if (changes.weightLb !== undefined) rec.Weight = changes.weightLb - 160;
   for (const [slot, cap] of Object.entries(changes.skillCaps ?? {})) rec[`SkillGroupCap${slot}`] = cap;
   if (changes.skillPoints !== undefined) rec.SkillPoints = changes.skillPoints;
+  if (changes.devTrait !== undefined) rec.TraitDevelopment = changes.devTrait;
 }
 
 function backUp(target: string, backupDir: string): string | null {
@@ -539,7 +564,8 @@ export async function applyPlayerEdit(
     const table = mainTable(check, 'Player');
     await table.readRecords([
       'FirstName', 'LastName', 'JerseyNum', 'GenericHeadAssetName', 'Height', 'Weight', 'SkillPoints',
-      'SkillGroupCap1', 'SkillGroupCap2', 'SkillGroupCap3', 'SkillGroupCap4', 'SkillGroupCap5', 'SkillGroupCap6'
+      'SkillGroupCap1', 'SkillGroupCap2', 'SkillGroupCap3', 'SkillGroupCap4', 'SkillGroupCap5', 'SkillGroupCap6',
+      'TraitDevelopment'
     ]);
     const written = table.records?.[changes.playerRow];
     const expectFirst = changes.firstName?.trim();
@@ -555,6 +581,7 @@ export async function applyPlayerEdit(
       (changes.heightIn !== undefined && Number(val(written, 'Height')) !== changes.heightIn) ||
       (changes.weightLb !== undefined && Number(val(written, 'Weight')) + 160 !== changes.weightLb) ||
       (changes.skillPoints !== undefined && Number(val(written, 'SkillPoints')) !== changes.skillPoints) ||
+      (changes.devTrait !== undefined && String(val(written, 'TraitDevelopment')) !== changes.devTrait) ||
       !capsHeld ||
       (changes.face !== undefined &&
         String(val(written, 'GenericHeadAssetName')) !== changes.face.assetName)
@@ -1264,7 +1291,7 @@ async function boardHandles(franchise: any, teamRow: number): Promise<BoardHandl
   const arrCapacity = Object.keys(arr._fields ?? {}).length;
 
   const recruitTable = mainTable(franchise, 'Recruit');
-  await recruitTable.readRecords(['Player', 'RecruitStage']);
+  await recruitTable.readRecords(['Player', 'RecruitStage', 'TotalScholarshipOffers']);
   const recruitTableId = recruitTable.header?.tableId ?? -1;
 
   // The user's target table, from an existing entry when one exists.
@@ -1494,7 +1521,8 @@ async function scholarshipsOut(franchise: any, h: BoardHandles): Promise<number>
     if (!rec || rec.isEmpty) continue;
     const raw = String(val(rec, 'ScholarshipStatus') ?? 'None');
     const st = SCHOLARSHIP_ALIAS[raw] ?? raw;
-    if (st === 'Offered' || st === 'Revoked' || st === 'Committed') out++;
+    // New = the game's own fresh-offer state (it lands there on an instant commit).
+    if (st === 'Offered' || st === 'New' || st === 'Revoked' || st === 'Committed') out++;
   }
   return out;
 }
@@ -1813,7 +1841,19 @@ export async function applyTargetActions(
     const want = req.actions?.[key as keyof TargetActionFlags];
     if (want !== undefined) target[field] = want === true;
   }
-  if (req.scholarship !== undefined) target.ScholarshipStatus = req.scholarship;
+  // A fresh offer also ticks the recruit's own offer count, as the game's
+  // instant commits do (RESEARCH "Instant commit"); a re-offer after a revoke
+  // counts again the same way.
+  let offersAfter = Number(val(rRec, 'TotalScholarshipOffers') ?? 0);
+  if (req.scholarship !== undefined) {
+    const rawBefore = String(val(target, 'ScholarshipStatus') ?? 'None');
+    const before = SCHOLARSHIP_ALIAS[rawBefore] ?? rawBefore;
+    if (req.scholarship === 'Offered' && before !== 'Offered' && before !== 'New') {
+      offersAfter = Math.min(offersAfter + 1, fieldMax(rRec, 'TotalScholarshipOffers', 255));
+      rRec.TotalScholarshipOffers = offersAfter;
+    }
+    target.ScholarshipStatus = req.scholarship;
+  }
   if (req.nilOffer !== undefined) target.CurrentNILOffer = req.nilOffer;
   if (req.swayPitch !== undefined) target.SwayPitch = req.swayPitch;
   let intelAfter = intelNow;
@@ -1833,11 +1873,132 @@ export async function applyTargetActions(
     if (scoutPasses > 0 && Number(val(written, 'UnlockedIntelBitfield')) !== intelAfter) {
       throw new Error('The written save did not read back with the scouting pass.');
     }
+    if (Number(val(h2.recruitTable.records[req.recruitRow], 'TotalScholarshipOffers')) !== offersAfter) {
+      throw new Error('The written save did not read back with the offer count.');
+    }
     if (derivedHours !== oldHours) {
       const assigned = Number(val(h2.board, 'RecruitingHoursAssigned') ?? 0);
       if (assigned !== Math.max(0, poolAssigned - oldHours + derivedHours)) {
         throw new Error('The board pool did not read back with the new assignment.');
       }
+    }
+  });
+}
+
+// --- Instant Commit ---------------------------------------------------------
+
+/** The recruit's ranked school list (ProspectTargetSchool rows via TopSchoolsList). */
+async function topSchoolRows(franchise: any, rRec: any): Promise<any[]> {
+  const ref = refFromRecord(rRec, 'TopSchoolsList');
+  if (!ref || (ref.tableId === 0 && ref.row === 0)) return [];
+  const aT = await tableById(franchise, ref.tableId);
+  const arr = aT?.records?.[ref.row];
+  if (!arr) return [];
+  const out: any[] = [];
+  for (const er of refsFromArrayRecord(arr)) {
+    if (er.tableId === 0 && er.row === 0) continue;
+    const eT = await tableById(franchise, er.tableId);
+    const e = eT?.records?.[er.row];
+    if (e) out.push(e);
+  }
+  return out;
+}
+
+/**
+ * Hard-commit a board recruit to the user's school on the spot. The recipe is
+ * the game's own instant-commit footprint, diffed from three observed in-game
+ * instant commits (RESEARCH "Instant commit"): RecruitStage flips to
+ * HardCommitted; the recruit's TopSchoolsList is rewritten with the user
+ * school first at the recruit's CommitScore and the others shifted down by
+ * influence (the list keeps its length, so the weakest drops when the user
+ * wasn't already on it); a school without an offer out gets
+ * ScholarshipStatus=New and the recruit's TotalScholarshipOffers ticks up.
+ * Nothing else moves — no CommittedPlayers, no Player fields, no other
+ * school's target rows. Gated on the game's own commitment window and the
+ * board's scholarship cap.
+ */
+export async function applyInstantCommit(
+  franchise: any,
+  savePath: string,
+  req: { teamRow: number; recruitRow: number },
+  backupDir: string
+): Promise<{ editedPath: string }> {
+  const { h, target } = await targetRecordFor(franchise, req.teamRow, req.recruitRow);
+  await h.recruitTable.readRecords(['Player', 'RecruitStage', 'CommitScore', 'TotalScholarshipOffers', 'TopSchoolsList']);
+  const rRec = h.recruitTable.records[req.recruitRow];
+  if (!rRec || rRec.isEmpty) throw new Error('That recruit is not in the save.');
+
+  const teamTable = mainTable(franchise, 'Team');
+  await teamTable.readRecords(['TeamIndex']);
+  const userIdx = Number(val(teamTable.records?.[req.teamRow], 'TeamIndex'));
+  if (!Number.isFinite(userIdx)) throw new Error('No school at that row in the save.');
+
+  const season = mainTable(franchise, 'SeasonInfo');
+  await season.readRecords(['IsScholarshipPeriodActive', 'IsCommittmentPeriodActive']);
+  const si = season.records?.[0];
+  if (val(si, 'IsScholarshipPeriodActive') !== true || val(si, 'IsCommittmentPeriodActive') !== true) {
+    throw new Error("The game's commitment window is closed right now — recruits can commit once it reopens.");
+  }
+
+  const rows = await topSchoolRows(franchise, rRec);
+  if (!rows.length) throw new Error('That recruit carries no school list in the save.');
+  const before = rows.map((e) => ({ tid: Number(val(e, 'TeamId')), inf: Number(val(e, 'TeamInfluence')) }));
+  const stage = String(val(rRec, 'RecruitStage') ?? '');
+  if (stage === 'Signed' || stage === 'HardCommitted') throw new Error('That recruit has already committed.');
+  if (stage === 'SoftCommitted' && before[0]?.tid !== userIdx) {
+    throw new Error('That recruit is verbally committed elsewhere — flips are the game\'s to run.');
+  }
+
+  const rawStatus = String(val(target, 'ScholarshipStatus') ?? 'None');
+  const status = SCHOLARSHIP_ALIAS[rawStatus] ?? rawStatus;
+  const needsOffer = status !== 'Offered' && status !== 'New';
+  if (needsOffer) {
+    const out = await scholarshipsOut(franchise, h);
+    const cap = RECRUITING_TUNABLES.maxTeamScholarshipOffers;
+    if (out >= cap) {
+      throw new Error(`All ${cap} scholarships are out — revoke one before committing another recruit.`);
+    }
+  }
+
+  // ---- apply ----
+  const commitScore = Number(val(rRec, 'CommitScore') ?? 0);
+  const others = before
+    .filter((b) => b.tid !== userIdx)
+    .sort((a, b) => b.inf - a.inf)
+    .slice(0, Math.max(0, before.length - 1));
+  const after = [{ tid: userIdx, inf: commitScore }, ...others];
+  after.forEach((v, i) => {
+    rows[i].TeamId = v.tid;
+    rows[i].TeamInfluence = v.inf;
+  });
+  rRec.RecruitStage = 'HardCommitted';
+  let offers = Number(val(rRec, 'TotalScholarshipOffers') ?? 0);
+  if (needsOffer) {
+    target.ScholarshipStatus = 'New';
+    offers = Math.min(offers + 1, fieldMax(rRec, 'TotalScholarshipOffers', 255));
+    rRec.TotalScholarshipOffers = offers;
+  }
+
+  return writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const rT = mainTable(check, 'Recruit');
+    await rT.readRecords(['RecruitStage', 'TotalScholarshipOffers', 'TopSchoolsList']);
+    const w = rT.records?.[req.recruitRow];
+    if (!w || String(val(w, 'RecruitStage')) !== 'HardCommitted') {
+      throw new Error('The written save did not read back as committed.');
+    }
+    if (Number(val(w, 'TotalScholarshipOffers')) !== offers) {
+      throw new Error('The written save did not read back with the offer count.');
+    }
+    const got = (await topSchoolRows(check, w)).map((e) => ({
+      tid: Number(val(e, 'TeamId')),
+      inf: Number(val(e, 'TeamInfluence'))
+    }));
+    if (JSON.stringify(got) !== JSON.stringify(after)) {
+      throw new Error('The written save did not read back with the school list.');
+    }
+    const { target: wt } = await targetRecordFor(check, req.teamRow, req.recruitRow);
+    if (needsOffer && String(val(wt, 'ScholarshipStatus')) !== 'New') {
+      throw new Error('The written save did not read back with the scholarship.');
     }
   });
 }
