@@ -1,4 +1,4 @@
-import { BrowserWindow, app, dialog, ipcMain, nativeTheme, net, protocol, shell } from 'electron';
+import { BrowserWindow, app, dialog, ipcMain, nativeTheme, net, protocol, screen, shell } from 'electron';
 import { pathToFileURL } from 'node:url';
 import { existsSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -7,6 +7,7 @@ import type {
   DetectedSave,
   GameDirStatus,
   MediaEvent,
+  Settings,
   Snapshot,
   ThemeMode,
   WatchStatus
@@ -692,8 +693,30 @@ function applyZoom(): void {
   win.webContents.send('ui:zoom', effective);
 }
 
-function createWindow(): void {
+/**
+ * Remembered bounds, but only while they still land on a display that exists.
+ * A window restored onto a monitor that has since been unplugged or moved is
+ * invisible, which looks exactly like the app starting with no window at all.
+ */
+function usableBounds(): Settings['windowBounds'] {
   const bounds = getSettings().windowBounds;
+  if (!bounds) return undefined;
+  const onScreen = screen.getAllDisplays().some((d) => {
+    const a = d.workArea;
+    return (
+      bounds.x < a.x + a.width &&
+      bounds.x + bounds.width > a.x &&
+      bounds.y < a.y + a.height &&
+      bounds.y + bounds.height > a.y
+    );
+  });
+  if (onScreen) return bounds;
+  log.warn('window', 'saved window position is off-screen — opening at the default size', bounds);
+  return undefined;
+}
+
+function createWindow(): void {
+  const bounds = usableBounds();
   win = new BrowserWindow({
     width: bounds?.width ?? 1380,
     height: bounds?.height ?? 880,
@@ -718,7 +741,19 @@ function createWindow(): void {
     }
   });
 
-  win.once('ready-to-show', () => win?.show());
+  // Normally the window appears as soon as the renderer has painted. If that
+  // never happens (a renderer that fails before first paint), show it anyway
+  // rather than leaving the app running with no window on screen.
+  const reveal = (why: string): void => {
+    if (!win || win.isDestroyed() || win.isVisible()) return;
+    win.show();
+    log.info('window', `window shown (${why})`);
+  };
+  const revealFallback = setTimeout(() => reveal('fallback'), 12000);
+  win.once('ready-to-show', () => {
+    clearTimeout(revealFallback);
+    reveal('ready-to-show');
+  });
   // Crash forensics: a dead or hung renderer leaves a trace in the log.
   win.webContents.on('render-process-gone', (_e, details) => {
     log.error('renderer', 'render process gone', details);
@@ -927,11 +962,32 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  /**
+   * A start that never finishes is worse than a crash: the process keeps the
+   * single-instance lock, so every later launch quits on the spot and the user
+   * sees nothing happen at all (observed 2026-09-03 — four processes, a window
+   * that was created but never shown, and not one line in the log). If the
+   * window has not been built shortly after launch, leave so the next attempt
+   * starts clean.
+   */
+  let started = false;
+  const startupWatchdog = setTimeout(() => {
+    if (started) return;
+    log.error('app', 'startup did not finish — exiting so the next launch can start clean');
+    app.exit(1);
+  }, 20000);
+
+  // Launching again focuses the running copy. If that copy somehow has no
+  // window left, build one instead of quitting silently — otherwise the app
+  // sits in the background with nothing to click.
   app.on('second-instance', () => {
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.focus();
+    if (!win || win.isDestroyed()) {
+      createWindow();
+      return;
     }
+    if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.show();
+    win.focus();
   });
 
   nativeTheme.on('updated', () => {
@@ -949,6 +1005,8 @@ if (!gotLock) {
     registerGameIconProtocol();
     registerIpc();
     createWindow();
+    started = true;
+    clearTimeout(startupWatchdog);
     startUpdateCheck();
     const { savePath, schoolTeamRow } = getSettings();
     if (savePath && existsSync(savePath)) {
