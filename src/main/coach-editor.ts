@@ -1,7 +1,7 @@
 /**
  * Coach editor: the form behind a coach profile's EDIT control and the write
  * that applies it. Same posture as the player editor — whole-payload
- * validation, then one write to the <save>_RJsEdited sibling through
+ * validation, then one write to the <save>_RJ sibling through
  * writeEditedSave, verified on a cold reload.
  *
  * Field map and talent-tree mechanics: RESEARCH "Coach editor field map" and

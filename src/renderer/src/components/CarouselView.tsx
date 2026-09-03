@@ -529,7 +529,7 @@ function FireDialog({
             {error && <div className="ed-error" role="alert">{error}</div>}
             <div className="ed-foot">
               <span className="ed-target">
-                Writes a <strong>_RJsEdited</strong> copy — the original save is never touched.
+                Writes a <strong>_RJ</strong> copy — the original save is never touched.
               </span>
               <button type="button" className="pf-btn" onClick={onClose}>
                 Cancel

@@ -4,7 +4,7 @@
  * Proves, against scratch copies in the OS temp dir (never samples/, never the
  * real saves folder):
  *   1. the edit form carries schema truth (name caps, ratings, ability options)
- *   2. an edit writes <save>_RJsEdited and the source file's bytes never change
+ *   2. an edit writes <save>_RJ and the source file's bytes never change
  *   3. editing an already-edited save updates it in place, after a backup
  *   4. bad payloads are rejected before anything is applied
  *
@@ -26,7 +26,8 @@ import {
   applyResourceEdit,
   buildEditForm,
   buildResourceForm,
-  editedPathFor
+  editedPathFor,
+  isEditedSavePath
 } from '../src/main/editor.ts';
 import { ensureCoachSchema } from '../src/main/parser/coach-schema.ts';
 import { loadFranchise, mainTable, refFromRecord, val } from '../src/main/parser/franchise.ts';
@@ -91,7 +92,7 @@ check('form: mental options carry game names', form.mentalOptions.length >= 15 &
 check('form: tier options', ['Bronze', 'Silver', 'Gold', 'Platinum'].every((t) => form.rankOptions.includes(t)),
   form.rankOptions.join('/'));
 check('form: rostered player has a jersey', form.jersey !== null && !form.isRecruit);
-check('form: target is the _RJsEdited sibling', form.targetFileName === 'DYNASTY-EDITCHECK_RJsEdited' && !form.targetExists);
+check('form: target is the _RJ sibling', form.targetFileName === 'DYNASTY-EDITCHECK_RJ' && !form.targetExists);
 
 check('form: rostered player carries his own look record',
   form.look !== null && (form.lookTone === null || (form.lookTone >= 1 && form.lookTone <= 8)),
@@ -677,6 +678,33 @@ check('form: skill points within the field ceiling',
   await rejects('transfer reject: same school both sides', () =>
     applyRosterTransfers(fr2, res.editedPath, { moves: [{ playerRow: rosterA2[1], fromTeamRow: teamA, toTeamRow: teamA }] }, dir));
   check('transfer rejections left the edited file unchanged', sha(res.editedPath) === beforeRej);
+}
+
+// --- 7d. edited-copy naming + vanilla backup ---
+{
+  const { backupVanillaSave, VANILLA_DIR } = await import('../src/main/vanilla-backup.ts');
+  check('naming: plain save gets the suffix', editedPathFor('C:/x/DYNASTY-FOO') === 'C:/x/DYNASTY-FOO_RJ');
+  check('naming: autosave drops the marker', editedPathFor('C:/x/DYNASTY-FOO-AUTOSAVE') === 'C:/x/DYNASTY-FOO_RJ');
+  check('naming: edited copy updates in place', editedPathFor('C:/x/DYNASTY-FOO_RJ') === 'C:/x/DYNASTY-FOO_RJ');
+  check('naming: a legacy copy that fits updates in place',
+    editedPathFor('C:/x/DYNASTY-AUG29-EDITED_RJsEdited') === 'C:/x/DYNASTY-AUG29-EDITED_RJsEdited');
+  check('naming: a legacy copy over the game limit migrates (41 chars blank-screened in-game)',
+    editedPathFor('C:/x/DYNASTY-AUG29-EDITED_R-AUTOSAVE_RJsEdited') === 'C:/x/DYNASTY-AUG29-EDITED_R_RJ');
+  {
+    const long = editedPathFor('C:/x/DYNASTY-BISECT7-SAMEBYTES-LONGNAME-XYZ');
+    check('naming: never longer than the game limit of 32', path.basename(long).length === 32 && long.endsWith('_RJ'), path.basename(long));
+  }
+  check('naming: edited names recognized either way', isEditedSavePath('C:/x/DYNASTY-A_RJ') && isEditedSavePath('C:/x/DYNASTY-A_RJsEdited') && !isEditedSavePath('C:/x/DYNASTY-A-AUTOSAVE'));
+  const vdir = path.join(dir, VANILLA_DIR);
+  // Section 2's first edit already backed the original up automatically, so a
+  // manual pass finds its bytes kept and writes nothing.
+  const kept = existsSync(vdir) ? readdirSync(vdir).filter((f) => f.startsWith('DYNASTY-EDITCHECK.')) : [];
+  const again = backupVanillaSave(work, dir);
+  check('vanilla: one automatic backup with the original bytes, identical bytes skipped on a manual pass',
+    kept.length === 1 && sha(path.join(vdir, kept[0])) === sourceHash && again === null, kept.join(', ') || 'none');
+  check('vanilla: edited copies are never treated as vanilla', backupVanillaSave(editedPath, dir) === null);
+  check('vanilla: the automatic backup from section 2 already exists',
+    existsSync(vdir) && readdirSync(vdir).some((f) => f.startsWith('DYNASTY-EDITCHECK.')));
 }
 
 // --- 8. board membership: remove + add round-trips + rejections ---

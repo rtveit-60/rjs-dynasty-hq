@@ -24,7 +24,7 @@ const yearRank = (p: RosterPlayer): number =>
 /**
  * Manual Transfers: pick two schools, browse both rosters, and move rostered
  * players either way. Moves are staged here and written in one go through
- * the usual _RJsEdited path, mirroring the game's own sign-player steps.
+ * the usual _RJ path, mirroring the game's own sign-player steps.
  */
 export default function ManualTransfersModal({ onClose }: { onClose: () => void }) {
   const snapshot = useHQ((s) => s.snapshot);
@@ -247,7 +247,7 @@ export default function ManualTransfersModal({ onClose }: { onClose: () => void 
             <p>
               Only rostered players move (prospects and portal players stay where they are). Neither school
               can end above the game's {ROSTER_CAP}-man limit. Team Needs update with the next refresh. As with
-              every edit, the write lands in the <strong>…_RJsEdited</strong> copy; the original save is never
+              every edit, the write lands in the <strong>…_RJ</strong> copy; the original save is never
               touched.
             </p>
           </InfoDot>
@@ -278,7 +278,7 @@ export default function ManualTransfersModal({ onClose }: { onClose: () => void 
             {(error || problem) && <div className="ed-error" role="alert">{error ?? problem}</div>}
             <div className="ed-foot">
               <span className="ed-target">
-                Writes the <strong>…_RJsEdited</strong> copy — the original save is never touched.
+                Writes the <strong>…_RJ</strong> copy — the original save is never touched.
               </span>
               <button type="button" className="pf-btn" onClick={onClose}>
                 Cancel

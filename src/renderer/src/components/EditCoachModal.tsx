@@ -40,7 +40,7 @@ function securityStatusFor(pct: number, bands: CoachEditForm['securityBands']): 
  * tabs: Base Values (points, level, prestige score, XP, job security), Coach
  * Profile (identity, role, measurables, look) and Coach Progression
  * (archetype, backstory, Expert Scout, and the talent trees node by node).
- * Writes go to the <save>_RJsEdited sibling like every other edit.
+ * Writes go to the <save>_RJ sibling like every other edit.
  */
 export default function EditCoachModal({ coachRow, onClose }: { coachRow: number; onClose: () => void }) {
   const [form, setForm] = useState<CoachEditForm | null>(null);
@@ -280,7 +280,7 @@ export default function EditCoachModal({ coachRow, onClose }: { coachRow: number
           )}
           <InfoDot title="Editing a coach">
             <p>
-              Edits are written to a separate copy of your dynasty save named <strong>…_RJsEdited</strong>; the
+              Edits are written to a separate copy of your dynasty save named <strong>…_RJ</strong>; the
               original file is never modified and the dashboard follows the edited copy from then on.
             </p>
             <p>

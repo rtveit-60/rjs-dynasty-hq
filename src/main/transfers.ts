@@ -11,7 +11,7 @@
  * The new team's depth chart is left for the game to refill (a fifth of every
  * roster sits in no window; the game rebuilds windows itself). Roster size is
  * capped at the save's own RosterInfo.MaxRosterSize (85). Same write posture
- * as every other edit: whole-payload validation, one write to the _RJsEdited
+ * as every other edit: whole-payload validation, one write to the _RJ
  * sibling through writeEditedSave, verified on a cold reload.
  */
 import type { TransferRequest } from '../shared/types.ts';

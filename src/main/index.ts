@@ -144,7 +144,7 @@ function useSave(savePath: string): void {
 }
 
 /**
- * After an edit lands in its _RJsEdited sibling, the dashboard follows that
+ * After an edit lands in its _RJ sibling, the dashboard follows that
  * file. Same dynasty, same scope — no auto-scope, no pipeline reset (the
  * cached parse already matches the written content, so the refresh is just a
  * re-extract).
@@ -309,7 +309,7 @@ function registerIpc(): void {
     return pipeline.editForm(playerRow, savePath, getSettings().portraitsDir);
   });
 
-  // The app's only write path: lands in <save>_RJsEdited (never the original),
+  // The app's only write path: lands in <save>_RJ (never the original),
   // then the dashboard switches to follow the edited file.
   handle('player:edit', async (_e, changes: unknown) => {
     const c = changes as { playerRow?: unknown };
@@ -331,7 +331,7 @@ function registerIpc(): void {
     return savePath ? pipeline.resourceForm(savePath) : null;
   });
 
-  // Fundraising / recruiter hours — the same _RJsEdited write path as player
+  // Fundraising / recruiter hours — the same _RJ write path as player
   // edits, then the dashboard follows the edited file.
   handle('resource:edit', async (_e, req: unknown) => {
     const r = req as { kind?: unknown; amount?: unknown };
@@ -386,7 +386,7 @@ function registerIpc(): void {
     return result;
   });
 
-  // Stage recruits onto or off the user's target board — the _RJsEdited path.
+  // Stage recruits onto or off the user's target board — the _RJ path.
   handle('board:edit', async (_e, req: unknown) => {
     const r = req as { changes?: unknown };
     const { savePath } = getSettings();
@@ -461,7 +461,7 @@ function registerIpc(): void {
     return pipeline.browseSchool(teamRow, savePath);
   });
 
-  // Depth-chart reorders/swaps — the same _RJsEdited write path.
+  // Depth-chart reorders/swaps — the same _RJ write path.
   handle('depth:edit', async (_e, req: unknown) => {
     const r = req as { changes?: unknown };
     const { savePath } = getSettings();
@@ -541,6 +541,21 @@ function registerIpc(): void {
   handle('diag:logs', () => {
     const p = logPath();
     if (p && existsSync(p)) shell.showItemInFolder(p);
+  });
+
+  // Vanilla save backups: every game-written save, copied under userData (never into the saves folder).
+  handle('vanilla:backup', async () => {
+    const { backupAllVanillaSaves } = await import('./vanilla-backup.ts');
+    const r = backupAllVanillaSaves(defaultSavesDir(), app.getPath('userData'));
+    log.info('vanilla', `backed up ${r.copied.length} save(s), ${r.skipped.length} already kept`);
+    return r;
+  });
+  handle('vanilla:open', async () => {
+    const { VANILLA_DIR } = await import('./vanilla-backup.ts');
+    const dir = join(app.getPath('userData'), VANILLA_DIR);
+    if (!existsSync(dir)) return false;
+    await shell.openPath(dir);
+    return true;
   });
 }
 

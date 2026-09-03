@@ -85,6 +85,8 @@ export interface HQBridge {
   reportError: (p: { message: string; stack?: string; area: string }) => Promise<string>;
   getDiagnostics: () => Promise<string>;
   openLogs: () => Promise<void>;
+  backupVanillaSaves: () => Promise<{ copied: string[]; skipped: string[]; dir: string }>;
+  openVanillaBackups: () => Promise<boolean>;
   getPlaybook: (
     side: 'offense' | 'defense',
     coachRow: number | null,
@@ -140,6 +142,8 @@ const bridge: HQBridge = {
   reportError: (p) => ipcRenderer.invoke('log:renderer', p),
   getDiagnostics: () => ipcRenderer.invoke('diag:report'),
   openLogs: () => ipcRenderer.invoke('diag:logs'),
+  backupVanillaSaves: () => ipcRenderer.invoke('vanilla:backup'),
+  openVanillaBackups: () => ipcRenderer.invoke('vanilla:open'),
   getPlaybook: (side, coachRow, schemeEnum) =>
     ipcRenderer.invoke('playbook:get', side, coachRow, schemeEnum),
   onSnapshot: subscribe<Snapshot>('snapshot'),

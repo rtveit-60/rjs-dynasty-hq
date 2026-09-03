@@ -15,7 +15,7 @@ interface DragFrom {
  * The depth chart, editable by drag and drop: dropping one name on another
  * swaps the two slots (within a window or across windows), so every window
  * keeps its game-defined slot count. Changes stage locally and write to the
- * <save>_RJsEdited sibling on SAVE TO COPY, through the same guarded path as
+ * <save>_RJ sibling on SAVE TO COPY, through the same guarded path as
  * every other edit.
  */
 export default function DepthChartView({ school, browsing = false }: { school: School; browsing?: boolean }) {
@@ -98,7 +98,7 @@ export default function DepthChartView({ school, browsing = false }: { school: S
           ) : (
             <span className="dc-save-note" role="status">
               {changes.length} window{changes.length === 1 ? '' : 's'} changed — writes a{' '}
-              <strong>_RJsEdited</strong> copy; the original save is never touched.
+              <strong>_RJ</strong> copy; the original save is never touched.
             </span>
           )}
           {changes.length > 0 && (
@@ -237,7 +237,7 @@ export default function DepthChartView({ school, browsing = false }: { school: S
       ) : (
       <p className="foot-note">
         Drag one name onto another to swap their spots — within a window or across windows. Windows
-        keep the game's own slot counts; changes stage here and write to a separate _RJsEdited copy
+        keep the game's own slot counts; changes stage here and write to a separate _RJ copy
         of your save.
       </p>
       )}

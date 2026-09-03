@@ -19,7 +19,7 @@ const ACTION_LABELS: { key: keyof TargetActionFlags; label: string; cost: number
 /**
  * One target's weekly plan — hours, the game's five contact/visit actions,
  * scholarship and NIL offers, sway pitch, and scouting — written through the
- * guarded _RJsEdited path. The fields are the game's own weekly action state;
+ * guarded _RJ path. The fields are the game's own weekly action state;
  * its next processed week consumes them.
  */
 export default function TargetActionsModal({
@@ -213,7 +213,7 @@ export default function TargetActionsModal({
             <p>
               Scouting is metered: each pass reveals another slice of the recruit's intel and
               five passes reach full knowledge. You can run several in one week if the hours
-              fit. Changes land in a <strong>…_RJsEdited</strong> copy; the original save is
+              fit. Changes land in a <strong>…_RJ</strong> copy; the original save is
               never touched.
             </p>
           </InfoDot>

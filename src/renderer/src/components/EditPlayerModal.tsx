@@ -131,7 +131,7 @@ const TABS: { key: EditTab; label: string }[] = [
 /**
  * The Edit Player dialog, opened from a profile's EDIT control. Values and
  * limits come from the save schema over player:editform; the write goes to
- * the <save>_RJsEdited sibling file — the user's original save is never
+ * the <save>_RJ sibling file — the user's original save is never
  * touched — and the dashboard switches to follow the edited copy.
  */
 export default function EditPlayerModal({
@@ -378,7 +378,7 @@ export default function EditPlayerModal({
           <InfoDot title="Editing and your save">
             <p>
               Edits are written to a separate copy of your dynasty save named{' '}
-              <strong>…_RJsEdited</strong>, created next to the original. The original file is
+              <strong>…_RJ</strong>, created next to the original. The original file is
               never modified. The dashboard follows the edited copy from then on; load that
               save in the game to play with your changes.
             </p>
