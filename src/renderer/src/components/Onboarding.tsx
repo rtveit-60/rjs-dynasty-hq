@@ -47,7 +47,7 @@ export default function Onboarding() {
 
         <p className="foot-note">
           Your save is never modified. The app parses a copy, and player edits are written
-          to a separate _RJsEdited copy — the original file always keeps its exact bytes.
+          to a separate _RJ copy — the original file always keeps its exact bytes.
         </p>
       </div>
     </div>

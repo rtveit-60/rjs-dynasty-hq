@@ -4,7 +4,7 @@ import { useHQ } from '../store.ts';
 /**
  * Staged board membership changes (shared by the recruiting board and the
  * office). Writes every staged add/remove in one pass through the guarded
- * _RJsEdited path.
+ * _RJ path.
  */
 export default function BoardSaveBar() {
   const pending = useHQ((s) => s.boardPending);
@@ -50,7 +50,7 @@ export default function BoardSaveBar() {
           Board changes staged: {adds > 0 && <strong>{adds} to add</strong>}
           {adds > 0 && removes > 0 && ' · '}
           {removes > 0 && <strong>{removes} to remove</strong>} — writes a{' '}
-          <strong>_RJsEdited</strong> copy; the original save is never touched.
+          <strong>_RJ</strong> copy; the original save is never touched.
         </span>
       )}
       {entries.length > 0 && (

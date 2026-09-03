@@ -231,7 +231,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
             className="filter"
             style={{ marginLeft: 'auto' }}
             onClick={() => setHiring(true)}
-            title="Add weekly recruiting hours (writes a _RJsEdited copy)"
+            title="Add weekly recruiting hours (writes a _RJ copy)"
           >
             Hire Scouts
           </button>

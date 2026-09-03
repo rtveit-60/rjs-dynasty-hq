@@ -385,7 +385,7 @@ export default function RecruitingView() {
           className="filter"
           style={{ marginLeft: 'auto' }}
           onClick={() => setCreating(true)}
-          title="Create a brand-new recruit in this class (writes a _RJsEdited copy)"
+          title="Create a brand-new recruit in this class (writes a _RJ copy)"
         >
           Create Recruit
         </button>
@@ -393,7 +393,7 @@ export default function RecruitingView() {
           <button
             className="filter"
             onClick={() => setTransferring(true)}
-            title="Move rostered players between two schools (writes a _RJsEdited copy)"
+            title="Move rostered players between two schools (writes a _RJ copy)"
           >
             Manual Transfers
           </button>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { GameDirStatus } from '../../../shared/types.ts';
+import { SAVE_NAME_MAX, type GameDirStatus } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
 import InfoDot from './InfoDot.tsx';
 import ScaleControl from './ScaleControl.tsx';
@@ -28,6 +28,13 @@ export default function Setup() {
         <div className="rule" />
       </div>
       <p className="set-value">{settings?.savePath ?? 'No save selected'}</p>
+      {settings?.savePath && settings.savePath.replace(/^.*[\\/]/, '').length > SAVE_NAME_MAX && (
+        <p className="set-warn">
+          This file's name is longer than {SAVE_NAME_MAX} characters, and the game loads such a save to a
+          blank screen. The next edit writes a copy with a name that fits; to play this one, rename it
+          shorter in the saves folder.
+        </p>
+      )}
       <div className="set-actions">
         <button className="btn" onClick={() => void pickSave()}>
           Change save file…
@@ -36,6 +43,24 @@ export default function Setup() {
           Show in folder
         </button>
       </div>
+
+      <div className="section-h">
+        <h3>Vanilla save backups</h3>
+        <InfoDot title="Vanilla save backups">
+          <p>
+            Edits never touch the game's own save; they write a separate <strong>…_RJ</strong> copy.
+            Before the first edited copy of a save is written, the untouched original is also backed up
+            here, under the app's data folder, so it stays recoverable even if the game later overwrites it.
+          </p>
+          <p>
+            Back up now copies every game-written save in the saves folder. A save whose bytes are already
+            kept is skipped, so running it often is free. The edited copies are not vanilla and are left
+            out; they have their own backups.
+          </p>
+        </InfoDot>
+        <div className="rule" />
+      </div>
+      <VanillaBackupRow />
 
       <div className="section-h">
         <h3>School</h3>
@@ -155,6 +180,47 @@ function GameFolderSection() {
             Auto-detect
           </button>
         )}
+      </div>
+    </>
+  );
+}
+
+function VanillaBackupRow() {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const run = async (): Promise<void> => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await window.hq.backupVanillaSaves();
+      setNote(
+        r.copied.length
+          ? `Backed up ${r.copied.length} save${r.copied.length === 1 ? '' : 's'}${
+              r.skipped.length ? `; ${r.skipped.length} already kept` : ''
+            }.`
+          : r.skipped.length
+            ? `Nothing new — all ${r.skipped.length} saves are already backed up.`
+            : 'No game-written saves found in the saves folder.'
+      );
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <p className="set-value">{note ?? 'Originals are backed up automatically before their first edit.'}</p>
+      <div className="set-actions">
+        <button className="btn" disabled={busy} onClick={() => void run()}>
+          {busy ? 'Backing up…' : 'Back up now'}
+        </button>
+        <button
+          className="btn"
+          onClick={() => void window.hq.openVanillaBackups().then((ok) => !ok && setNote('No backups yet.'))}
+        >
+          Open backups folder
+        </button>
       </div>
     </>
   );

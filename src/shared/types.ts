@@ -1,5 +1,12 @@
 export type ThemeMode = 'system' | 'light' | 'dark';
 
+/**
+ * The game blank-screens on any save whose file name is longer than this
+ * (bisected in-game 2026-09-02 with byte-identical files: 32 loads, 33 does
+ * not). Its own names stop at 31.
+ */
+export const SAVE_NAME_MAX = 32;
+
 export type BrandPack = 'real' | 'parody';
 
 export interface Settings {
@@ -787,7 +794,7 @@ export interface PlayerEditForm {
   faces: FaceOption[];
   /** The player's current head: portrait id + whether it is a unique scan. */
   currentFace: { portraitId: number; unique: boolean };
-  /** File name an edit would write ("…_RJsEdited") and whether it already exists. */
+  /** File name an edit would write ("…_RJ") and whether it already exists. */
   targetFileName: string;
   targetExists: boolean;
 }

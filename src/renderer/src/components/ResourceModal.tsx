@@ -9,7 +9,7 @@ const HOUR_STEPS = [10, 50, 100, 1000];
 /**
  * Fundraising (program points, the pool NIL offers spend from) and Hire
  * Additional Recruiters (weekly recruiting hours). Both add to the user
- * school and write the <save>_RJsEdited sibling — the original is never
+ * school and write the <save>_RJ sibling — the original is never
  * touched — through the same guarded path as player edits.
  */
 export default function ResourceModal({
@@ -118,7 +118,7 @@ export default function ResourceModal({
               </p>
             )}
             <p>
-              The change is written to a separate <strong>…_RJsEdited</strong> copy of your
+              The change is written to a separate <strong>…_RJ</strong> copy of your
               save — the original is never modified — and the dashboard follows the copy.
               Load it in the game to play with the change.
             </p>

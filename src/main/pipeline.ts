@@ -223,7 +223,7 @@ export class Pipeline {
   /**
    * The app's only save-write shell. Guarded compare-and-swap: the file on
    * disk must still be the one this parse read (the game may have written
-   * meanwhile) — then the edit lands in the <name>_RJsEdited sibling, never
+   * meanwhile) — then the edit lands in the <name>_RJ sibling, never
    * the original, and the follow-up refresh is extract-only with media
    * rebaselining silently.
    */

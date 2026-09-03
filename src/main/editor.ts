@@ -26,6 +26,7 @@ import type {
   TargetActionFlags,
   TargetActionForm
 } from '../shared/types.ts';
+import { SAVE_NAME_MAX } from '../shared/types.ts';
 import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
 import { ACTION_HOURS } from '../shared/recruiting-actions.ts';
 import { RECRUITING_TUNABLES } from '../shared/recruiting-tunables.ts';
@@ -36,12 +37,38 @@ import { SKILL_GROUP_CAP_MAX, skillGroupsFor } from '../shared/skill-groups.ts';
 import { BY_GROUP, COMMON, GROUP_OF } from './parser/recruit-card.ts';
 import { loadFranchise, mainTable, refFromRecord, tableById, val } from './parser/franchise.ts';
 
-export const EDIT_SUFFIX = '_RJsEdited';
+export const EDIT_SUFFIX = '_RJ';
+/** The suffix edited copies carried before 2026-09-02; still recognized, still updated in place when it fits. */
+const LEGACY_EDIT_SUFFIX = '_RJsEdited';
+const EDIT_SUFFIXES = [EDIT_SUFFIX, LEGACY_EDIT_SUFFIX];
 const BACKUPS_KEPT = 10;
+const AUTOSAVE_MARK = '-AUTOSAVE';
+export { SAVE_NAME_MAX };
 
-/** Where an edit of this save lands. An already-edited save updates in place. */
+/**
+ * Where an edit of this save lands: the source's name, minus a trailing
+ * autosave marker, plus the edit suffix, cut to the game's name limit. An
+ * already-edited save (either suffix) updates in place when its name fits;
+ * one that does not fit migrates to a name that does on its next write.
+ */
 export function editedPathFor(savePath: string): string {
-  return savePath.endsWith(EDIT_SUFFIX) ? savePath : savePath + EDIT_SUFFIX;
+  const dir = savePath.slice(0, savePath.length - basename(savePath).length);
+  const name = basename(savePath);
+  if (isEditedSaveName(name) && name.length <= SAVE_NAME_MAX) return savePath;
+  let base = name;
+  for (const s of EDIT_SUFFIXES) if (base.endsWith(s)) base = base.slice(0, -s.length);
+  if (base.endsWith(AUTOSAVE_MARK)) base = base.slice(0, -AUTOSAVE_MARK.length);
+  base = base.slice(0, SAVE_NAME_MAX - EDIT_SUFFIX.length);
+  return dir + base + EDIT_SUFFIX;
+}
+
+/** True for files the app wrote (either edit suffix), false for the game's own saves. */
+export function isEditedSaveName(name: string): boolean {
+  return EDIT_SUFFIXES.some((s) => name.endsWith(s));
+}
+
+export function isEditedSavePath(savePath: string): boolean {
+  return isEditedSaveName(basename(savePath));
 }
 
 const EDIT_BASE_FIELDS = [
@@ -399,6 +426,16 @@ export async function writeEditedSave(
   verify: (check: any) => Promise<void>
 ): Promise<{ editedPath: string }> {
   const target = editedPathFor(savePath);
+  // The untouched original is kept under the app's data folder before its
+  // first edited copy exists — recoverable even if the game later overwrites it.
+  if (!isEditedSavePath(savePath)) {
+    try {
+      const { backupVanillaSave } = await import('./vanilla-backup.ts');
+      backupVanillaSave(savePath, backupDir);
+    } catch {
+      // a missed vanilla backup never blocks the edit; Setup can take one on demand
+    }
+  }
   const backupPath = backUp(target, join(backupDir, 'backups'));
   const existedBefore = backupPath !== null;
   try {

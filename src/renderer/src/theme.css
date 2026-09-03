@@ -4467,7 +4467,7 @@ table.tbl.tbl-wide {
   color: var(--ink-3);
 }
 
-/* --- Edit Player dialog (writes the _RJsEdited sibling save) ------------- */
+/* --- Edit Player dialog (writes the _RJ sibling save) ------------- */
 
 /* Manual transfers: two roster columns, a school picker over each. */
 .mt-panel.ed-panel {
