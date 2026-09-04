@@ -123,6 +123,7 @@ interface TuningSide {
   psaTableId: number;
   psaAbilityRow: Map<number, number>; // PSA row -> SignatureAbility row
   names: Map<number, string>; // SignatureAbility row -> Name
+  descs: Map<number, string>; // SignatureAbility row -> Description (the game's blurb)
   guid: string;
 }
 interface LeagueSide {
@@ -172,10 +173,13 @@ for (const chunk of toc.chunks) {
         // With the schema injected the lib decodes strings directly; the
         // pool-recovery path stays as a fallback for numeric offsets.
         const names = new Map<number, string>();
+        const descs = new Map<number, string>();
         (sig.records as any[]).forEach((r, row) => {
           if (r.isEmpty) return;
           const v = fieldVal(r, 'Name');
           if (typeof v === 'string' && v.trim() && !/^\d+$/.test(v)) names.set(row, v.trim());
+          const d = fieldVal(r, 'Description');
+          if (typeof d === 'string' && d.trim() && !/^\d+$/.test(d)) descs.set(row, d.trim());
         });
         if (!names.size) for (const [k, v] of recoverStrings(image, sig, 'Name')) names.set(k, v);
         if (names.size >= 40) {
@@ -191,7 +195,7 @@ for (const chunk of toc.chunks) {
             psaAbilityRow.set(row, raw & 0x1ffff);
           });
           if (psaAbilityRow.size >= 100) {
-            tuning = { psaTableId: psa.header?.tableId, psaAbilityRow, names, guid: chunk.guid };
+            tuning = { psaTableId: psa.header?.tableId, psaAbilityRow, names, descs, guid: chunk.guid };
           }
         }
       } catch {
@@ -244,13 +248,18 @@ for (const m of members) {
 }
 
 const byArchetype = new Map<string, (string | null)[]>();
+/** name -> the game's description, for every ability any archetype slot names. */
+const descByName = new Map<string, string>();
 for (const row of league.rows) {
   const arch = enumById.get(row.archetypeValue);
   if (!arch) continue;
   const slots = row.slotRefs.map((ref) => {
     if (!ref || ref >>> 17 !== tuning!.psaTableId) return null;
     const sigRow = tuning!.psaAbilityRow.get(ref & 0x1ffff);
-    return sigRow !== undefined ? (tuning!.names.get(sigRow) ?? null) : null;
+    const name = sigRow !== undefined ? (tuning!.names.get(sigRow) ?? null) : null;
+    const desc = sigRow !== undefined ? tuning!.descs.get(sigRow) : undefined;
+    if (name && desc && !descByName.has(name)) descByName.set(name, desc);
+    return name;
   });
   byArchetype.set(arch, slots);
 }
@@ -260,7 +269,7 @@ if (byArchetype.size < 40) {
 const result = { byArchetype, abilityCount: tuning.names.size, storeGuid: `${league.guid} + ${tuning.guid}` };
 
 console.log(
-  `mapped ${result.byArchetype.size} archetypes (store ${result.storeGuid}, ${result.abilityCount} named abilities)`
+  `mapped ${result.byArchetype.size} archetypes (store ${result.storeGuid}, ${result.abilityCount} named abilities, ${descByName.size} described)`
 );
 if (printOnly) {
   for (const [arch, slots] of [...result.byArchetype.entries()].sort()) {
@@ -269,6 +278,10 @@ if (printOnly) {
   process.exit(0);
 }
 
+const descBody = [...descByName.entries()]
+  .sort(([a], [b]) => a.localeCompare(b))
+  .map(([name, desc]) => `  ${JSON.stringify(name)}: ${JSON.stringify(desc)},`)
+  .join('\n');
 const body = [...result.byArchetype.entries()]
   .sort(([a], [b]) => a.localeCompare(b))
   .map(([arch, slots]) => `  ${arch}: ${JSON.stringify(slots)},`)
@@ -290,6 +303,11 @@ fs.writeFileSync(
  */
 export const PHYSICAL_ABILITY_SLOTS: Record<string, (string | null)[]> = {
 ${body}
+};
+
+/** The game's own one-line description per physical ability (SignatureAbility.Description). */
+export const PHYSICAL_ABILITY_DESCS: Record<string, string> = {
+${descBody}
 };
 `,
   'utf8'

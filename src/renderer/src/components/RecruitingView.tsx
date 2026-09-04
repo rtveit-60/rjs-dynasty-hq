@@ -77,6 +77,75 @@ const STAR_FILTERS = [
   { label: '3★+', min: 3 }
 ];
 
+/**
+ * Multi-select pipeline filter: a filter pill that opens a checklist of every
+ * pipeline in the class (your program's tiered pipelines first, tier shown).
+ */
+function PipelinePicker({
+  options,
+  selected,
+  onChange
+}: {
+  options: { pipeline: string; count: number; tier: string | null }[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.pipe-picker')) setOpen(false);
+    };
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', key);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', key);
+    };
+  }, [open]);
+  const toggle = (p: string) => {
+    const next = new Set(selected);
+    if (next.has(p)) next.delete(p);
+    else next.add(p);
+    onChange(next);
+  };
+  return (
+    <span className="pipe-picker">
+      <button
+        type="button"
+        className={`filter ${selected.size ? 'active' : ''}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        title="Filter by pipeline (pick several)"
+      >
+        Pipelines{selected.size ? ` · ${selected.size}` : ''} ▾
+      </button>
+      {open && (
+        <div className="pipe-menu" role="listbox" aria-multiselectable="true" aria-label="Pipelines">
+          <div className="pipe-menu-head">
+            <span>{options.length} pipelines</span>
+            <button type="button" className="pf-btn" disabled={!selected.size} onClick={() => onChange(new Set())}>
+              Clear
+            </button>
+          </div>
+          <div className="pipe-menu-list">
+            {options.map((o) => (
+              <label key={o.pipeline} className={`pipe-opt ${selected.has(o.pipeline) ? 'on' : ''}`} role="option" aria-selected={selected.has(o.pipeline)}>
+                <input type="checkbox" checked={selected.has(o.pipeline)} onChange={() => toggle(o.pipeline)} />
+                <span className="pipe-name">{spaceOut(o.pipeline)}</span>
+                {o.tier && <span className="pipe-tier">{o.tier}</span>}
+                <span className="pipe-count">{o.count}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 export default function RecruitingView() {
   const snapshot = useHQ((s) => s.snapshot);
   const school = snapshot?.school;
@@ -86,6 +155,7 @@ export default function RecruitingView() {
   const [board, setBoard] = useState<Board>('hs');
   const [q, setQ] = useState('');
   const [pos, setPos] = useState('ALL');
+  const [pipes, setPipes] = useState<Set<string>>(() => new Set());
   const [minStars, setMinStars] = useState(0);
   const [edgeOnly, setEdgeOnly] = useState(false);
   const [openOnly, setOpenOnly] = useState(false);
@@ -134,12 +204,23 @@ export default function RecruitingView() {
     return `${schemeLabel(scheme)} looks for ${top2.join(', ')} at ${recruitPos(r.position)} — not ${archetypeLabel(r.archetype)}.`;
   };
 
+  // Every pipeline the class comes from; your program's tiered pipelines lead, with the tier.
+  const pipelineOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of pool) if (r.pipeline) counts.set(r.pipeline, (counts.get(r.pipeline) ?? 0) + 1);
+    const own = new Map((rc?.pipelines ?? []).map((p) => [p.pipeline, p]));
+    return [...counts.entries()]
+      .map(([pipeline, count]) => ({ pipeline, count, tier: own.get(pipeline)?.level ?? null }))
+      .sort((a, b) => Number(!!b.tier) - Number(!!a.tier) || a.pipeline.localeCompare(b.pipeline));
+  }, [pool, rc]);
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const allowed = recruitPositionsFor(pos);
     return pool.filter((r) => {
       if (minStars && r.stars < minStars) return false;
       if (allowed.length && !allowed.includes(r.position)) return false;
+      if (pipes.size && !pipes.has(r.pipeline)) return false;
       if (edgeOnly && r.edgeCall !== 'up') return false;
       if (openOnly && r.committedTo) return false;
       if (boardOnly && !r.onBoard) return false;
@@ -150,7 +231,7 @@ export default function RecruitingView() {
       }
       return true;
     });
-  }, [pool, q, pos, minStars, edgeOnly, openOnly, boardOnly]);
+  }, [pool, q, pos, pipes, minStars, edgeOnly, openOnly, boardOnly]);
 
   const sorted = useMemo(() => {
     const dir = asc ? 1 : -1;
@@ -209,7 +290,7 @@ export default function RecruitingView() {
   useEffect(() => {
     setPage(0);
     setOpenRow(null);
-  }, [board, q, pos, minStars, edgeOnly, openOnly, boardOnly, sortKey, asc]);
+  }, [board, q, pos, pipes, minStars, edgeOnly, openOnly, boardOnly, sortKey, asc]);
 
   if (!rc) {
     return (
@@ -361,6 +442,7 @@ export default function RecruitingView() {
             </option>
           ))}
         </select>
+        <PipelinePicker options={pipelineOptions} selected={pipes} onChange={setPipes} />
         <span className="filter-sep" />
         {STAR_FILTERS.map((f) => (
           <button

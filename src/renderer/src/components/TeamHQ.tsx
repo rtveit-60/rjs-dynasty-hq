@@ -10,6 +10,7 @@ import TeamLogo from './TeamLogo.tsx';
 import PlaybookView from './PlaybookView.tsx';
 import ProgramDashboard from './ProgramDashboard.tsx';
 import RosterTable from './RosterTable.tsx';
+import ScheduleView from './ScheduleView.tsx';
 import TargetsView from './TargetsView.tsx';
 import TeamHistoryView from './TeamHistoryView.tsx';
 import TendenciesView from './TendenciesView.tsx';
@@ -17,6 +18,7 @@ import TendenciesView from './TendenciesView.tsx';
 type Tab =
   | 'program'
   | 'matchup'
+  | 'schedule'
   | 'roster'
   | 'depth'
   | 'targets'
@@ -30,6 +32,7 @@ type Tab =
 const TABS: { key: Tab; label: string; short: string }[] = [
   { key: 'program', label: 'PROGRAM DASHBOARD', short: 'DASHBOARD' },
   { key: 'matchup', label: "THIS WEEK'S MATCHUP", short: 'MATCHUP' },
+  { key: 'schedule', label: 'SCHEDULE', short: 'SCHEDULE' },
   { key: 'roster', label: 'ROSTER', short: 'ROSTER' },
   { key: 'depth', label: 'DEPTH CHART', short: 'DEPTH' },
   { key: 'targets', label: 'RECRUITING OFFICE', short: 'RECRUITING' },
@@ -200,6 +203,7 @@ export default function TeamHQ() {
 
       {tab === 'program' && <ProgramDashboard school={school!} season={snapshot?.season ?? null} />}
       {tab === 'matchup' && <MatchupView school={school!} />}
+      {tab === 'schedule' && <ScheduleView school={school!} />}
       {tab === 'roster' && (
         <RosterTable roster={roster} proPotential={school!.recruiting?.proPotential ?? []} />
       )}

@@ -3,6 +3,7 @@ import type { EditMentalSlot, FaceOption, PlayerEditChanges, PlayerEditForm } fr
 import InfoDot from './InfoDot.tsx';
 import { useDialog } from '../lib/dialog.ts';
 import { heightFt } from '../lib/format.ts';
+import { abilityDesc } from '../../../shared/ability-descs.ts';
 import LookSection, { effectiveLook } from './LookSection.tsx';
 
 /**
@@ -606,6 +607,11 @@ export default function EditPlayerModal({
                           </option>
                         ))}
                       </select>
+                      <span className="ed-blurb">
+                        {m.ability === 'None'
+                          ? ''
+                          : (form.mentalOptions.find((o) => o.id === m.ability)?.desc ?? 'No description in the game data.')}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -617,7 +623,10 @@ export default function EditPlayerModal({
                       {form.physical.map((p) => (
                         <div key={p.slot} className="ed-row">
                           <span className="ed-slot">{p.slot}</span>
-                          <span className="ed-phys-name">{p.name}</span>
+                          <span className="ed-phys-name">
+                            {p.name}
+                            <span className="ed-blurb">{abilityDesc(p.name) ?? 'No description in the game data.'}</span>
+                          </span>
                           <select
                             value={physical[p.slot] ?? p.rank}
                             onChange={(e) =>

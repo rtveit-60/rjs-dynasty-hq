@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { abilityDesc } from '../../../shared/ability-descs.ts';
 import type { RecruitCard } from '../../../shared/types.ts';
 import { PITCHES } from '../../../shared/pitches.ts';
 import { RATINGS } from '../../../shared/ratings.ts';
@@ -85,7 +86,7 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                     <div>
                       <div className="rc-sub">Mental</div>
                       {card.mental.map((a) => (
-                        <span key={a.name} className="chip">
+                        <span key={a.name} className="chip" title={abilityDesc(a.name) ?? undefined}>
                           {spaceOut(a.name)}
                           {a.rank && (
                             <>
@@ -101,7 +102,7 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                     <div>
                       <div className="rc-sub">Physical</div>
                       {card.physical.map((a, i) => (
-                        <span key={i} className="chip">
+                        <span key={i} className="chip" title={abilityDesc(a.name) ?? undefined}>
                           {a.name || `Slot ${i + 1}`}&nbsp;
                           <b style={{ color: medalColor(a.rank) }}>{a.rank}</b>
                         </span>

@@ -480,7 +480,11 @@ async function extractGames(
       'IsOvertimeGame',
       'BroadcastNetwork',
       'Attendance',
-      'BowlGame'
+      'BowlGame',
+      'GameDateMonth',
+      'GameDateDay',
+      'DayOfWeek',
+      'TimeOfDay'
     ]);
     // Bowl slots repeat the same few BowlGame rows; resolve each name once.
     const bowlNames = new Map<string, string | null>();
@@ -514,7 +518,12 @@ async function extractGames(
         overtime: val(rec, 'IsOvertimeGame') === true,
         network: String(val(rec, 'BroadcastNetwork') ?? ''),
         attendance: Number(val(rec, 'Attendance') ?? 0),
-        bowlName
+        bowlName,
+        month: Number(val(rec, 'GameDateMonth') ?? 0) || null,
+        day: Number(val(rec, 'GameDateDay') ?? 0) || null,
+        dayOfWeek: String(val(rec, 'DayOfWeek') ?? '') || null,
+        // Minutes from midnight (720 = noon, 1170 = 7:30 PM).
+        timeOfDay: Number.isFinite(Number(val(rec, 'TimeOfDay'))) ? Number(val(rec, 'TimeOfDay')) : null
       });
     }
   } catch {
