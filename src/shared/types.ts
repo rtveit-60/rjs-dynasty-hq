@@ -1573,3 +1573,26 @@ export interface DynastySettingsChanges {
   /** field id -> new value. */
   values: Record<string, number | boolean | string>;
 }
+
+// --- Facilities editor -------------------------------------------------------
+
+export interface FacilitiesForm {
+  school: string;
+  /** Team.FacilitiesLevel, 0–4. */
+  level: number;
+  levelMax: number;
+  /** The save's reserved renewal fee for the current level. */
+  renewReserved: number;
+  /** The five levels as the game defines them (names, costs, slot caps, grade bands). */
+  levels: { level: number; name: string; desc: string; cost: number; renewCost: number; slotCap: number; bestGrade: string; worstGrade: string }[];
+  /** Equipment the school owns right now (read-only here). */
+  equipment: { name: string; effect: string; value: number; cost: number; weeksOwned: number }[];
+  /** Current Athletic Facilities letter (member id), for context. */
+  grade: string;
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+export interface FacilitiesChanges {
+  level: number;
+}

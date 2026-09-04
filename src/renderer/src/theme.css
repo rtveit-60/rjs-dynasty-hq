@@ -7503,3 +7503,112 @@ table.tbl.tbl-wide {
   font: 500 11px var(--font-ui);
   color: var(--ink-3);
 }
+
+/* --- Facilities editor ------------------------------------------------------ */
+
+.fc-panel {
+  width: min(600px, 94vw);
+}
+
+.fc-levels {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.fc-level {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  grid-template-areas: 'tier name now' 'tier meta now';
+  align-items: center;
+  column-gap: 10px;
+  padding: 6px 10px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.fc-level:hover {
+  background: color-mix(in srgb, var(--team, var(--hot)) 8%, var(--surface));
+}
+
+.fc-level.on {
+  border-left-color: var(--hot);
+  border-color: color-mix(in srgb, var(--hot) 45%, var(--line));
+}
+
+.fc-level.blocked {
+  opacity: 0.55;
+}
+
+.fc-tier {
+  grid-area: tier;
+  font: 400 20px var(--font-score);
+  color: var(--ink-3);
+  text-align: center;
+}
+
+.fc-level.on .fc-tier {
+  color: var(--hot);
+}
+
+.fc-name {
+  grid-area: name;
+  font: 700 13px var(--font-ui);
+}
+
+.fc-meta {
+  grid-area: meta;
+  font: 500 11px var(--font-ui);
+  color: var(--ink-3);
+}
+
+.fc-now {
+  grid-area: now;
+  font: 700 9px var(--font-cond);
+  letter-spacing: 0.1em;
+  color: var(--good);
+}
+
+.fc-desc {
+  margin: 8px 0 4px;
+  font: 400 12px/1.4 var(--font-ui);
+  color: var(--ink-2);
+}
+
+.fc-equip {
+  display: grid;
+  gap: 4px;
+}
+
+.fc-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  padding: 5px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font: 500 12px var(--font-ui);
+}
+
+.fc-item-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.fc-item-eff {
+  color: var(--ink-2);
+}
+
+.fc-item-meta {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.fc-none {
+  font: 500 12px var(--font-ui);
+  color: var(--ink-3);
+}
