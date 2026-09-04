@@ -32,6 +32,8 @@ import type {
   InstantCommitRequest,
   DynastySettingsForm,
   DynastySettingsChanges,
+  FacilitiesForm,
+  FacilitiesChanges,
   TargetActionForm,
   ThemeMode,
   WatchStatus
@@ -87,6 +89,8 @@ export interface HQBridge {
   instantCommit: (req: InstantCommitRequest) => Promise<PlayerEditResult>;
   getSettingsForm: () => Promise<DynastySettingsForm | null>;
   editSettings: (req: DynastySettingsChanges) => Promise<PlayerEditResult>;
+  getFacilitiesForm: () => Promise<FacilitiesForm | null>;
+  editFacilities: (req: FacilitiesChanges) => Promise<PlayerEditResult>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
   gameStatus: () => Promise<GameDirStatus>;
@@ -149,6 +153,8 @@ const bridge: HQBridge = {
   instantCommit: (req) => ipcRenderer.invoke('recruit:commit', req),
   getSettingsForm: () => ipcRenderer.invoke('settings:form'),
   editSettings: (req) => ipcRenderer.invoke('settings:edit', req),
+  getFacilitiesForm: () => ipcRenderer.invoke('facilities:form'),
+  editFacilities: (req) => ipcRenderer.invoke('facilities:edit', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   gameStatus: () => ipcRenderer.invoke('game:status'),

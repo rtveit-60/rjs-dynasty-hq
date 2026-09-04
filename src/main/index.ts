@@ -475,6 +475,23 @@ function registerIpc(): void {
     return result;
   });
 
+  // Facility level — the _RJ path.
+  handle('facilities:form', () => {
+    const { savePath } = getSettings();
+    return savePath ? pipeline.facilitiesForm(savePath) : null;
+  });
+  handle('facilities:edit', async (_e, req: unknown) => {
+    const r = req as { level?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath || !Number.isInteger(r?.level)) return { ok: false, message: 'Nothing to save.' };
+    const result = await pipeline.editFacilities({ level: r.level as number }, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   handle('coach:editform', (_e, coachRow: number) => {
     const { savePath } = getSettings();
     if (!Number.isInteger(coachRow) || coachRow < 0 || !savePath) return null;

@@ -16,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { applyGradesEdit, buildGradesForm } from '../src/main/grades-editor.ts';
 import { applyDynastySettings, buildDynastySettingsForm } from '../src/main/dynasty-settings.ts';
+import { applyFacilitiesEdit, buildFacilitiesForm } from '../src/main/facilities-editor.ts';
 import {
   applyBoardEdit,
   applyCoachFire,
@@ -1293,6 +1294,48 @@ check('form: skill points within the field ceiling',
   await rejects('settings reject: unknown id', async () =>
     applyDynastySettings(frS2, editedPath, { teamRow: teamRowS, values: { 'league:0:CoachStartingLevel': 5 } }, dir));
   check('source still untouched after settings edits', sha(work) === sourceHash);
+}
+
+
+// --- 12. facilities level ------------------------------------------------------
+{
+  const teamRowOf = async (f: any): Promise<number> => {
+    const t = mainTable(f, 'Team');
+    await t.readRecords(['ProgramPointBudget']);
+    for (let i = 0; i < t.records.length; i++) {
+      const r = t.records[i];
+      if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) return i;
+    }
+    return -1;
+  };
+  const frF = await loadFranchise(editedPath);
+  const teamRow = await teamRowOf(frF);
+  const fform = await buildFacilitiesForm(frF, teamRow, editedPath);
+  check('facilities form: five game-named levels, slot caps 1..5, reserve matches the level',
+    fform.levels.length === 5 && fform.levels[0].name === 'Basic Facility' && fform.levels[4].name === 'National Powerhouse' &&
+    fform.levels.every((l, i) => l.level === i && l.slotCap === i + 1) &&
+    fform.renewReserved === fform.levels[fform.level].renewCost,
+    `${fform.school}: level ${fform.level} (${fform.levels[fform.level].name}) reserve ${fform.renewReserved} grade ${fform.grade} equipment ${fform.equipment.map((e) => e.name).join(', ') || 'none'}`);
+  check('facilities form: owned equipment resolves to catalog names',
+    fform.equipment.every((e) => e.name !== 'Unknown equipment'), fform.equipment.map((e) => `${e.name}/${e.effect}`).join(' '));
+  // Pick a level that can hold the owned equipment and differs from the current one.
+  const owned = fform.equipment.length;
+  const want = fform.levels.find((l) => l.level !== fform.level && l.slotCap >= owned)!.level;
+  await applyFacilitiesEdit(frF, editedPath, { teamRow, level: want }, dir);
+  const fform2 = await buildFacilitiesForm(await loadFranchise(editedPath), teamRow, editedPath);
+  check('facilities: level lands and the renewal reserve follows it',
+    fform2.level === want && fform2.renewReserved === fform.levels[want].renewCost,
+    `${fform.level} -> ${fform2.level}, reserve ${fform.renewReserved} -> ${fform2.renewReserved}`);
+  check('facilities: equipment rows untouched', fform2.equipment.length === owned, `${owned}`);
+  const frF2 = await loadFranchise(editedPath);
+  await rejects('facilities reject: same level', async () => applyFacilitiesEdit(frF2, editedPath, { teamRow, level: want }, dir));
+  await rejects('facilities reject: level past the schema', async () => applyFacilitiesEdit(frF2, editedPath, { teamRow, level: 5 }, dir));
+  await rejects('facilities reject: negative level', async () => applyFacilitiesEdit(frF2, editedPath, { teamRow, level: -1 }, dir));
+  if (owned >= 2) {
+    await rejects('facilities reject: below the slot cap of owned equipment', async () =>
+      applyFacilitiesEdit(frF2, editedPath, { teamRow, level: 0 }, dir));
+  }
+  check('source still untouched after facilities edit', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

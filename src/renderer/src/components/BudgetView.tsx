@@ -4,6 +4,7 @@ import { fmt, stars } from '../lib/format.ts';
 import InfoDot from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import ResourceModal from './ResourceModal.tsx';
+import FacilitiesModal from './FacilitiesModal.tsx';
 
 type School = NonNullable<Snapshot['school']>;
 
@@ -14,6 +15,7 @@ function GradeBadge({ grade }: { grade: string | null }) {
 
 export default function BudgetView({ school, browsing = false }: { school: School; browsing?: boolean }) {
   const [fundraising, setFundraising] = useState(false);
+  const [facilities, setFacilities] = useState(false);
   const b = school.budget;
   if (!b) return <div className="empty">No budget data found in this save.</div>;
   const spent = b.spending.reduce((sum, s) => sum + s.points, 0);
@@ -25,13 +27,17 @@ export default function BudgetView({ school, browsing = false }: { school: Schoo
   return (
     <>
       {!browsing && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+          <button type="button" className="btn" onClick={() => setFacilities(true)}>
+            FACILITIES
+          </button>
           <button type="button" className="btn" onClick={() => setFundraising(true)}>
             FUNDRAISING
           </button>
         </div>
       )}
       {fundraising && !browsing && <ResourceModal kind="nil" onClose={() => setFundraising(false)} />}
+      {facilities && !browsing && <FacilitiesModal onClose={() => setFacilities(false)} />}
       <div className="statgrid" style={{ marginTop: 10 }}>
         <div className="stat">
           <div className="lbl">

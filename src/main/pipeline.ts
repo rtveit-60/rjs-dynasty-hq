@@ -5,6 +5,8 @@ import { basename, join } from 'node:path';
 import type {
   DynastySettingsChanges,
   DynastySettingsForm,
+  FacilitiesChanges,
+  FacilitiesForm,
   GradesEditChanges,
   GradesEditForm,
   InstantCommitRequest,
@@ -49,6 +51,7 @@ import { applyCoachEdit, buildCoachEditForm } from './coach-editor.ts';
 import { applyInstantCommit } from './editor.ts';
 import { applyGradesEdit, buildGradesForm } from './grades-editor.ts';
 import { applyDynastySettings, buildDynastySettingsForm } from './dynasty-settings.ts';
+import { applyFacilitiesEdit, buildFacilitiesForm } from './facilities-editor.ts';
 import { log, reportError } from './log.ts';
 import { applyRosterTransfers } from './transfers.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
@@ -462,6 +465,26 @@ export class Pipeline {
         app.getPath('userData')
       );
       return { editedPath, message: `${changed} setting${changed === 1 ? '' : 's'} saved to ${basename(editedPath)}.` };
+    });
+  }
+
+  /** The school's facility level, catalog and owned equipment, for the NIL & Budget dialog. */
+  async facilitiesForm(savePath: string): Promise<FacilitiesForm | null> {
+    if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
+    try {
+      return await buildFacilitiesForm(this.franchise, this.lastSchoolRow, savePath);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Facility level, via the guarded shell. */
+  async editFacilities(req: FacilitiesChanges, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath } = await applyFacilitiesEdit(this.franchise, savePath, { teamRow, level: req.level }, app.getPath('userData'));
+      return { editedPath, message: `Facility level saved to ${basename(editedPath)}.` };
     });
   }
 
