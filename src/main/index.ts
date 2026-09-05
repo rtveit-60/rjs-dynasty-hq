@@ -30,6 +30,12 @@ let media: MediaEvent[] = [];
 let updateReady: string | null = null;
 /** File name of a freshly selected save whose first parse should re-scope to the user's program. */
 let pendingAutoDefault: string | null = null;
+/**
+ * User-controlled team rows from the previous parse of the current save. A
+ * change between parses means the user's coach took a new job (or a second
+ * user joined/left), so the scope follows without re-selecting the save.
+ */
+let lastUserRows: number[] | null = null;
 
 function startUpdateCheck(): void {
   checkForUpdates(getSettings().autoUpdate, (version) => {
@@ -52,12 +58,29 @@ const pipeline = new Pipeline({
     win?.webContents.send('media', events);
   },
   onParsed: (s) => {
-    if (!pendingAutoDefault || s.fileName !== pendingAutoDefault) return;
-    pendingAutoDefault = null;
+    const userRows = userTeamRows(s);
+    const prev = lastUserRows;
+    lastUserRows = userRows;
+    const freshSelection = !!pendingAutoDefault && s.fileName === pendingAutoDefault;
+    if (freshSelection) pendingAutoDefault = null;
+    // Fresh save selection, or the user's program moved since the last parse
+    // (offseason job change). Same set → leave whatever the user chose to view.
+    if (!freshSelection && (!prev || sameRows(prev, userRows))) return;
     // Deferred so the rescope starts after the refresh that fired this fully settles.
     setImmediate(() => applyUserSchoolDefault(s));
   }
 });
+
+function userTeamRows(s: Snapshot): number[] {
+  return s.teams
+    .filter((t) => t.isUserTeam)
+    .map((t) => t.row)
+    .sort((a, b) => a - b);
+}
+
+function sameRows(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((row, i) => row === b[i]);
+}
 
 /** Settings changed outside a renderer request (auto-scope) — push, don't wait to be asked. */
 function pushSettings(): void {
@@ -72,7 +95,7 @@ function pushSettings(): void {
  * scope already is one of them. None (spectator save) changes nothing.
  */
 function applyUserSchoolDefault(s: Snapshot): void {
-  const userRows = s.teams.filter((t) => t.isUserTeam).map((t) => t.row);
+  const userRows = userTeamRows(s);
   const { savePath, schoolTeamRow } = getSettings();
   if (!savePath || userRows.length === 0) return;
   if (userRows.length === 1) {
@@ -138,6 +161,7 @@ function useSave(savePath: string): void {
   // Selecting a different file arms the auto-scope; re-picking the current one must not
   // yank the user off a school they chose to browse. Watcher refreshes never arm it.
   if (getSettings().savePath !== savePath) pendingAutoDefault = basename(savePath);
+  lastUserRows = null;
   updateSettings({ savePath });
   pipeline.reset();
   startWatching(savePath);
