@@ -8,7 +8,7 @@
  *   3. editing an already-edited save updates it in place, after a backup
  *   4. bad payloads are rejected before anything is applied
  *
- * Usage: node scripts/edit-check.ts [save]
+ * Usage: node --max-old-space-size=16384 scripts/edit-check.ts [save]
  */
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
@@ -21,6 +21,9 @@ import {
   applyBoardEdit,
   applyCoachFire,
   applyInstantCommit,
+  applyCommitSwap,
+  applyMassCommit,
+  buildMassCommitForm,
   applyCreateRecruit,
   applyTargetActions,
   buildCreateForm,
@@ -1336,6 +1339,334 @@ check('form: skill points within the field ceiling',
       applyFacilitiesEdit(frF2, editedPath, { teamRow, level: 0 }, dir));
   }
   check('source still untouched after facilities edit', sha(work) === sourceHash);
+}
+
+
+// --- 13. swap commitment: CPU → CPU (board provisioned), CPU → user (offer New), rejections ---
+{
+  const teamRowOf = async (f: any): Promise<number> => {
+    const t = mainTable(f, 'Team');
+    await t.readRecords(['ProgramPointBudget']);
+    for (let i = 0; i < t.records.length; i++) {
+      const r = t.records[i];
+      if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) return i;
+    }
+    return -1;
+  };
+  /** The recruit's school list as [{tid, inf}]. */
+  const listOf = async (f: any, recruitRow: number): Promise<{ tid: number; inf: number }[]> => {
+    const rT = mainTable(f, 'Recruit');
+    await rT.readRecords(['RecruitStage', 'TopSchoolsList', 'CommitScore', 'TotalScholarshipOffers']);
+    const lr = refFromRecord(rT.records[recruitRow], 'TopSchoolsList');
+    if (!lr || (lr.tableId === 0 && lr.row === 0)) return [];
+    const aT = f.getTableById(lr.tableId);
+    if (!aT.recordsRead) await aT.readRecords();
+    const arr = aT.records[lr.row];
+    const out: { tid: number; inf: number }[] = [];
+    for (let i = 0; i < (arr.arraySize ?? 0); i++) {
+      const er = refFromRecord(arr, `ProspectTargetSchool${i}`);
+      if (!er || (er.tableId === 0 && er.row === 0)) continue;
+      const eT = f.getTableById(er.tableId);
+      if (!eT.recordsRead) await eT.readRecords();
+      const e = eT.records[er.row];
+      out.push({ tid: Number(val(e, 'TeamId')), inf: Number(val(e, 'TeamInfluence')) });
+    }
+    return out;
+  };
+  /** A team's board as recruitRow -> ScholarshipStatus. */
+  const boardOf = async (f: any, teamRow: number): Promise<Map<number, string>> => {
+    const t = mainTable(f, 'Team');
+    await t.readRecords(['RecruitingBoard']);
+    const bRef = refFromRecord(t.records[teamRow], 'RecruitingBoard')!;
+    const bT = f.getTableById(bRef.tableId);
+    if (!bT.recordsRead) await bT.readRecords();
+    const lRef = refFromRecord(bT.records[bRef.row], 'Recruits')!;
+    const lT = f.getTableById(lRef.tableId);
+    if (!lT.recordsRead) await lT.readRecords();
+    const arr = lT.records[lRef.row];
+    const rT = mainTable(f, 'Recruit');
+    const m = new Map<number, string>();
+    for (let i = 0; i < (arr.arraySize ?? 0); i++) {
+      const tr = refFromRecord(arr, `RecruitTarget${i}`);
+      if (!tr || (tr.tableId === 0 && tr.row === 0)) continue;
+      const tT = f.getTableById(tr.tableId);
+      if (!tT.recordsRead) await tT.readRecords();
+      const rRef = refFromRecord(tT.records[tr.row], 'Recruit');
+      if (rRef && rRef.tableId === rT.header.tableId) m.set(rRef.row, String(val(tT.records[tr.row], 'ScholarshipStatus')));
+    }
+    return m;
+  };
+
+  const frW = await loadFranchise(editedPath);
+  const userRow = await teamRowOf(frW);
+  const teamT = mainTable(frW, 'Team');
+  await teamT.readRecords(['TeamIndex', 'LongName']);
+  const idxOfRow = (row: number) => Number(val(teamT.records[row], 'TeamIndex'));
+  const rowOfIdx = (idx: number) => (teamT.records as any[]).findIndex((r) => !r.isEmpty && Number(val(r, 'TeamIndex')) === idx);
+  const userIdx = idxOfRow(userRow);
+  const rT = mainTable(frW, 'Recruit');
+  await rT.readRecords(['RecruitStage', 'TopSchoolsList', 'CommitScore', 'TotalScholarshipOffers']);
+
+  // A recruit committed to a CPU school, with a list.
+  let swapRow = -1;
+  let uncommittedRow = -1;
+  let list0: { tid: number; inf: number }[] = [];
+  for (let i = 0; i < rT.records.length; i++) {
+    const r = rT.records[i];
+    if (r.isEmpty) continue;
+    const stage = String(val(r, 'RecruitStage'));
+    if (uncommittedRow < 0 && !stage.includes('Committed') && stage !== 'Signed') uncommittedRow = i;
+    if (swapRow >= 0 || !stage.includes('Committed')) continue;
+    const l = await listOf(frW, i);
+    if (l.length && l[0].tid !== userIdx && rowOfIdx(l[0].tid) >= 0) {
+      swapRow = i;
+      list0 = l;
+    }
+  }
+  check('swap: a recruit committed to a CPU school exists', swapRow >= 0, `row ${swapRow}`);
+  const fromIdx = list0[0].tid;
+  const fromRow = rowOfIdx(fromIdx);
+  const stage0 = String(val(rT.records[swapRow], 'RecruitStage'));
+  const cs0 = Number(val(rT.records[swapRow], 'CommitScore'));
+  const offers0 = Number(val(rT.records[swapRow], 'TotalScholarshipOffers'));
+  const fromBoard0 = await boardOf(frW, fromRow);
+  check('swap: the committed school carries the recruit on its board with an offer',
+    fromBoard0.get(swapRow) === 'Offered', `${val(teamT.records[fromRow], 'LongName')}: ${fromBoard0.get(swapRow)}`);
+
+  // Destination A: a CPU school not on the recruit's list and not the user.
+  const onList = new Set(list0.map((e) => e.tid));
+  let destRow = -1;
+  for (let i = 0; i < teamT.records.length; i++) {
+    const r = teamT.records[i];
+    if (r.isEmpty || i === userRow || i === fromRow) continue;
+    const idx = Number(val(r, 'TeamIndex'));
+    if (onList.has(idx)) continue;
+    const b = await boardOf(frW, i).catch(() => null);
+    if (!b || b.has(swapRow)) continue;
+    destRow = i;
+    break;
+  }
+  check('swap: a CPU destination off the list and off the board exists', destRow >= 0, `row ${destRow}`);
+  const destIdx = idxOfRow(destRow);
+  const destBoardBefore = (await boardOf(frW, destRow)).size;
+
+  await applyCommitSwap(frW, editedPath, { recruitRow: swapRow, toTeamRow: destRow, userTeamRow: userRow }, dir);
+  const frW2 = await loadFranchise(editedPath);
+  const l2 = await listOf(frW2, swapRow);
+  const rT2 = mainTable(frW2, 'Recruit');
+  const w2 = rT2.records[swapRow];
+  const wantInf = Math.max(cs0, list0[0].inf);
+  check('swap CPU→CPU: destination leads the list at max(CommitScore, old lead), old school shifted down, length kept',
+    l2[0]?.tid === destIdx && l2[0]?.inf === wantInf && l2.some((e) => e.tid === fromIdx) && l2.length === list0.length &&
+    l2.slice(1).map((e) => e.tid).join(',') === list0.filter((e) => e.tid !== destIdx).sort((a, b) => b.inf - a.inf).slice(0, list0.length - 1).map((e) => e.tid).join(','),
+    `before ${list0.map((e) => `${e.tid}@${e.inf}`).join(' ')} | after ${l2.map((e) => `${e.tid}@${e.inf}`).join(' ')}`);
+  check('swap CPU→CPU: stage kept, TotalScholarshipOffers +1',
+    String(val(w2, 'RecruitStage')) === stage0 && Number(val(w2, 'TotalScholarshipOffers')) === offers0 + 1,
+    `${stage0} -> ${val(w2, 'RecruitStage')}; offers ${offers0} -> ${val(w2, 'TotalScholarshipOffers')}`);
+  const destBoard2 = await boardOf(frW2, destRow);
+  check('swap CPU→CPU: destination board grew by one and holds the recruit with Offered',
+    destBoard2.size === destBoardBefore + 1 && destBoard2.get(swapRow) === 'Offered',
+    `${destBoardBefore} -> ${destBoard2.size}; ${destBoard2.get(swapRow)}`);
+  const fromBoard2 = await boardOf(frW2, fromRow);
+  check('swap CPU→CPU: the old school\'s row is untouched', fromBoard2.get(swapRow) === 'Offered', `${fromBoard2.get(swapRow)}`);
+  const tform = await buildTargetForm(frW2, destRow, swapRow, editedPath).catch((e: Error) => e);
+  check('swap CPU→CPU: the provisioned target reads back as a fresh target (form builds)', !(tform instanceof Error),
+    tform instanceof Error ? tform.message : `${(tform as any).name ?? ''} hours ${(tform as any).hours ?? '?'}`);
+
+  // Destination B: the user's program.
+  const userBoardBefore = await boardOf(frW2, userRow);
+  const wasOnUserBoard = userBoardBefore.has(swapRow);
+  const userStatusBefore = userBoardBefore.get(swapRow) ?? 'None';
+  const offers1 = Number(val(w2, 'TotalScholarshipOffers'));
+  await applyCommitSwap(frW2, editedPath, { recruitRow: swapRow, toTeamRow: userRow, userTeamRow: userRow }, dir);
+  const frW3 = await loadFranchise(editedPath);
+  const l3 = await listOf(frW3, swapRow);
+  const w3 = mainTable(frW3, 'Recruit').records[swapRow];
+  const userBoard3 = await boardOf(frW3, userRow);
+  const needsOffer = userStatusBefore !== 'Offered' && userStatusBefore !== 'New';
+  check('swap CPU→user: user leads the list, previous destination shifted down',
+    l3[0]?.tid === userIdx && l3.some((e) => e.tid === destIdx) && l3.length === l2.length,
+    `after ${l3.map((e) => `${e.tid}@${e.inf}`).join(' ')}`);
+  check('swap CPU→user: recruit on the user board, offer New when none was out, offers ticked accordingly',
+    userBoard3.has(swapRow) &&
+    (needsOffer ? userBoard3.get(swapRow) === 'New' : userBoard3.get(swapRow) === userStatusBefore) &&
+    Number(val(w3, 'TotalScholarshipOffers')) === offers1 + (needsOffer ? 1 : 0),
+    `on board before: ${wasOnUserBoard} (${userStatusBefore}); after: ${userBoard3.get(swapRow)}; offers ${offers1} -> ${val(w3, 'TotalScholarshipOffers')}`);
+
+  // Rejections (validation throws before anything is touched, so the loaded copy is reused).
+  const frW4 = frW3;
+  await rejects('swap reject: already committed to that school', async () =>
+    applyCommitSwap(frW4, editedPath, { recruitRow: swapRow, toTeamRow: userRow, userTeamRow: userRow }, dir));
+  if (uncommittedRow >= 0) {
+    await rejects('swap reject: recruit not committed anywhere', async () =>
+      applyCommitSwap(frW4, editedPath, { recruitRow: uncommittedRow, toTeamRow: destRow, userTeamRow: userRow }, dir));
+  }
+  await rejects('swap reject: bad school row', async () =>
+    applyCommitSwap(frW4, editedPath, { recruitRow: swapRow, toTeamRow: 9999, userTeamRow: userRow }, dir));
+  await rejects('swap reject: bad recruit row', async () =>
+    applyCommitSwap(frW4, editedPath, { recruitRow: -1, toTeamRow: destRow, userTeamRow: userRow }, dir));
+  check('source still untouched after commitment swaps', sha(work) === sourceHash);
+}
+
+
+// --- 14. mass commit: plan truth, one-write board commit, flips, rejections ---
+{
+  const teamRowOf = async (f: any): Promise<number> => {
+    const t = mainTable(f, 'Team');
+    await t.readRecords(['ProgramPointBudget']);
+    for (let i = 0; i < t.records.length; i++) {
+      const r = t.records[i];
+      if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) return i;
+    }
+    return -1;
+  };
+  const listOf = async (f: any, recruitRow: number): Promise<{ tid: number; inf: number }[]> => {
+    const rT = mainTable(f, 'Recruit');
+    await rT.readRecords(['RecruitStage', 'TopSchoolsList', 'CommitScore', 'TotalScholarshipOffers']);
+    const lr = refFromRecord(rT.records[recruitRow], 'TopSchoolsList');
+    if (!lr || (lr.tableId === 0 && lr.row === 0)) return [];
+    const aT = f.getTableById(lr.tableId);
+    if (!aT.recordsRead) await aT.readRecords();
+    const arr = aT.records[lr.row];
+    const out: { tid: number; inf: number }[] = [];
+    for (let i = 0; i < (arr.arraySize ?? 0); i++) {
+      const er = refFromRecord(arr, `ProspectTargetSchool${i}`);
+      if (!er || (er.tableId === 0 && er.row === 0)) continue;
+      const eT = f.getTableById(er.tableId);
+      if (!eT.recordsRead) await eT.readRecords();
+      const e = eT.records[er.row];
+      out.push({ tid: Number(val(e, 'TeamId')), inf: Number(val(e, 'TeamInfluence')) });
+    }
+    return out;
+  };
+  /** The user's board as recruitRow -> {status, stage, cs, offers, lead}. */
+  const boardState = async (f: any, teamRow: number) => {
+    const t = mainTable(f, 'Team');
+    await t.readRecords(['RecruitingBoard', 'TeamIndex']);
+    const bRef = refFromRecord(t.records[teamRow], 'RecruitingBoard')!;
+    const bT = f.getTableById(bRef.tableId);
+    if (!bT.recordsRead) await bT.readRecords();
+    const lRef = refFromRecord(bT.records[bRef.row], 'Recruits')!;
+    const lT = f.getTableById(lRef.tableId);
+    if (!lT.recordsRead) await lT.readRecords();
+    const arr = lT.records[lRef.row];
+    const rT = mainTable(f, 'Recruit');
+    await rT.readRecords(['RecruitStage', 'TopSchoolsList', 'CommitScore', 'TotalScholarshipOffers']);
+    const m = new Map<number, { status: string; stage: string; cs: number; offers: number; lead: { tid: number; inf: number } | null }>();
+    for (let i = 0; i < (arr.arraySize ?? 0); i++) {
+      const tr = refFromRecord(arr, `RecruitTarget${i}`);
+      if (!tr || (tr.tableId === 0 && tr.row === 0)) continue;
+      const tT = f.getTableById(tr.tableId);
+      if (!tT.recordsRead) await tT.readRecords();
+      const rRef = refFromRecord(tT.records[tr.row], 'Recruit');
+      if (!rRef || rRef.tableId !== rT.header.tableId) continue;
+      const r = rT.records[rRef.row];
+      const l = await listOf(f, rRef.row);
+      m.set(rRef.row, {
+        status: String(val(tT.records[tr.row], 'ScholarshipStatus')),
+        stage: String(val(r, 'RecruitStage')),
+        cs: Number(val(r, 'CommitScore')),
+        offers: Number(val(r, 'TotalScholarshipOffers')),
+        lead: l[0] ?? null
+      });
+    }
+    return m;
+  };
+
+  const frM = await loadFranchise(editedPath);
+  const userRow = await teamRowOf(frM);
+  const teamT = mainTable(frM, 'Team');
+  await teamT.readRecords(['TeamIndex']);
+  const userIdx = Number(val(teamT.records[userRow], 'TeamIndex'));
+  const before = await boardState(frM, userRow);
+  const mform = await buildMassCommitForm(frM, userRow, editedPath);
+  const committedNow = (s: { stage: string }) => s.stage === 'SoftCommitted' || s.stage === 'HardCommitted';
+  const eligible = [...before.entries()].filter(([, s]) => !committedNow(s) && s.stage !== 'Signed' && s.lead !== null);
+  const elsewhere = [...before.entries()].filter(([, s]) => committedNow(s) && s.lead?.tid !== userIdx);
+  const hereAlready = [...before.entries()].filter(([, s]) => committedNow(s) && s.lead?.tid === userIdx);
+  check('mass form: board count matches the board, plans partition the board',
+    mform.boardCount === before.size &&
+    mform.boardOnly.commits + mform.boardOnly.skipped.length === before.size &&
+    mform.withFlips.commits + mform.withFlips.skipped.length === before.size,
+    `board ${mform.boardCount}; boardOnly ${mform.boardOnly.commits}+${mform.boardOnly.skipped.length}; withFlips ${mform.withFlips.commits}+${mform.withFlips.skipped.length}`);
+  check('mass form: elsewhere targets skipped without the flip, taken with it; already-yours skipped both ways',
+    mform.boardOnly.skipped.filter((s) => s.reason === 'elsewhere').length === elsewhere.length &&
+    mform.withFlips.flips === elsewhere.length &&
+    mform.boardOnly.skipped.filter((s) => s.reason === 'alreadyHere').length === hereAlready.length &&
+    mform.withFlips.skipped.filter((s) => s.reason === 'alreadyHere').length === hereAlready.length,
+    `elsewhere ${elsewhere.length}, already yours ${hereAlready.length}, eligible ${eligible.length}`);
+  const capRoom = mform.scholarshipsCap - mform.scholarshipsUsed;
+  const needOffer = eligible.filter(([, s]) => s.status !== 'Offered' && s.status !== 'New').length;
+  check('mass form: scholarships spent = offers needed, bounded by the cap',
+    mform.boardOnly.newOffers === Math.min(needOffer, capRoom) &&
+    mform.boardOnly.skipped.filter((s) => s.reason === 'cap').length === Math.max(0, needOffer - capRoom),
+    `need ${needOffer}, room ${capRoom}, spend ${mform.boardOnly.newOffers}`);
+
+  if (mform.windowOpen && mform.boardOnly.commits > 0) {
+    const res = await applyMassCommit(frM, editedPath, { teamRow: userRow, flipOthers: false }, dir);
+    check('mass commit: result matches the plan',
+      res.committed === mform.boardOnly.commits && res.flipped === 0 && res.newOffers === mform.boardOnly.newOffers,
+      `${res.committed} committed, ${res.newOffers} offers, ${res.skipped.length} skipped`);
+    const frM2 = await loadFranchise(editedPath);
+    const after = await boardState(frM2, userRow);
+    // Board order decides who gets the last scholarships; the rest are left out at the cap.
+    const cappedRows = new Set<number>();
+    let room = capRoom;
+    for (const [row, s0] of eligible) {
+      if (s0.status === 'Offered' || s0.status === 'New') continue;
+      if (room > 0) room--;
+      else cappedRows.add(row);
+    }
+    let good = 0;
+    const bad: string[] = [];
+    for (const [row, s0] of eligible) {
+      const s1 = after.get(row)!;
+      const hadOffer = s0.status === 'Offered' || s0.status === 'New';
+      if (cappedRows.has(row)) {
+        if (s1.stage !== s0.stage || s1.status !== s0.status) bad.push(`row ${row}: capped target changed`);
+        continue;
+      }
+      const ok =
+        s1.stage === 'HardCommitted' && s1.lead?.tid === userIdx && s1.lead?.inf === s0.cs &&
+        (hadOffer ? s1.status === s0.status && s1.offers === s0.offers : s1.status === 'New' && s1.offers === s0.offers + 1);
+      if (ok) good++;
+      else bad.push(`row ${row}: ${s0.stage}/${s0.status}/${s0.offers} -> ${s1.stage}/${s1.status}/${s1.offers} lead ${s1.lead?.tid}@${s1.lead?.inf} (cs ${s0.cs})`);
+    }
+    check('mass commit: every planned target reads back HardCommitted, user first at CommitScore, offer bookkeeping right',
+      bad.length === 0 && good === res.committed, bad.length ? bad.slice(0, 3).join(' | ') : `${good} verified`);
+    const untouched = [...elsewhere, ...hereAlready].every(([row, s0]) => {
+      const s1 = after.get(row)!;
+      return s1.stage === s0.stage && s1.status === s0.status && s1.lead?.tid === s0.lead?.tid && s1.lead?.inf === s0.lead?.inf;
+    });
+    check('mass commit: committed-elsewhere and already-yours targets untouched', untouched, `${elsewhere.length + hereAlready.length} rows`);
+    const mform2 = await buildMassCommitForm(frM2, userRow, editedPath);
+    check('mass form after: nothing left without the flip, scholarships used grew by the spend',
+      mform2.boardOnly.commits === 0 && mform2.scholarshipsUsed === mform.scholarshipsUsed + mform.boardOnly.newOffers,
+      `left ${mform2.boardOnly.commits}; used ${mform.scholarshipsUsed} -> ${mform2.scholarshipsUsed}`);
+    await rejects('mass commit reject: nothing left to commit', async () =>
+      applyMassCommit(frM2, editedPath, { teamRow: userRow, flipOthers: false }, dir));
+
+    if (mform2.withFlips.commits > 0) {
+      const res2 = await applyMassCommit(frM2, editedPath, { teamRow: userRow, flipOthers: true }, dir);
+      const frM3 = await loadFranchise(editedPath);
+      const after3 = await boardState(frM3, userRow);
+      const flippedOk = elsewhere.every(([row, s0]) => {
+        const s1 = after3.get(row)!;
+        const s2 = after.get(row)!;
+        const hadOffer = s2.status === 'Offered' || s2.status === 'New';
+        return s1.stage === 'HardCommitted' && s1.lead?.tid === userIdx &&
+          s1.lead?.inf === Math.max(s0.cs, s0.lead?.inf ?? 0) &&
+          (hadOffer ? s1.offers === s2.offers : s1.status === 'New' && s1.offers === s2.offers + 1);
+      });
+      check('mass commit with flips: elsewhere targets now HardCommitted to the user at max(CommitScore, old lead)',
+        flippedOk && res2.flipped === elsewhere.length && res2.committed === mform2.withFlips.commits,
+        `${res2.committed} committed, ${res2.flipped} flipped, ${res2.newOffers} offers`);
+    }
+  } else {
+    await rejects('mass commit reject: window closed or nothing to commit in this save', async () =>
+      applyMassCommit(frM, editedPath, { teamRow: userRow, flipOthers: false }, dir));
+  }
+  check('source still untouched after mass commit', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

@@ -24,7 +24,9 @@ import type {
   ResourceForm,
   TargetActionChanges,
   TargetActionFlags,
-  TargetActionForm
+  TargetActionForm,
+  MassCommitForm,
+  MassCommitPlanSummary
 } from '../shared/types.ts';
 import { SAVE_NAME_MAX } from '../shared/types.ts';
 import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
@@ -1337,6 +1339,78 @@ export function firstEmptyRow(table: any): number {
   return -1;
 }
 
+type NilExpectation = { exp: number; orig: number; bonus: number };
+
+/** NIL expectations per recruit, learned from any other school's target row. */
+async function learnNilExpectations(franchise: any, h: BoardHandles): Promise<Map<number, NilExpectation>> {
+  const aiTable = (franchise.tables as any[])
+    .filter((t) => t?.name === 'RecruitTarget')
+    .sort((a, b) => (b.header?.recordCapacity ?? 0) - (a.header?.recordCapacity ?? 0))[0];
+  const nilByRecruit = new Map<number, NilExpectation>();
+  if (aiTable) {
+    if (!aiTable.recordsRead) await aiTable.readRecords();
+    for (const rec of aiTable.records as any[]) {
+      if (rec.isEmpty) continue;
+      const rRef = refFromRecord(rec, 'Recruit');
+      if (!rRef || rRef.tableId !== h.recruitTableId || nilByRecruit.has(rRef.row)) continue;
+      nilByRecruit.set(rRef.row, {
+        exp: Number(val(rec, 'NILExpectation') ?? 0),
+        orig: Number(val(rec, 'OriginalNILExpectation') ?? 0),
+        bonus: Number(val(rec, 'CurrentScholarshipBonus') ?? FRESH_SCHOLARSHIP_BONUS)
+      });
+    }
+  }
+  return nilByRecruit;
+}
+
+/**
+ * Put a recruit on a board as a fresh, untouched target: a pitch row + a
+ * target row initialized to the game's own fresh-target pattern, appended to
+ * the board array. Caller checks capacity and free-row supply first. Returns
+ * the new target row record.
+ */
+function provisionTarget(h: BoardHandles, recruitRow: number, nil?: NilExpectation): any {
+  const targetTableId = h.targetTable.header?.tableId ?? -1;
+  const pitchTableId = h.pitchTable.header?.tableId ?? -1;
+  const pitchRow = firstEmptyRow(h.pitchTable);
+  const targetRow = firstEmptyRow(h.targetTable);
+  if (pitchRow < 0 || targetRow < 0) throw new Error('The save has no free target slots left.');
+  const pitch = h.pitchTable.records[pitchRow];
+  // A fresh pitch row is three zero refs — the dominant shape on every board.
+  pitch.ActiveRecruitingPitch0 = ZERO_REF;
+
+  const t = h.targetTable.records[targetRow];
+  const n = nil ?? { exp: 0, orig: 0, bonus: FRESH_SCHOLARSHIP_BONUS };
+  t.Recruit = refString(h.recruitTableId, recruitRow);
+  t.ActivePitches = refString(pitchTableId, pitchRow);
+  t.ScheduledVisit = ZERO_REF;
+  if (t._fields?.RecruitingFeedback) t.RecruitingFeedback = ZERO_REF;
+  if (t._fields?.ImmediateRecruitingFeedback) t.ImmediateRecruitingFeedback = ZERO_REF;
+  t.ProspectHoursSpentCurrent = 0;
+  t.ProspectInfluenceDelta = FRESH_INFLUENCE_DELTA;
+  t.ProspectInfluenceTotal = 0;
+  t.ProspectInfluenceTotalLastWeek = 0;
+  t.UnlockedIntelBitfield = 0;
+  t.VisitRecruitsSchool = false;
+  t.IsFavorite = false;
+  t.SendTheHouse = false;
+  t.ContactFriendsAndFamily = false;
+  t.ContactHighSchoolCoaches = false;
+  t.SearchSocialMedia = false;
+  t.CommittedWeekNumber = 0;
+  t.NILExpectation = n.exp;
+  t.OriginalNILExpectation = n.orig;
+  t.CurrentNILOffer = 0;
+  t.CurrentScholarshipBonus = n.bonus;
+  t.ScholarshipStatus = 'None';
+  t.SwayPitch = 'Invalid';
+
+  const slot = h.arr.arraySize ?? 0;
+  h.arr[`RecruitTarget${slot}`] = refString(targetTableId, targetRow); // grows
+  h.slotOf.set(recruitRow, slot);
+  return t;
+}
+
 /**
  * Add existing class recruits to the user's target board, or remove targets
  * from it, and write the _RJsEdited sibling. Initialization for new targets
@@ -1353,24 +1427,7 @@ export async function applyBoardEdit(
   if (!req.changes.length) throw new Error('No board changes to save.');
   const h = await boardHandles(franchise, req.teamRow);
 
-  // NIL expectations for a recruit, learned from any other school's target row.
-  const aiTable = (franchise.tables as any[])
-    .filter((t) => t?.name === 'RecruitTarget')
-    .sort((a, b) => (b.header?.recordCapacity ?? 0) - (a.header?.recordCapacity ?? 0))[0];
-  const nilByRecruit = new Map<number, { exp: number; orig: number; bonus: number }>();
-  if (aiTable) {
-    if (!aiTable.recordsRead) await aiTable.readRecords();
-    for (const rec of aiTable.records as any[]) {
-      if (rec.isEmpty) continue;
-      const rRef = refFromRecord(rec, 'Recruit');
-      if (!rRef || rRef.tableId !== h.recruitTableId || nilByRecruit.has(rRef.row)) continue;
-      nilByRecruit.set(rRef.row, {
-        exp: Number(val(rec, 'NILExpectation') ?? 0),
-        orig: Number(val(rec, 'OriginalNILExpectation') ?? 0),
-        bonus: Number(val(rec, 'CurrentScholarshipBonus') ?? FRESH_SCHOLARSHIP_BONUS)
-      });
-    }
-  }
+  const nilByRecruit = await learnNilExpectations(franchise, h);
 
   // ---- validate everything before touching anything ----
   const seen = new Set<number>();
@@ -1432,43 +1489,8 @@ export async function applyBoardEdit(
   }
 
   // ---- adds: allocate pitch + target rows, then append to the array ----
-  const targetTableId = h.targetTable.header?.tableId ?? -1;
-  const pitchTableId = h.pitchTable.header?.tableId ?? -1;
   for (const recruitRow of adds) {
-    const pitchRow = firstEmptyRow(h.pitchTable);
-    const targetRow = firstEmptyRow(h.targetTable);
-    if (pitchRow < 0 || targetRow < 0) throw new Error('The save has no free target slots left.');
-    const pitch = h.pitchTable.records[pitchRow];
-    // A fresh pitch row is three zero refs — the dominant shape on every board.
-    pitch.ActiveRecruitingPitch0 = ZERO_REF;
-
-    const t = h.targetTable.records[targetRow];
-    const nil = nilByRecruit.get(recruitRow) ?? { exp: 0, orig: 0, bonus: FRESH_SCHOLARSHIP_BONUS };
-    t.Recruit = refString(h.recruitTableId, recruitRow);
-    t.ActivePitches = refString(pitchTableId, pitchRow);
-    t.ScheduledVisit = ZERO_REF;
-    if (t._fields?.RecruitingFeedback) t.RecruitingFeedback = ZERO_REF;
-    if (t._fields?.ImmediateRecruitingFeedback) t.ImmediateRecruitingFeedback = ZERO_REF;
-    t.ProspectHoursSpentCurrent = 0;
-    t.ProspectInfluenceDelta = FRESH_INFLUENCE_DELTA;
-    t.ProspectInfluenceTotal = 0;
-    t.ProspectInfluenceTotalLastWeek = 0;
-    t.UnlockedIntelBitfield = 0;
-    t.VisitRecruitsSchool = false;
-    t.IsFavorite = false;
-    t.SendTheHouse = false;
-    t.ContactFriendsAndFamily = false;
-    t.ContactHighSchoolCoaches = false;
-    t.SearchSocialMedia = false;
-    t.CommittedWeekNumber = 0;
-    t.NILExpectation = nil.exp;
-    t.OriginalNILExpectation = nil.orig;
-    t.CurrentNILOffer = 0;
-    t.CurrentScholarshipBonus = nil.bonus;
-    t.ScholarshipStatus = 'None';
-    t.SwayPitch = 'Invalid';
-
-    h.arr[`RecruitTarget${h.arr.arraySize}`] = refString(targetTableId, targetRow); // grows
+    provisionTarget(h, recruitRow, nilByRecruit.get(recruitRow));
   }
   // The library's own crash-prevention pass over the empty chains we touched.
   try {
@@ -2001,6 +2023,385 @@ export async function applyInstantCommit(
       throw new Error('The written save did not read back with the scholarship.');
     }
   });
+}
+
+// --- Mass commit (Recruiting Class Options) ---------------------------------
+
+/** Why a board target is left out of a mass commit. */
+export type MassCommitSkip = 'alreadyHere' | 'elsewhere' | 'noList' | 'signed' | 'cap';
+
+interface MassCommitCandidate {
+  recruitRow: number;
+  slot: number;
+  name: string;
+  stage: string;
+  /** Leader of the recruit's school list (TeamIndex), or null with no list. */
+  leadTid: number | null;
+  leadInf: number;
+  commitScore: number;
+  hasOffer: boolean;
+  target: any;
+  rRec: any;
+  rows: any[];
+  before: { tid: number; inf: number }[];
+}
+
+/**
+ * The user's board, classified for a mass commit. `flipOthers` decides whether
+ * targets committed to other schools are candidates (they take the swap
+ * footprint: list re-led at max(CommitScore, old lead), stage HardCommitted).
+ */
+async function massCommitCandidates(
+  franchise: any,
+  teamRow: number
+): Promise<{ h: BoardHandles; userIdx: number; all: MassCommitCandidate[]; windowOpen: boolean; offersOut: number }> {
+  const h = await boardHandles(franchise, teamRow);
+  await h.recruitTable.readRecords(['Player', 'RecruitStage', 'CommitScore', 'TotalScholarshipOffers', 'TopSchoolsList']);
+  const teamTable = mainTable(franchise, 'Team');
+  await teamTable.readRecords(['TeamIndex']);
+  const userIdx = Number(val(teamTable.records?.[teamRow], 'TeamIndex'));
+  if (!Number.isFinite(userIdx)) throw new Error('No school at that row in the save.');
+  const players = mainTable(franchise, 'Player');
+  await players.readRecords(['FirstName', 'LastName']);
+
+  const season = mainTable(franchise, 'SeasonInfo');
+  await season.readRecords(['IsScholarshipPeriodActive', 'IsCommittmentPeriodActive']);
+  const si = season.records?.[0];
+  const windowOpen = val(si, 'IsScholarshipPeriodActive') === true && val(si, 'IsCommittmentPeriodActive') === true;
+  const offersOut = await scholarshipsOut(franchise, h);
+
+  const all: MassCommitCandidate[] = [];
+  for (let slot = 0; slot < (h.arr.arraySize ?? 0); slot++) {
+    const tr = refFromRecord(h.arr, `RecruitTarget${slot}`);
+    if (!tr || (tr.tableId === 0 && tr.row === 0)) continue;
+    const target = h.targetTable.records[tr.row];
+    if (!target || target.isEmpty) continue;
+    const rRef = refFromRecord(target, 'Recruit');
+    if (!rRef || rRef.tableId !== h.recruitTableId) continue;
+    const rRec = h.recruitTable.records[rRef.row];
+    if (!rRec || rRec.isEmpty) continue;
+    const pRef = refFromRecord(rRec, 'Player');
+    const p = pRef ? players.records?.[pRef.row] : null;
+    const name = p ? `${String(val(p, 'FirstName') ?? '')} ${String(val(p, 'LastName') ?? '')}`.trim() : `recruit ${rRef.row}`;
+    const rows = await topSchoolRows(franchise, rRec);
+    const before = rows.map((e) => ({ tid: Number(val(e, 'TeamId')), inf: Number(val(e, 'TeamInfluence')) }));
+    const rawStatus = String(val(target, 'ScholarshipStatus') ?? 'None');
+    const status = SCHOLARSHIP_ALIAS[rawStatus] ?? rawStatus;
+    all.push({
+      recruitRow: rRef.row,
+      slot,
+      name,
+      stage: String(val(rRec, 'RecruitStage') ?? ''),
+      leadTid: before.length ? before[0].tid : null,
+      leadInf: before.length ? before[0].inf : 0,
+      commitScore: Number(val(rRec, 'CommitScore') ?? 0),
+      hasOffer: status === 'Offered' || status === 'New',
+      target,
+      rRec,
+      rows,
+      before
+    });
+  }
+  return { h, userIdx, all, windowOpen, offersOut };
+}
+
+/** Classify one candidate: null = commits; otherwise the reason it is skipped (cap handled by the caller). */
+function massCommitSkipReason(c: MassCommitCandidate, userIdx: number, flipOthers: boolean): Exclude<MassCommitSkip, 'cap'> | null {
+  if (c.stage === 'Signed') return 'signed';
+  if (!c.before.length) return 'noList';
+  const committed = c.stage === 'SoftCommitted' || c.stage === 'HardCommitted';
+  if (committed && c.leadTid === userIdx) return 'alreadyHere';
+  if (committed && !flipOthers) return 'elsewhere';
+  return null;
+}
+
+/** The plan a mass commit would carry out, in board order, under the scholarship cap. */
+function massCommitPlan(
+  all: MassCommitCandidate[],
+  userIdx: number,
+  flipOthers: boolean,
+  offersOut: number
+): { commits: MassCommitCandidate[]; skipped: { name: string; reason: MassCommitSkip }[]; newOffers: number } {
+  const cap = RECRUITING_TUNABLES.maxTeamScholarshipOffers;
+  let out = offersOut;
+  const commits: MassCommitCandidate[] = [];
+  const skipped: { name: string; reason: MassCommitSkip }[] = [];
+  for (const c of all) {
+    const why = massCommitSkipReason(c, userIdx, flipOthers);
+    if (why) {
+      skipped.push({ name: c.name, reason: why });
+      continue;
+    }
+    if (!c.hasOffer) {
+      if (out >= cap) {
+        skipped.push({ name: c.name, reason: 'cap' });
+        continue;
+      }
+      out++;
+    }
+    commits.push(c);
+  }
+  return { commits, skipped, newOffers: out - offersOut };
+}
+
+export async function buildMassCommitForm(franchise: any, teamRow: number, savePath: string): Promise<MassCommitForm> {
+  const { userIdx, all, windowOpen, offersOut } = await massCommitCandidates(franchise, teamRow);
+  const teamRec = await teamRecord(franchise, teamRow);
+  const summarize = (flipOthers: boolean): MassCommitPlanSummary => {
+    const plan = massCommitPlan(all, userIdx, flipOthers, offersOut);
+    return {
+      commits: plan.commits.length,
+      flips: plan.commits.filter((c) => c.stage === 'SoftCommitted' || c.stage === 'HardCommitted').length,
+      newOffers: plan.newOffers,
+      skipped: plan.skipped
+    };
+  };
+  return {
+    school: String(val(teamRec, 'LongName') ?? ''),
+    savePath,
+    editedPath: editedPathFor(savePath),
+    boardCount: all.length,
+    windowOpen,
+    scholarshipsUsed: offersOut,
+    scholarshipsCap: RECRUITING_TUNABLES.maxTeamScholarshipOffers,
+    boardOnly: summarize(false),
+    withFlips: summarize(true)
+  };
+}
+
+/**
+ * Commit every eligible target on the user's board in one write. Each target
+ * takes the game's own instant-commit footprint (RESEARCH "Instant commit"):
+ * HardCommitted, user school first at CommitScore, others shifted down, a New
+ * scholarship when none is out (+1 TotalScholarshipOffers). With `flipOthers`
+ * targets committed to other schools come too, on the swap footprint
+ * (RESEARCH "Swap commitment": user first at max(CommitScore, old lead)).
+ * Board order; a target needing a scholarship past the cap is skipped, the
+ * rest still commit. Gated on the game's commitment window like a single
+ * instant commit.
+ */
+export async function applyMassCommit(
+  franchise: any,
+  savePath: string,
+  req: { teamRow: number; flipOthers: boolean },
+  backupDir: string
+): Promise<{ editedPath: string; committed: number; flipped: number; newOffers: number; skipped: { name: string; reason: MassCommitSkip }[] }> {
+  const { userIdx, all, windowOpen, offersOut } = await massCommitCandidates(franchise, req.teamRow);
+  if (!windowOpen) {
+    throw new Error("The game's commitment window is closed right now — recruits can commit once it reopens.");
+  }
+  const plan = massCommitPlan(all, userIdx, !!req.flipOthers, offersOut);
+  if (!plan.commits.length) throw new Error('Nothing on the board is left to commit.');
+
+  // ---- apply ----
+  const expected: { recruitRow: number; after: { tid: number; inf: number }[]; offers: number; wantNew: boolean }[] = [];
+  let flipped = 0;
+  for (const c of plan.commits) {
+    const rRec = c.rRec;
+    const wasElsewhere = c.stage === 'SoftCommitted' || c.stage === 'HardCommitted';
+    if (wasElsewhere) flipped++;
+    const leadInf = wasElsewhere ? Math.max(c.commitScore, c.leadInf) : c.commitScore;
+    const others = c.before
+      .filter((b) => b.tid !== userIdx)
+      .sort((a, b) => b.inf - a.inf)
+      .slice(0, Math.max(0, c.before.length - 1));
+    const after = [{ tid: userIdx, inf: leadInf }, ...others];
+    after.forEach((v, i) => {
+      c.rows[i].TeamId = v.tid;
+      c.rows[i].TeamInfluence = v.inf;
+    });
+    rRec.RecruitStage = 'HardCommitted';
+    let offers = Number(val(rRec, 'TotalScholarshipOffers') ?? 0);
+    if (!c.hasOffer) {
+      c.target.ScholarshipStatus = 'New';
+      offers = Math.min(offers + 1, fieldMax(rRec, 'TotalScholarshipOffers', 255));
+      rRec.TotalScholarshipOffers = offers;
+    }
+    expected.push({ recruitRow: c.recruitRow, after, offers, wantNew: !c.hasOffer });
+  }
+
+  const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const rT = mainTable(check, 'Recruit');
+    await rT.readRecords(['RecruitStage', 'TotalScholarshipOffers', 'TopSchoolsList']);
+    const h2 = await boardHandles(check, req.teamRow);
+    for (const e of expected) {
+      const w = rT.records?.[e.recruitRow];
+      if (!w || String(val(w, 'RecruitStage')) !== 'HardCommitted') {
+        throw new Error('A committed recruit did not read back as committed.');
+      }
+      if (Number(val(w, 'TotalScholarshipOffers')) !== e.offers) {
+        throw new Error('A committed recruit did not read back with the offer count.');
+      }
+      const got = (await topSchoolRows(check, w)).map((x) => ({
+        tid: Number(val(x, 'TeamId')),
+        inf: Number(val(x, 'TeamInfluence'))
+      }));
+      if (JSON.stringify(got) !== JSON.stringify(e.after)) {
+        throw new Error('A committed recruit did not read back with the school list.');
+      }
+      if (e.wantNew) {
+        const s2 = h2.slotOf.get(e.recruitRow);
+        const tr2 = s2 === undefined ? null : refFromRecord(h2.arr, `RecruitTarget${s2}`);
+        const t2 = tr2 ? h2.targetTable.records[tr2.row] : null;
+        if (!t2 || String(val(t2, 'ScholarshipStatus')) !== 'New') {
+          throw new Error('A committed recruit did not read back with the scholarship.');
+        }
+      }
+    }
+  });
+  return { editedPath, committed: plan.commits.length, flipped, newOffers: plan.newOffers, skipped: plan.skipped };
+}
+
+// --- Swap commitment --------------------------------------------------------
+
+/**
+ * Move a committed recruit's commitment to another school. The save has no
+ * "committed team" field: a commitment is `RecruitStage` in Soft/HardCommitted
+ * plus the recruit's `TopSchoolsList` led by the school, and in every observed
+ * case (252/252 committed recruits in the mid-season sample) that school also
+ * carries the recruit on its own board with a scholarship out (RESEARCH "Swap
+ * commitment"). So the swap re-leads the list with the destination — at the
+ * higher of the recruit's CommitScore and the outgoing leader's influence, so
+ * the committed school stays the top influence — shifts the others down by
+ * influence (list length kept, weakest drops), and makes sure the destination
+ * board holds the recruit with an offer: a missing target row is provisioned
+ * from the game's fresh-target pattern, a missing offer is set (New on the
+ * user's board — where the game's own instant commit lands — Offered on a CPU
+ * board, the state every CPU commitment reads) and TotalScholarshipOffers
+ * ticks up. The stage is kept as-is; Signed recruits are refused. The old
+ * school's target row is left alone, the way every other pursuer's row stays
+ * once a recruit commits elsewhere.
+ */
+export async function applyCommitSwap(
+  franchise: any,
+  savePath: string,
+  req: { recruitRow: number; toTeamRow: number; userTeamRow: number | null },
+  backupDir: string
+): Promise<{ editedPath: string; from: string; to: string }> {
+  if (!Number.isInteger(req.recruitRow) || req.recruitRow < 0) throw new Error('Bad recruit row.');
+  if (!Number.isInteger(req.toTeamRow) || req.toTeamRow < 0) throw new Error('Bad school row.');
+
+  const teamTable = mainTable(franchise, 'Team');
+  await teamTable.readRecords(['TeamIndex', 'LongName', 'DisplayName']);
+  const toRec = teamTable.records?.[req.toTeamRow];
+  if (!toRec || toRec.isEmpty) throw new Error('No school at that row in the save.');
+  const toIdx = Number(val(toRec, 'TeamIndex'));
+  if (!Number.isFinite(toIdx)) throw new Error('No school at that row in the save.');
+  const nameOfIdx = (idx: number): string => {
+    const r = (teamTable.records as any[]).find((t) => !t.isEmpty && Number(val(t, 'TeamIndex')) === idx);
+    return r ? String(val(r, 'LongName') ?? val(r, 'DisplayName') ?? idx) : `team ${idx}`;
+  };
+
+  const h = await boardHandles(franchise, req.toTeamRow);
+  await h.recruitTable.readRecords(['Player', 'RecruitStage', 'CommitScore', 'TotalScholarshipOffers', 'TopSchoolsList']);
+  const rRec = h.recruitTable.records[req.recruitRow];
+  if (!rRec || rRec.isEmpty) throw new Error('That recruit is not in the save.');
+
+  const stage = String(val(rRec, 'RecruitStage') ?? '');
+  if (stage === 'Signed') throw new Error("That recruit has already signed — signed classes are the game's.");
+  if (stage !== 'SoftCommitted' && stage !== 'HardCommitted') {
+    throw new Error('That recruit is not committed anywhere yet.');
+  }
+  const rows = await topSchoolRows(franchise, rRec);
+  if (!rows.length) throw new Error('That recruit carries no school list in the save.');
+  const before = rows.map((e) => ({ tid: Number(val(e, 'TeamId')), inf: Number(val(e, 'TeamInfluence')) }));
+  const fromIdx = before[0].tid;
+  if (fromIdx === toIdx) throw new Error(`That recruit is already committed to ${nameOfIdx(toIdx)}.`);
+
+  // Destination board: the recruit's row there, provisioned when missing.
+  const isUserBoard = req.userTeamRow !== null && req.userTeamRow === req.toTeamRow;
+  let target: any = null;
+  const slot = h.slotOf.get(req.recruitRow);
+  if (slot !== undefined) {
+    const tr = refFromRecord(h.arr, `RecruitTarget${slot}`)!;
+    target = h.targetTable.records[tr.row];
+    if (!target || target.isEmpty) target = null;
+  }
+  const rawStatus = target ? String(val(target, 'ScholarshipStatus') ?? 'None') : 'None';
+  const status = SCHOLARSHIP_ALIAS[rawStatus] ?? rawStatus;
+  const needsOffer = status !== 'Offered' && status !== 'New';
+  if (needsOffer && isUserBoard) {
+    const out = await scholarshipsOut(franchise, h);
+    const cap = RECRUITING_TUNABLES.maxTeamScholarshipOffers;
+    if (out >= cap) {
+      throw new Error(`All ${cap} scholarships are out — revoke one before moving this commitment to your program.`);
+    }
+  }
+  if (!target) {
+    if ((h.arr.arraySize ?? 0) + 1 > h.arrCapacity) {
+      throw new Error(`${nameOfIdx(toIdx)}'s board is full (${h.arrCapacity} targets).`);
+    }
+    let targetSupply = 0;
+    let pitchSupply = 0;
+    for (const rec of h.targetTable.records as any[]) if (rec.isEmpty) targetSupply++;
+    for (const rec of h.pitchTable.records as any[]) if (rec.isEmpty) pitchSupply++;
+    if (targetSupply < 1 || pitchSupply < 1) throw new Error('The save has no free target slots left.');
+  }
+
+  // ---- apply ----
+  const commitScore = Number(val(rRec, 'CommitScore') ?? 0);
+  const leadInf = Math.max(commitScore, before[0].inf);
+  const others = before
+    .filter((b) => b.tid !== toIdx)
+    .sort((a, b) => b.inf - a.inf)
+    .slice(0, Math.max(0, before.length - 1));
+  const after = [{ tid: toIdx, inf: leadInf }, ...others];
+  after.forEach((v, i) => {
+    rows[i].TeamId = v.tid;
+    rows[i].TeamInfluence = v.inf;
+  });
+
+  const provisioned = !target;
+  if (!target) {
+    const nil = await learnNilExpectations(franchise, h);
+    target = provisionTarget(h, req.recruitRow, nil.get(req.recruitRow));
+    try {
+      h.targetTable.recalculateEmptyRecordReferences?.();
+      h.pitchTable.recalculateEmptyRecordReferences?.();
+    } catch {
+      // bookkeeping helper only; the write itself is verified below
+    }
+  }
+  const wantStatus = needsOffer ? (isUserBoard ? 'New' : 'Offered') : null;
+  let offers = Number(val(rRec, 'TotalScholarshipOffers') ?? 0);
+  if (wantStatus) {
+    target.ScholarshipStatus = wantStatus;
+    offers = Math.min(offers + 1, fieldMax(rRec, 'TotalScholarshipOffers', 255));
+    rRec.TotalScholarshipOffers = offers;
+  }
+  const finalCount = h.arr.arraySize ?? 0;
+
+  const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const rT = mainTable(check, 'Recruit');
+    await rT.readRecords(['RecruitStage', 'TotalScholarshipOffers', 'TopSchoolsList']);
+    const w = rT.records?.[req.recruitRow];
+    if (!w || String(val(w, 'RecruitStage')) !== stage) {
+      throw new Error('The written save did not read back with the commitment stage.');
+    }
+    if (Number(val(w, 'TotalScholarshipOffers')) !== offers) {
+      throw new Error('The written save did not read back with the offer count.');
+    }
+    const got = (await topSchoolRows(check, w)).map((e) => ({
+      tid: Number(val(e, 'TeamId')),
+      inf: Number(val(e, 'TeamInfluence'))
+    }));
+    if (JSON.stringify(got) !== JSON.stringify(after)) {
+      throw new Error('The written save did not read back with the school list.');
+    }
+    const h2 = await boardHandles(check, req.toTeamRow);
+    const s2 = h2.slotOf.get(req.recruitRow);
+    if (s2 === undefined) throw new Error("The recruit did not read back on the new school's board.");
+    if (provisioned && (h2.arr.arraySize ?? 0) !== finalCount) {
+      throw new Error('The board count did not read back as expected.');
+    }
+    const tr2 = refFromRecord(h2.arr, `RecruitTarget${s2}`)!;
+    const t2 = h2.targetTable.records[tr2.row];
+    const st2 = String(val(t2, 'ScholarshipStatus') ?? 'None');
+    if (wantStatus && st2 !== wantStatus) {
+      throw new Error('The written save did not read back with the scholarship.');
+    }
+  });
+  return { editedPath, from: nameOfIdx(fromIdx), to: nameOfIdx(toIdx) };
 }
 
 // --- Fire Coach -------------------------------------------------------------

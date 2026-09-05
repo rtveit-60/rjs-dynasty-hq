@@ -20,6 +20,7 @@ import {
 import { useHQ } from '../store.ts';
 import BoardMark from './BoardMark.tsx';
 import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
+import SwapCommitModal, { type SwapCommitSubject } from './SwapCommitModal.tsx';
 import CreateRecruitModal from './CreateRecruitModal.tsx';
 import ManualTransfersModal from './ManualTransfersModal.tsx';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
@@ -151,6 +152,7 @@ export default function RecruitingView() {
   const school = snapshot?.school;
   const rc = school?.recruiting;
   const teamName = school?.team.longName;
+  const [swapSubject, setSwapSubject] = useState<SwapCommitSubject | null>(null);
 
   const [board, setBoard] = useState<Board>('hs');
   const [q, setQ] = useState('');
@@ -531,11 +533,30 @@ export default function RecruitingView() {
                           {board === 'portal' && r.classType !== 'HS' ? ` · ${r.classType}` : ''}
                         </span>
                         {r.onBoard && <BoardMark />}
-                        {!r.committedTo && (
-                          <span className="bd-actions">
+                        <span className="bd-actions">
+                          {r.committedTo ? (
+                            <button
+                              type="button"
+                              className="bd-btn swap"
+                              title={`Committed to ${r.committedTo} — move this commitment to another school`}
+                              aria-label={`Swap ${r.name}'s commitment`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSwapSubject({
+                                  recruitRow: r.row,
+                                  name: r.name,
+                                  position: recruitPos(r.position),
+                                  stars: r.stars,
+                                  committedTo: r.committedTo!
+                                });
+                              }}
+                            >
+                              ⇄
+                            </button>
+                          ) : (
                             <BoardToggle recruitRow={r.row} onBoard={r.onBoard} />
-                          </span>
-                        )}
+                          )}
+                        </span>
                         {r.quality === 'GEM' && <span className="btag gem">Gem</span>}
                         {r.quality === 'BUST' && <span className="btag bust">Bust</span>}
                       </td>
@@ -612,6 +633,7 @@ export default function RecruitingView() {
       )}
       </>
       )}
+      {swapSubject && <SwapCommitModal subject={swapSubject} onClose={() => setSwapSubject(null)} />}
     </div>
   );
 }

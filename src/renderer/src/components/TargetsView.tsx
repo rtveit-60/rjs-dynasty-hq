@@ -9,6 +9,7 @@ import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
 import ResourceModal from './ResourceModal.tsx';
 import TargetActionsModal from './TargetActionsModal.tsx';
 import InstantCommitModal from './InstantCommitModal.tsx';
+import ClassOptionsModal from './ClassOptionsModal.tsx';
 import TeamNeedsStrip from './TeamNeedsStrip.tsx';
 
 type School = NonNullable<Snapshot['school']>;
@@ -101,6 +102,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
   const [hiring, setHiring] = useState(false);
   const [planRow, setPlanRow] = useState<number | null>(null);
   const [commitTarget, setCommitTarget] = useState<RecruitTargetEntry | null>(null);
+  const [classOptions, setClassOptions] = useState(false);
 
   const conflicts = useMemo(
     () => playingTimeConflicts(board?.targets ?? []),
@@ -228,15 +230,25 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
           <span className="k">BUSTS</span> <b>{busts}</b>
         </span>
         {!browsing && (
-          <button
-            type="button"
-            className="filter"
-            style={{ marginLeft: 'auto' }}
-            onClick={() => setHiring(true)}
-            title="Add weekly recruiting hours (writes a _RJ copy)"
-          >
-            Hire Scouts
-          </button>
+          <>
+            <button
+              type="button"
+              className="filter"
+              style={{ marginLeft: 'auto' }}
+              onClick={() => setHiring(true)}
+              title="Add weekly recruiting hours (writes a _RJ copy)"
+            >
+              Hire Scouts
+            </button>
+            <button
+              type="button"
+              className="filter"
+              onClick={() => setClassOptions(true)}
+              title="Board-wide actions on the recruiting class, such as Mass Commit (writes a _RJ copy)"
+            >
+              Recruiting Class Options
+            </button>
+          </>
         )}
         <InfoDot title="Recruiting Office">
           <p>Your board, with everything the game knows about each pursuit.</p>
@@ -270,6 +282,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
       {commitTarget && !browsing && (
         <InstantCommitModal target={commitTarget} onClose={() => setCommitTarget(null)} />
       )}
+      {classOptions && !browsing && <ClassOptionsModal onClose={() => setClassOptions(false)} />}
       <div className="tbl-wrap">
         <table className="tbl">
           <thead>

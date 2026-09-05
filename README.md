@@ -201,7 +201,7 @@ Developer tools worth knowing about:
 node scripts/filter-check.ts     # assert the recruiting filters and scouting queries hold
 node scripts/profile-check.ts    # regression suite over the profile extractor
 node scripts/media-check.ts      # run the media engine against a save and audit its output
-node scripts/edit-check.ts       # regression suite over the player editor's save writes
+node --max-old-space-size=16384 scripts/edit-check.ts   # regression suite over the player editor's save writes
 node scripts/bc-check.ts         # prove the built-in texture decoder byte-exact against a reference
 node scripts/extract-awards.ts   # regenerate award names from the installed game
 node scripts/extract-pitches.ts  # regenerate pitch names + motivations from the installed game
