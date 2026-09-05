@@ -814,18 +814,37 @@ function createWindow(): void {
     }
   });
 
-  // Normally the window appears as soon as the renderer has painted. If that
-  // never happens (a renderer that fails before first paint), show it anyway
-  // rather than leaving the app running with no window on screen.
+  // The window is built hidden and revealed once the page is in. Electron's own
+  // cue for that, `ready-to-show`, waits for the renderer's first paint — and a
+  // window that has never been shown does not paint on every display: bisected
+  // on the live machine 2026-09-04, a hidden window centred on the 5120×1440
+  // primary monitor produced no frames at all (zero requestAnimationFrame
+  // ticks, no paint entries) for as long as it stayed hidden, while the same
+  // window moved onto the second monitor painted at once, and a window that is
+  // already visible paints fine on either. So the load finishing is the reveal
+  // cue: the page is there, the window carries the theme ground colour, and
+  // frames start the moment it is shown. `ready-to-show` stays as the fast path
+  // when it does fire, a failed load reveals the error screen instead of
+  // nothing, and a timer backstops a load that never finishes.
   const reveal = (why: string): void => {
     if (!win || win.isDestroyed() || win.isVisible()) return;
     win.show();
     log.info('window', `window shown (${why})`);
   };
-  const revealFallback = setTimeout(() => reveal('fallback'), 12000);
-  win.once('ready-to-show', () => {
+  const revealFallback = setTimeout(() => reveal('fallback'), 6000);
+  const revealNow = (why: string): void => {
     clearTimeout(revealFallback);
-    reveal('ready-to-show');
+    reveal(why);
+  };
+  win.once('ready-to-show', () => revealNow('ready-to-show'));
+  win.webContents.once('did-finish-load', () => {
+    // A beat for the renderer to mount before the frame is on screen.
+    setTimeout(() => revealNow('did-finish-load'), 150);
+  });
+  win.webContents.on('did-fail-load', (_e, code, description, _url, isMainFrame) => {
+    if (!isMainFrame || code === -3) return; // -3: superseded navigation, not a failure
+    log.error('window', 'page failed to load', { code, description });
+    revealNow('did-fail-load');
   });
   // Crash forensics: a dead or hung renderer leaves a trace in the log.
   win.webContents.on('render-process-gone', (_e, details) => {
