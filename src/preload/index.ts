@@ -31,6 +31,8 @@ import type {
   GradesEditChanges,
   InstantCommitRequest,
   CommitSwapRequest,
+  MassCommitForm,
+  MassCommitRequest,
   DynastySettingsForm,
   DynastySettingsChanges,
   FacilitiesForm,
@@ -89,6 +91,8 @@ export interface HQBridge {
   editGrades: (req: GradesEditChanges) => Promise<PlayerEditResult>;
   instantCommit: (req: InstantCommitRequest) => Promise<PlayerEditResult>;
   swapCommit: (req: CommitSwapRequest) => Promise<PlayerEditResult>;
+  getMassCommitForm: () => Promise<MassCommitForm | null>;
+  massCommit: (req: MassCommitRequest) => Promise<PlayerEditResult>;
   getSettingsForm: () => Promise<DynastySettingsForm | null>;
   editSettings: (req: DynastySettingsChanges) => Promise<PlayerEditResult>;
   getFacilitiesForm: () => Promise<FacilitiesForm | null>;
@@ -154,6 +158,8 @@ const bridge: HQBridge = {
   editGrades: (req) => ipcRenderer.invoke('grades:edit', req),
   instantCommit: (req) => ipcRenderer.invoke('recruit:commit', req),
   swapCommit: (req) => ipcRenderer.invoke('recruit:swapcommit', req),
+  getMassCommitForm: () => ipcRenderer.invoke('recruit:masscommit:form'),
+  massCommit: (req) => ipcRenderer.invoke('recruit:masscommit', req),
   getSettingsForm: () => ipcRenderer.invoke('settings:form'),
   editSettings: (req) => ipcRenderer.invoke('settings:edit', req),
   getFacilitiesForm: () => ipcRenderer.invoke('facilities:form'),

@@ -439,6 +439,24 @@ function registerIpc(): void {
     return result;
   });
 
+  // Recruiting Class Options: mass commit preview + the write.
+  handle('recruit:masscommit:form', () => {
+    const { savePath } = getSettings();
+    if (!savePath) return null;
+    return pipeline.massCommitForm(savePath);
+  });
+  handle('recruit:masscommit', async (_e, req: unknown) => {
+    const r = req as { flipOthers?: unknown };
+    const { savePath } = getSettings();
+    if (!savePath) return { ok: false, message: 'Nothing to commit.' };
+    const result = await pipeline.massCommit({ flipOthers: r?.flipOthers === true }, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   // Move a committed recruit's commitment to another school — the _RJ path.
   handle('recruit:swapcommit', async (_e, req: unknown) => {
     const r = req as { recruitRow?: unknown; toTeamRow?: unknown; label?: unknown };

@@ -11,6 +11,8 @@ import type {
   GradesEditForm,
   InstantCommitRequest,
   CommitSwapRequest,
+  MassCommitForm,
+  MassCommitRequest,
   LeagueLeaders,
   MediaEvent,
   PlayerEditChanges,
@@ -49,7 +51,7 @@ import {
   buildTargetForm
 } from './editor.ts';
 import { applyCoachEdit, buildCoachEditForm } from './coach-editor.ts';
-import { applyInstantCommit, applyCommitSwap } from './editor.ts';
+import { applyInstantCommit, applyCommitSwap, applyMassCommit, buildMassCommitForm } from './editor.ts';
 import { applyGradesEdit, buildGradesForm } from './grades-editor.ts';
 import { applyDynastySettings, buildDynastySettingsForm } from './dynasty-settings.ts';
 import { applyFacilitiesEdit, buildFacilitiesForm } from './facilities-editor.ts';
@@ -441,6 +443,31 @@ export class Pipeline {
       );
       const who = req.label ? `${req.label} committed` : 'Commitment';
       return { editedPath, message: `${who} — saved to ${basename(editedPath)}.` };
+    });
+  }
+
+  /** What a mass commit of the board would do right now. */
+  async massCommitForm(savePath: string): Promise<MassCommitForm | null> {
+    if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
+    try {
+      return await buildMassCommitForm(this.franchise, this.lastSchoolRow, savePath);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Commit every eligible board target in one write, via the guarded shell. */
+  async massCommit(req: MassCommitRequest, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const r = await applyMassCommit(this.franchise, savePath, { teamRow, flipOthers: !!req.flipOthers }, app.getPath('userData'));
+      const parts = [`${r.committed} recruit${r.committed === 1 ? '' : 's'} committed`];
+      if (r.flipped) parts.push(`${r.flipped} flipped`);
+      if (r.newOffers) parts.push(`${r.newOffers} scholarship${r.newOffers === 1 ? '' : 's'} spent`);
+      const capped = r.skipped.filter((s) => s.reason === 'cap').length;
+      if (capped) parts.push(`${capped} left out at the cap`);
+      return { editedPath: r.editedPath, message: `${parts.join(', ')} — saved to ${basename(r.editedPath)}.` };
     });
   }
 
