@@ -7245,6 +7245,132 @@ table.tbl.tbl-wide {
   padding: 0 6px;
 }
 
+/* Sliding scale under each editable slider: tick rail + draggable knob. */
+.ds-field.has-scale {
+  padding-bottom: 6px;
+}
+
+.ds-scale {
+  grid-column: 1 / -1;
+  position: relative;
+  padding: 6px 7px 14px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.ds-scale.dragging {
+  cursor: grabbing;
+}
+
+.ds-rail {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+.ds-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--team-bright, var(--team));
+  opacity: 0.55;
+}
+
+.ds-scale.changed .ds-fill {
+  background: var(--hot);
+  opacity: 0.8;
+}
+
+.ds-tick {
+  position: absolute;
+  top: 100%;
+  width: 1px;
+  background: var(--ink-3);
+  transform: translateX(-50%);
+}
+
+.ds-tick.minor {
+  height: 3px;
+  opacity: 0.45;
+}
+
+.ds-tick.major {
+  height: 6px;
+}
+
+.ds-knob-h {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  transform: translate(-50%, -50%);
+  background: var(--team-bright, var(--team));
+  box-shadow:
+    inset 0 1px 0 var(--edge-hi),
+    0 1px 3px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+}
+
+.ds-knob-h::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  bottom: 3px;
+  width: 1px;
+  background: var(--team-contrast, #fff);
+  opacity: 0.6;
+  transform: translateX(-50%);
+}
+
+.ds-scale.changed .ds-knob-h {
+  background: var(--hot);
+}
+
+.ds-scale.changed .ds-knob-h::after {
+  background: #1a1a1a;
+}
+
+.ds-scale.dragging .ds-knob-h {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scaleY(1.15);
+}
+
+.ds-knob-h:focus-visible {
+  outline: 2px solid var(--team, var(--hot));
+  outline-offset: 2px;
+}
+
+.ds-ticklbls {
+  position: relative;
+  height: 10px;
+  margin-top: 7px;
+}
+
+.ds-ticklbls span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font: 600 9px var(--font-cond);
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-ticklbls span:first-child {
+  transform: translateX(-25%);
+}
+
+.ds-ticklbls span:last-child {
+  transform: translateX(-75%);
+}
+
 .ds-toggle {
   display: inline-flex;
   align-items: center;

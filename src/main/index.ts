@@ -951,6 +951,29 @@ function createWindow(): void {
               );
               await new Promise((r) => setTimeout(r, 700));
             }
+            // HQ_CAPTURE_DRAG="<n>,<fraction>" drags the nth settings scale's knob
+            // to a fraction of its rail with real input events (exercises pointer capture).
+            const dragSpec = process.env['HQ_CAPTURE_DRAG'];
+            if (dragSpec) {
+              const [nRaw, fRaw] = dragSpec.split(',');
+              const rect = (await win!.webContents.executeJavaScript(
+                `(() => { const el = document.querySelectorAll('.ds-scale .ds-rail')[${Number(nRaw) || 0}]; if (!el) return null; const r = el.getBoundingClientRect(); const k = el.querySelector('.ds-knob-h').getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height, knobX: k.left + k.width / 2 }; })()`
+              )) as { left: number; top: number; width: number; height: number; knobX: number } | null;
+              if (rect) {
+                const z = win!.webContents.getZoomFactor();
+                const y = Math.round((rect.top + rect.height / 2) * z);
+                const x0 = Math.round(rect.knobX * z);
+                const x1 = Math.round((rect.left + rect.width * (Number(fRaw) || 0)) * z);
+                win!.webContents.sendInputEvent({ type: 'mouseDown', x: x0, y, button: 'left', clickCount: 1 });
+                const steps = 12;
+                for (let i = 1; i <= steps; i++) {
+                  await new Promise((r) => setTimeout(r, 25));
+                  win!.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(x0 + ((x1 - x0) * i) / steps), y, button: 'left' });
+                }
+                win!.webContents.sendInputEvent({ type: 'mouseUp', x: x1, y, button: 'left', clickCount: 1 });
+                await new Promise((r) => setTimeout(r, 500));
+              }
+            }
             // HQ_CAPTURE_STORY=<n> opens the nth article card's reader.
             const storyN = Number(process.env['HQ_CAPTURE_STORY'] ?? NaN);
             if (Number.isFinite(storyN)) {
