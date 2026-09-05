@@ -1532,6 +1532,49 @@ export interface InstantCommitRequest {
   label?: string;
 }
 
+// --- Mass commit (Recruiting Class Options) ----------------------------------
+
+export type MassCommitSkipReason = 'alreadyHere' | 'elsewhere' | 'noList' | 'signed' | 'cap';
+
+export interface MassCommitPlanSummary {
+  /** Targets that would commit. */
+  commits: number;
+  /** Of those, targets currently committed to another school. */
+  flips: number;
+  /** Scholarships the commits would spend. */
+  newOffers: number;
+  skipped: { name: string; reason: MassCommitSkipReason }[];
+}
+
+export interface MassCommitForm {
+  school: string;
+  savePath: string;
+  editedPath: string;
+  boardCount: number;
+  /** The game's own commitment window (scholarship + commitment periods active). */
+  windowOpen: boolean;
+  scholarshipsUsed: number;
+  scholarshipsCap: number;
+  /** Plan for uncommitted targets only. */
+  boardOnly: MassCommitPlanSummary;
+  /** Plan that also flips targets committed elsewhere. */
+  withFlips: MassCommitPlanSummary;
+}
+
+export interface MassCommitRequest {
+  flipOthers: boolean;
+}
+
+// --- Swap commitment ---------------------------------------------------------
+
+export interface CommitSwapRequest {
+  recruitRow: number;
+  /** Team row (Snapshot.teams[].row) the commitment moves to. */
+  toTeamRow: number;
+  /** Display name for the result message only. */
+  label?: string;
+}
+
 // --- Dynasty settings --------------------------------------------------------
 
 export type SettingKind = 'int' | 'bool' | 'enum';
