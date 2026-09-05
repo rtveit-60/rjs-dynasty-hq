@@ -3,6 +3,7 @@ import type { DynastySettingsForm, SettingField, SettingsGroup } from '../../../
 import { useHQ } from '../store.ts';
 import { Stepper } from './EditPlayerModal.tsx';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
+import SettingScale from './SettingScale.tsx';
 
 type Value = number | boolean | string;
 
@@ -23,8 +24,9 @@ function Field({
 }) {
   const changed = value !== f.value;
   const locked = f.locked === true;
+  const scale = f.kind === 'int' && !locked;
   return (
-    <div className={`ds-field ${changed ? 'changed' : ''} ${locked ? 'locked' : ''}`}>
+    <div className={`ds-field ${scale ? 'has-scale' : ''} ${changed ? 'changed' : ''} ${locked ? 'locked' : ''}`}>
       <div className="ds-lbl">
         <span>{f.label}</span>
         {f.note && <span className="ds-note">{f.note}</span>}
@@ -70,6 +72,16 @@ function Field({
             </select>
           ))}
       </div>
+      {scale && (
+        <SettingScale
+          value={Number(value)}
+          min={f.min ?? 0}
+          max={f.max ?? 100}
+          changed={changed}
+          label={`${f.label} scale`}
+          onChange={(n) => onChange(n)}
+        />
+      )}
     </div>
   );
 }
