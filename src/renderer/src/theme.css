@@ -7163,6 +7163,54 @@ table.tbl.tbl-wide {
   color: var(--ink);
 }
 
+/* --- Swap commitment -------------------------------------------------------- */
+
+.bd-btn.swap {
+  color: var(--ink-3);
+  font-size: 13px;
+  padding-bottom: 1px;
+}
+
+.bd-btn.swap:hover {
+  color: var(--team);
+  border-color: color-mix(in srgb, var(--team) 60%, var(--line));
+  background: color-mix(in srgb, var(--team) 10%, var(--surface));
+}
+
+.sc-pick {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.sc-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 400 13px var(--font-ui);
+}
+
+.sc-search:focus {
+  outline: none;
+  border-color: var(--team);
+}
+
+.ed-panel select.sc-list {
+  width: 100%;
+  height: auto;
+  padding: 2px;
+  background-image: none;
+  font: 400 13px/1.6 var(--font-ui);
+}
+
+.ed-panel select.sc-list option {
+  padding: 3px 6px;
+}
+
 /* --- Dynasty settings ------------------------------------------------------- */
 
 .ds-tabs {

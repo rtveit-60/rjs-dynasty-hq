@@ -10,6 +10,7 @@ import type {
   GradesEditChanges,
   GradesEditForm,
   InstantCommitRequest,
+  CommitSwapRequest,
   LeagueLeaders,
   MediaEvent,
   PlayerEditChanges,
@@ -48,7 +49,7 @@ import {
   buildTargetForm
 } from './editor.ts';
 import { applyCoachEdit, buildCoachEditForm } from './coach-editor.ts';
-import { applyInstantCommit } from './editor.ts';
+import { applyInstantCommit, applyCommitSwap } from './editor.ts';
 import { applyGradesEdit, buildGradesForm } from './grades-editor.ts';
 import { applyDynastySettings, buildDynastySettingsForm } from './dynasty-settings.ts';
 import { applyFacilitiesEdit, buildFacilitiesForm } from './facilities-editor.ts';
@@ -440,6 +441,20 @@ export class Pipeline {
       );
       const who = req.label ? `${req.label} committed` : 'Commitment';
       return { editedPath, message: `${who} — saved to ${basename(editedPath)}.` };
+    });
+  }
+
+  /** Move a committed recruit's commitment to another school, via the guarded shell. */
+  async swapCommit(req: CommitSwapRequest, savePath: string): Promise<PlayerEditResult> {
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, from, to } = await applyCommitSwap(
+        this.franchise,
+        savePath,
+        { recruitRow: req.recruitRow, toTeamRow: req.toTeamRow, userTeamRow: this.lastSchoolRow },
+        app.getPath('userData')
+      );
+      const who = req.label ? `${req.label}` : 'Commitment';
+      return { editedPath, message: `${who} moved from ${from} to ${to} — saved to ${basename(editedPath)}.` };
     });
   }
 

@@ -1532,6 +1532,16 @@ export interface InstantCommitRequest {
   label?: string;
 }
 
+// --- Swap commitment ---------------------------------------------------------
+
+export interface CommitSwapRequest {
+  recruitRow: number;
+  /** Team row (Snapshot.teams[].row) the commitment moves to. */
+  toTeamRow: number;
+  /** Display name for the result message only. */
+  label?: string;
+}
+
 // --- Dynasty settings --------------------------------------------------------
 
 export type SettingKind = 'int' | 'bool' | 'enum';

@@ -30,6 +30,7 @@ import type {
   GradesEditForm,
   GradesEditChanges,
   InstantCommitRequest,
+  CommitSwapRequest,
   DynastySettingsForm,
   DynastySettingsChanges,
   FacilitiesForm,
@@ -87,6 +88,7 @@ export interface HQBridge {
   getGradesForm: () => Promise<GradesEditForm | null>;
   editGrades: (req: GradesEditChanges) => Promise<PlayerEditResult>;
   instantCommit: (req: InstantCommitRequest) => Promise<PlayerEditResult>;
+  swapCommit: (req: CommitSwapRequest) => Promise<PlayerEditResult>;
   getSettingsForm: () => Promise<DynastySettingsForm | null>;
   editSettings: (req: DynastySettingsChanges) => Promise<PlayerEditResult>;
   getFacilitiesForm: () => Promise<FacilitiesForm | null>;
@@ -151,6 +153,7 @@ const bridge: HQBridge = {
   getGradesForm: () => ipcRenderer.invoke('grades:form'),
   editGrades: (req) => ipcRenderer.invoke('grades:edit', req),
   instantCommit: (req) => ipcRenderer.invoke('recruit:commit', req),
+  swapCommit: (req) => ipcRenderer.invoke('recruit:swapcommit', req),
   getSettingsForm: () => ipcRenderer.invoke('settings:form'),
   editSettings: (req) => ipcRenderer.invoke('settings:edit', req),
   getFacilitiesForm: () => ipcRenderer.invoke('facilities:form'),
