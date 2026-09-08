@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CarouselEntry } from '../../../shared/types.ts';
+import type { CarouselEntry, JobOpeningEntry } from '../../../shared/types.ts';
 import {
   PRESTIGE_TIER_SPECS,
   prestigeLetterForScore,
@@ -20,11 +20,17 @@ const STATUS: Record<string, { label: string; color: string }> = {
   HotSeat: { label: 'Hot seat', color: 'var(--bad)' }
 };
 
-type RoleFilter = 'ALL' | 'HC' | 'OC' | 'DC';
+type Role = 'HC' | 'OC' | 'DC';
+/** Page tabs: one board per role, the open-jobs ledger while the carousel runs, and the prestige ledger. */
+type CarouselTab = Role | 'jobs' | 'prestige';
+const ROLE_TABS: { key: Role; label: string }[] = [
+  { key: 'HC', label: 'HEAD COACHES' },
+  { key: 'OC', label: 'OFFENSIVE COORDINATORS' },
+  { key: 'DC', label: 'DEFENSIVE COORDINATORS' }
+];
 type SortKey =
   | 'team'
   | 'coach'
-  | 'role'
   | 'age'
   | 'rec'
   | 'prestige'
@@ -115,8 +121,60 @@ function Flame({ size = 14 }: { size?: number }) {
   );
 }
 
-const ROLE_ORDER: Record<string, number> = { HC: 0, OC: 1, DC: 2 };
 const PAGE_SIZE = 60;
+
+/** The save's live vacancies (JobOpening rows exist only in the postseason carousel weeks). */
+function OpenJobsPanel({
+  openings,
+  teams
+}: {
+  openings: JobOpeningEntry[];
+  teams: Map<number, { longName: string }>;
+}) {
+  return (
+    <div className="panel" style={{ marginTop: 16 }}>
+      <div className="panel-title">Open Jobs · Carousel Live</div>
+      {openings.map((o) => {
+        const team = teams.get(o.teamRow);
+        const reason = REASON_LABEL[o.reason] ?? { label: o.reason.toUpperCase() };
+        return (
+          <div
+            key={`${o.teamRow}-${o.role}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '7px 0',
+              borderBottom: '1px solid var(--line-soft)'
+            }}
+          >
+            <TeamLogo row={o.teamRow} size={26} fallback={null} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>
+                <NameLink req={{ kind: 'school', row: o.teamRow }}>{team?.longName ?? `Team ${o.teamRow}`}</NameLink>
+                <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}> · {o.role}</span>
+              </div>
+              {o.prevCoach && <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>was {o.prevCoach}</div>}
+            </div>
+            <span className="tag" style={reason.hot ? { color: 'var(--bad)', borderColor: 'var(--bad)' } : undefined}>
+              {reason.label}
+            </span>
+            {o.filled ? (
+              <span style={{ fontSize: 12.5 }}>
+                <b>{o.selectedCoach ?? 'Filled'}</b>
+                {o.finalPts > 0 && (
+                  <span style={{ color: 'var(--ink-3)' }}> · {o.finalPts.toLocaleString('en-US')} pts</span>
+                )}
+              </span>
+            ) : (
+              <span style={{ fontSize: 11.5, color: 'var(--dev-elite)', fontWeight: 700 }}>OPEN</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const CAUSE_LABEL: Record<PrestigeEntry['cause'], string> = {
   loss: 'LOSS',
@@ -290,12 +348,19 @@ function PrestigeLedgerPanel({
 
 export default function CarouselView() {
   const snapshot = useHQ((s) => s.snapshot);
-  const [role, setRole] = useState<RoleFilter>('HC');
+  const [tab, setTab] = useState<CarouselTab>('HC');
   const [sortKey, setSortKey] = useState<SortKey>('security');
   const [asc, setAsc] = useState(true);
   const [page, setPage] = useState(0);
   const [fireTarget, setFireTarget] = useState<CarouselEntry | null>(null);
   const carousel = snapshot?.carousel ?? [];
+  const openings = snapshot?.jobOpenings ?? [];
+  const isRoleTab = tab === 'HC' || tab === 'OC' || tab === 'DC';
+  const role: Role = isRoleTab ? tab : 'HC';
+  // The Open Jobs tab exists only while the save's JobOpening table has rows.
+  useEffect(() => {
+    if (tab === 'jobs' && !openings.length) setTab('HC');
+  }, [tab, openings.length]);
   const teams = useMemo(() => new Map((snapshot?.teams ?? []).map((t) => [t.row, t])), [snapshot]);
   const prestigeTier = useHQ((s) => s.settings?.prestigeTier ?? 'off');
   const [prestige, setPrestige] = useState<PrestigeView | null>(null);
@@ -327,7 +392,7 @@ export default function CarouselView() {
 
   const rows = useMemo(() => {
     const dir = asc ? 1 : -1;
-    const list = (role === 'ALL' ? carousel : carousel.filter((c) => c.role === role)).map((c) => ({
+    const list = carousel.filter((c) => c.role === role).map((c) => ({
       c,
       team: teams.get(c.teamRow),
       rec: records.get(c.teamRow) ?? null,
@@ -341,8 +406,6 @@ export default function CarouselView() {
           return dir * (a.team?.longName ?? '').localeCompare(b.team?.longName ?? '');
         case 'coach':
           return dir * a.c.name.localeCompare(b.c.name);
-        case 'role':
-          return dir * ((ROLE_ORDER[a.c.role] ?? 9) - (ROLE_ORDER[b.c.role] ?? 9)) || bySecurity(a, b);
         case 'age':
           return dir * ((a.c.age ?? -1) - (b.c.age ?? -1)) || bySecurity(a, b);
         case 'rec': {
@@ -394,7 +457,6 @@ export default function CarouselView() {
   const likelyHC = hcs.filter(likelyOpen).length;
   const atRiskHC = hcs.filter((c) => atRisk(c, teams.get(c.teamRow)?.adDemeanor ?? null)).length;
   const coordOut = carousel.filter(coordDone).length;
-  const openings = snapshot?.jobOpenings ?? [];
 
   const sortBy = (key: SortKey, defaultAsc = true) => {
     if (sortKey === key) setAsc(!asc);
@@ -442,67 +504,38 @@ export default function CarouselView() {
         </span>
       </div>
 
-      {openings.length > 0 && (
-        <div className="panel" style={{ marginTop: 16 }}>
-          <div className="panel-title">Open Jobs · Carousel Live</div>
-          {openings.map((o) => {
-            const team = teams.get(o.teamRow);
-            const reason = REASON_LABEL[o.reason] ?? { label: o.reason.toUpperCase() };
-            return (
-              <div
-                key={`${o.teamRow}-${o.role}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '7px 0',
-                  borderBottom: '1px solid var(--line-soft)'
-                }}
-              >
-                <TeamLogo row={o.teamRow} size={26} fallback={null} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>
-                    {team?.longName ?? `Team ${o.teamRow}`}
-                    <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}> · {o.role}</span>
-                  </div>
-                  {o.prevCoach && (
-                    <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>was {o.prevCoach}</div>
-                  )}
-                </div>
-                <span
-                  className="tag"
-                  style={reason.hot ? { color: 'var(--bad)', borderColor: 'var(--bad)' } : undefined}
-                >
-                  {reason.label}
-                </span>
-                {o.filled ? (
-                  <span style={{ fontSize: 12.5 }}>
-                    <b>{o.selectedCoach ?? 'Filled'}</b>
-                    {o.finalPts > 0 && (
-                      <span style={{ color: 'var(--ink-3)' }}>
-                        {' '}
-                        · {o.finalPts.toLocaleString('en-US')} pts
-                      </span>
-                    )}
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 11.5, color: 'var(--dev-elite)', fontWeight: 700 }}>OPEN</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <PrestigeLedgerPanel view={prestige} teams={teams} />
-
-      <div className="filters" style={{ marginTop: 16 }}>
-        {(['HC', 'OC', 'DC', 'ALL'] as RoleFilter[]).map((r) => (
-          <button key={r} className={`filter ${role === r ? 'active' : ''}`} onClick={() => setRole(r)}>
-            {r}
+      <div className="tabs hq-tabs" style={{ marginTop: 16 }}>
+        {ROLE_TABS.map((t) => (
+          <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)} title={t.label}>
+            <span className="tab-full">{t.label}</span>
+            <span className="tab-short" aria-hidden="true">
+              {t.key}
+            </span>
           </button>
         ))}
-        <span style={{ marginLeft: 'auto', alignSelf: 'center', display: 'inline-flex' }}>
+        {openings.length > 0 && (
+          <button className={`tab ${tab === 'jobs' ? 'active' : ''}`} onClick={() => setTab('jobs')} title="Open jobs">
+            <span className="tab-full">OPEN JOBS · {openings.filter((o) => !o.filled).length}</span>
+            <span className="tab-short" aria-hidden="true">
+              JOBS
+            </span>
+          </button>
+        )}
+        <button className={`tab ${tab === 'prestige' ? 'active' : ''}`} onClick={() => setTab('prestige')} title="Prestige ledger">
+          <span className="tab-full">PRESTIGE LEDGER</span>
+          <span className="tab-short" aria-hidden="true">
+            PRESTIGE
+          </span>
+        </button>
+      </div>
+
+      {tab === 'jobs' && <OpenJobsPanel openings={openings} teams={teams} />}
+      {tab === 'prestige' && <PrestigeLedgerPanel view={prestige} teams={teams} />}
+
+      {isRoleTab && (
+        <>
+      <div className="filters" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
+        <span style={{ alignSelf: 'center', display: 'inline-flex' }}>
           <InfoDot title="Coaching Carousel">
             <p>
               Job security for every head coach and coordinator in the country, read straight from
@@ -516,7 +549,10 @@ export default function CarouselView() {
             <InfoRow term="Outlook">
               Every save fact feeding the forecast: seat status, security, contract, AD temperament.
             </InfoRow>
-            <p>Open jobs list live once the season ends and the carousel starts turning.</p>
+            <p>
+              An Open Jobs tab appears once the season ends and the carousel starts turning; the
+              Prestige Ledger tab holds the app's prestige regression.
+            </p>
           </InfoDot>
         </span>
       </div>
@@ -527,7 +563,6 @@ export default function CarouselView() {
             <tr>
               {th('Team', 'team')}
               {th('Coach', 'coach')}
-              {th('Role', 'role')}
               {th('Age', 'age', { num: true })}
               {th('Rec', 'rec', { num: true, defaultAsc: false })}
               {th('Prestige', 'prestige', { defaultAsc: false })}
@@ -556,7 +591,6 @@ export default function CarouselView() {
                 <td style={{ fontWeight: 600 }}>
                   <NameLink req={{ kind: 'coach', row: c.coachRow }}>{c.name}</NameLink>
                 </td>
-                <td>{c.role}</td>
                 <td className="num">{c.age ?? '—'}</td>
                 <td className="num">{rec ? `${rec.w}–${rec.l}` : '—'}</td>
                 <td>
@@ -631,8 +665,8 @@ export default function CarouselView() {
         </button>
         <span className="pager-info">
           {rows.length
-            ? `${safePage * PAGE_SIZE + 1}–${Math.min(rows.length, (safePage + 1) * PAGE_SIZE)} of ${rows.length} ${role === 'ALL' ? 'coaches' : `${role}s`}`
-            : 'No coaches under this filter'}
+            ? `${safePage * PAGE_SIZE + 1}–${Math.min(rows.length, (safePage + 1) * PAGE_SIZE)} of ${rows.length} ${role}s`
+            : 'No coaches in this role'}
           {pageCount > 1 && (
             <span style={{ color: 'var(--ink-3)' }}>
               {' '}
@@ -648,6 +682,8 @@ export default function CarouselView() {
           Next →
         </button>
       </div>
+        </>
+      )}
     </div>
   );
 }
