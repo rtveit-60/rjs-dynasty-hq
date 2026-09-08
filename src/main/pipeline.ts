@@ -7,6 +7,8 @@ import type {
   DynastySettingsForm,
   FacilitiesChanges,
   FacilitiesForm,
+  PipelinesChanges,
+  PipelinesForm,
   GradesEditChanges,
   GradesEditForm,
   InstantCommitRequest,
@@ -55,6 +57,7 @@ import { applyInstantCommit, applyCommitSwap, applyMassCommit, buildMassCommitFo
 import { applyGradesEdit, buildGradesForm } from './grades-editor.ts';
 import { applyDynastySettings, buildDynastySettingsForm } from './dynasty-settings.ts';
 import { applyFacilitiesEdit, buildFacilitiesForm } from './facilities-editor.ts';
+import { applyPipelinesEdit, buildPipelinesForm } from './pipelines-editor.ts';
 import { log, reportError } from './log.ts';
 import { applyRosterTransfers } from './transfers.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
@@ -527,6 +530,35 @@ export class Pipeline {
     return this.guardedEdit(savePath, async () => {
       const { editedPath } = await applyFacilitiesEdit(this.franchise, savePath, { teamRow, level: req.level }, app.getPath('userData'));
       return { editedPath, message: `Facility level saved to ${basename(editedPath)}.` };
+    });
+  }
+
+  /** The school's pipelines, the full pipeline vocabulary and the tier ladder, for the dashboard dialog. */
+  async pipelinesForm(savePath: string): Promise<PipelinesForm | null> {
+    if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
+    try {
+      return await buildPipelinesForm(this.franchise, this.lastSchoolRow, savePath);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Pipeline adds / value changes / removes, via the guarded shell. */
+  async editPipelines(req: PipelinesChanges, savePath: string): Promise<PlayerEditResult> {
+    const teamRow = this.lastSchoolRow;
+    if (teamRow === null) return { ok: false, message: 'Pick your program first.' };
+    return this.guardedEdit(savePath, async () => {
+      const { editedPath, added, updated, removed } = await applyPipelinesEdit(
+        this.franchise,
+        savePath,
+        { teamRow, ...req },
+        app.getPath('userData')
+      );
+      const parts: string[] = [];
+      if (added) parts.push(`${added} added`);
+      if (updated) parts.push(`${updated} changed`);
+      if (removed) parts.push(`${removed} removed`);
+      return { editedPath, message: `Pipelines saved to ${basename(editedPath)} (${parts.join(', ')}).` };
     });
   }
 

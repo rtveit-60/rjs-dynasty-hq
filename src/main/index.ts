@@ -563,6 +563,25 @@ function registerIpc(): void {
     return result;
   });
 
+  // Pipelines (add / influence / remove) — the _RJ path.
+  handle('pipelines:form', () => {
+    const { savePath } = getSettings();
+    return savePath ? pipeline.pipelinesForm(savePath) : null;
+  });
+  handle('pipelines:edit', async (_e, req: unknown) => {
+    const r = req as { set?: unknown; remove?: unknown };
+    const { savePath } = getSettings();
+    const hasSet = Array.isArray(r?.set) && r.set.length > 0;
+    const hasRemove = Array.isArray(r?.remove) && r.remove.length > 0;
+    if (!savePath || (!hasSet && !hasRemove)) return { ok: false, message: 'Nothing to save.' };
+    const result = await pipeline.editPipelines(r as never, savePath);
+    if (result.ok && result.editedPath) {
+      if (result.editedPath !== savePath) followEditedSave(result.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+    }
+    return result;
+  });
+
   handle('coach:editform', (_e, coachRow: number) => {
     const { savePath } = getSettings();
     if (!Number.isInteger(coachRow) || coachRow < 0 || !savePath) return null;

@@ -1639,3 +1639,41 @@ export interface FacilitiesForm {
 export interface FacilitiesChanges {
   level: number;
 }
+
+// --- Pipelines editor --------------------------------------------------------
+
+export interface PipelineEditEntry {
+  /** Save enum member, e.g. "BigApple". */
+  pipeline: string;
+  /** The game's display name ("Big Apple"). */
+  label: string;
+  /** The game's region blurb for pipelines not named after a place, else ''. */
+  region: string;
+  /** InfluenceLevel member and its 0–5 tier. */
+  level: string;
+  tier: number;
+  value: number;
+}
+
+export interface PipelinesForm {
+  school: string;
+  entries: PipelineEditEntry[];
+  /** Every real pipeline the schema knows, game-named, label order. */
+  options: { pipeline: string; label: string; region: string }[];
+  /** The tier ladder: enum member, tier number, game name, and the value floor the app snaps to. */
+  levels: { level: string; tier: number; label: string; floor: number }[];
+  valueMax: number;
+  /** Array slots per school (42 = every pipeline). */
+  capacity: number;
+  /** Free SchoolPipelineInfluence rows in the save — each add needs one. */
+  freeRows: number;
+  targetFileName: string;
+  targetExists: boolean;
+}
+
+export interface PipelinesChanges {
+  /** Add or update: pipeline member → influence value; the tier follows the value. */
+  set?: { pipeline: string; value: number }[];
+  /** Pipelines to drop from the school's list. */
+  remove?: string[];
+}

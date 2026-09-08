@@ -37,6 +37,8 @@ import type {
   DynastySettingsChanges,
   FacilitiesForm,
   FacilitiesChanges,
+  PipelinesForm,
+  PipelinesChanges,
   TargetActionForm,
   ThemeMode,
   WatchStatus
@@ -97,6 +99,8 @@ export interface HQBridge {
   editSettings: (req: DynastySettingsChanges) => Promise<PlayerEditResult>;
   getFacilitiesForm: () => Promise<FacilitiesForm | null>;
   editFacilities: (req: FacilitiesChanges) => Promise<PlayerEditResult>;
+  getPipelinesForm: () => Promise<PipelinesForm | null>;
+  editPipelines: (req: PipelinesChanges) => Promise<PlayerEditResult>;
   scoutRecruits: (criteria: ScoutCriterion[]) => Promise<ScoutHit[]>;
   openExternal: (url: string) => Promise<void>;
   gameStatus: () => Promise<GameDirStatus>;
@@ -164,6 +168,8 @@ const bridge: HQBridge = {
   editSettings: (req) => ipcRenderer.invoke('settings:edit', req),
   getFacilitiesForm: () => ipcRenderer.invoke('facilities:form'),
   editFacilities: (req) => ipcRenderer.invoke('facilities:edit', req),
+  getPipelinesForm: () => ipcRenderer.invoke('pipelines:form'),
+  editPipelines: (req) => ipcRenderer.invoke('pipelines:edit', req),
   scoutRecruits: (criteria) => ipcRenderer.invoke('recruit:scout', criteria),
   openExternal: (url) => ipcRenderer.invoke('open:external', url),
   gameStatus: () => ipcRenderer.invoke('game:status'),
