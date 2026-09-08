@@ -3,6 +3,7 @@ import { SAVE_NAME_MAX, type GameDirStatus } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
 import InfoDot from './InfoDot.tsx';
 import { PRESTIGE_TIERS, PRESTIGE_TIER_SPECS, prestigeTierSpec } from '../../../shared/prestige.ts';
+import PrestigeTierTable, { PrestigeWeightNotes } from './PrestigeTierTable.tsx';
 import ScaleControl from './ScaleControl.tsx';
 import ThemeToggle from './ThemeToggle.tsx';
 
@@ -137,6 +138,14 @@ export default function Setup() {
             Carousel shows every deduction and its reason. Off leaves the game as it is and writes
             nothing.
           </p>
+          <p style={{ marginBottom: 2 }}>
+            <b>How a loss is weighed</b>
+          </p>
+          <PrestigeWeightNotes />
+          <p style={{ marginBottom: 2 }}>
+            <b>What each tier charges</b>
+          </p>
+          <PrestigeTierTable />
         </InfoDot>
         <div className="rule" />
       </div>

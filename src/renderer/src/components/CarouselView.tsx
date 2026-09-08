@@ -10,6 +10,7 @@ import {
 import { useHQ } from '../store.ts';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
+import PrestigeTierTable, { PrestigeWeightNotes } from './PrestigeTierTable.tsx';
 import { PrestigeTierControl } from './Setup.tsx';
 import TeamLogo from './TeamLogo.tsx';
 
@@ -256,15 +257,12 @@ function PrestigeLedgerPanel({
               each sync that brings a new week, written only to the save’s protected _RJ copy.
             </p>
             <InfoRow term="Loss">
-              Weighed by rank gap and record gap between the two teams (an upset costs several times
-              an even game), then by stakes — postseason, rivalry, at home — and margin. Each charge
-              is the larger of a flat amount and a share of the coach’s own score, so a 6,000-point
-              coach feels it too and nothing is ever clamped.
+              Weighed by how badly it reads, then charged as the larger of a flat amount and a share of
+              the coach’s own score, so a 6,000-point coach feels it too and nothing is ever clamped.
             </InfoRow>
             <InfoRow term="Skid">
               Losses compound on a losing streak: once the skid reaches the tier’s threshold, each further
-              loss multiplies its charge again (×1.5 per game on Balanced, ×2 on Ruthless). The extra over
-              the plain loss is booked on this line.
+              loss multiplies its charge again. The extra over the plain loss is booked on this line.
             </InfoRow>
             <InfoRow term="Year end">A season closed on the hot seat, or on low security, is charged once.</InfoRow>
             <InfoRow term="Fired">Charged once when the carousel names the coach as fired.</InfoRow>
@@ -272,10 +270,17 @@ function PrestigeLedgerPanel({
               The game saved over an earlier deduction (the _RJ file was not the one loaded), so it was
               taken again.
             </InfoRow>
+            <p style={{ marginBottom: 2 }}>
+              <b>How a loss is weighed</b>
+            </p>
+            <PrestigeWeightNotes />
+            <p style={{ marginBottom: 2 }}>
+              <b>What each tier charges</b>
+            </p>
+            <PrestigeTierTable />
             <p>
-              Coordinators pay a share of the head coach’s charge. Rankings are read as of the sync, so
-              a week played several syncs ago is weighed by the poll at the time it was seen. The
-              letter is the game’s; it re-grades from the score on its own schedule.
+              Rankings are read as of the sync, so a week played several syncs ago is weighed by the poll at
+              the time it was seen. The letter is the game’s; it re-grades from the score on its own schedule.
             </p>
           </InfoDot>
         </span>
