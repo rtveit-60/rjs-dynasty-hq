@@ -28,6 +28,8 @@ import {
   yearAbbrev
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import BoardMark from './BoardMark.tsx';
+import BoardSaveBar from './BoardSaveBar.tsx';
 import EditPlayerModal from './EditPlayerModal.tsx';
 import EditCoachModal from './EditCoachModal.tsx';
 import TeamLogo from './TeamLogo.tsx';
@@ -452,6 +454,61 @@ function GameLog({ games }: { games: GameLogRow[] }) {
 // ---------------------------------------------------------------------------
 // Player
 
+/**
+ * Your-board line for a class prospect or portal transfer: where they stand
+ * on your board, and a control that stages an add or drop through the same
+ * one-write save bar the recruiting boards use. Board state comes from the
+ * snapshot (your program's board), not the profile, so it follows the save.
+ */
+function BoardLine({ playerRow }: { playerRow: number }) {
+  const cr = useHQ((s) =>
+    s.snapshot?.school?.recruiting?.recruits.find((r) => r.playerRow === playerRow)
+  );
+  const pending = useHQ((s) => (cr ? s.boardPending[cr.row] : undefined));
+  const toggle = useHQ((s) => s.toggleBoardPending);
+  if (!cr) return null;
+  const action = cr.onBoard ? 'remove' : 'add';
+  const staged = pending === action;
+  return (
+    <>
+      <div className="pf-board">
+        <span className="pf-va">Your board</span>
+        {cr.committedTo ? (
+          <span className="pf-board-note">
+            Committed recruits stay where they are; use Swap Commitment on the board instead.
+          </span>
+        ) : (
+          <>
+            <span className={`pf-board-state ${cr.onBoard ? 'on' : ''}`}>
+              {cr.onBoard && <BoardMark />}
+              {cr.onBoard ? 'On your board' : 'Not on your board'}
+            </span>
+            <button
+              type="button"
+              className={`pf-btn pf-board-btn ${action} ${staged ? 'staged' : ''}`}
+              onClick={() => toggle(cr.row, action)}
+              title={
+                staged
+                  ? 'Click to undo the staged change'
+                  : cr.onBoard
+                    ? 'Drop from your board (stages the change)'
+                    : 'Add to your board (stages the change)'
+              }
+            >
+              {staged
+                ? `STAGED TO ${action === 'add' ? 'ADD' : 'DROP'} · UNDO`
+                : cr.onBoard
+                  ? '✕ DROP FROM BOARD'
+                  : '+ ADD TO BOARD'}
+            </button>
+          </>
+        )}
+      </div>
+      <BoardSaveBar />
+    </>
+  );
+}
+
 function PlayerBody({ p }: { p: PlayerProfile }) {
   const colors = useTeamColors(p.teamRow);
   const hurt = p.injury && p.injury !== 'Uninjured';
@@ -517,6 +574,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
           {p.recruit.committedTo && <span className="pf-commit">Committed · {p.recruit.committedTo}</span>}
         </div>
       )}
+      <BoardLine playerRow={p.row} />
 
       {p.recruit && p.recruit.pursuing.length > 0 && (
         <>

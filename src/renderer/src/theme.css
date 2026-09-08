@@ -2660,6 +2660,59 @@ table.tbl.tbl-wide {
   font-weight: 600;
 }
 
+/* Your-board line in a prospect's profile: state + the stage/unstage control. */
+.pf-board {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--team, var(--hot));
+  background: var(--paper);
+  font-size: 12.5px;
+}
+
+.pf-board-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-2);
+}
+
+.pf-board-state.on {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.pf-board-note {
+  color: var(--ink-3);
+}
+
+.pf-board-btn {
+  margin-left: auto;
+}
+
+.pf-board-btn.staged.add {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 60%, var(--line));
+  background: color-mix(in srgb, var(--good) 12%, var(--surface));
+}
+
+.pf-board-btn.staged.remove {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 60%, var(--line));
+  background: color-mix(in srgb, var(--bad) 12%, var(--surface));
+}
+
+/* The shared save bar sits in flow inside a profile; the pop-up's own
+   controls already own the sticky top edge. */
+.pf-body .dc-savebar {
+  position: static;
+  margin-top: 8px;
+}
+
 .pf-stops {
   margin-top: 12px;
   font-size: 12.5px;
