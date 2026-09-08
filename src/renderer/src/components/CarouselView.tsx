@@ -150,7 +150,7 @@ function PrestigeCell({ c, deducted }: { c: CarouselEntry; deducted: number }) {
 }
 
 /** The ledger: tier control, last review, and the recent charges week by week. */
-function PrestigeDesk({
+function PrestigeLedgerPanel({
   view,
   teams
 }: {
@@ -189,9 +189,9 @@ function PrestigeDesk({
   return (
     <div className="panel" style={{ marginTop: 16 }}>
       <div className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span>Prestige Desk</span>
+        <span>Prestige Ledger</span>
         <span style={{ marginLeft: 'auto', display: 'inline-flex' }}>
-          <InfoDot title="Prestige Desk">
+          <InfoDot title="Prestige Ledger">
             <p>
               The app’s coach prestige regression. The game pays every win and takes a single point per
               loss; nothing else ever lowers a coach. A tier adds the missing side of the ledger, on
@@ -494,7 +494,7 @@ export default function CarouselView() {
         </div>
       )}
 
-      <PrestigeDesk view={prestige} teams={teams} />
+      <PrestigeLedgerPanel view={prestige} teams={teams} />
 
       <div className="filters" style={{ marginTop: 16 }}>
         {(['HC', 'OC', 'DC', 'ALL'] as RoleFilter[]).map((r) => (
