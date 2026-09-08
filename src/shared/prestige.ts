@@ -5,8 +5,8 @@
  * and never for a firing or a missed AD expectation (docs/RESEARCH.md "Coach
  * prestige — how the game moves it"). This module adds the missing downward
  * force as a policy over save facts: every processed loss is weighed by how
- * badly it reads (rank gap, record gap, stakes, margin), losing streaks
- * escalate, a season that ends on the hot seat costs at year end, and a
+ * badly it reads (rank gap, record gap, stakes, margin), losses compound on
+ * a losing streak, a season that ends on the hot seat costs at year end, and a
  * firing costs once. Everything here is pure — the main process owns the
  * ledger file and the write; see src/main/prestige.ts.
  *
@@ -35,8 +35,8 @@ export interface PrestigeTierSpec {
   coordShare: number;
   /** Losing-streak length at which escalation starts. */
   streakStart: number;
-  /** Extra charge per game past the start, as a multiple of the loss base (and of lossPct). */
-  streakStep: number;
+  /** Compounding factor: the loss charge is multiplied by rate^(games past the start) once a skid reaches streakStart. */
+  streakRate: number;
   /** Season ends on the hot seat / on low security: flat and percentage legs. */
   hotSeatFlat: number;
   hotSeatPct: number;
@@ -56,7 +56,7 @@ export const PRESTIGE_TIER_SPECS: Record<Exclude<PrestigeTier, 'off'>, PrestigeT
     lossPct: 0.004,
     coordShare: 0.35,
     streakStart: 4,
-    streakStep: 0.5,
+    streakRate: 1.25,
     hotSeatFlat: 30,
     hotSeatPct: 0.03,
     lowFlat: 0,
@@ -72,7 +72,7 @@ export const PRESTIGE_TIER_SPECS: Record<Exclude<PrestigeTier, 'off'>, PrestigeT
     lossPct: 0.008,
     coordShare: 0.4,
     streakStart: 3,
-    streakStep: 0.75,
+    streakRate: 1.5,
     hotSeatFlat: 60,
     hotSeatPct: 0.06,
     lowFlat: 25,
@@ -88,7 +88,7 @@ export const PRESTIGE_TIER_SPECS: Record<Exclude<PrestigeTier, 'off'>, PrestigeT
     lossPct: 0.015,
     coordShare: 0.5,
     streakStart: 3,
-    streakStep: 1,
+    streakRate: 1.75,
     hotSeatFlat: 100,
     hotSeatPct: 0.1,
     lowFlat: 50,
@@ -104,7 +104,7 @@ export const PRESTIGE_TIER_SPECS: Record<Exclude<PrestigeTier, 'off'>, PrestigeT
     lossPct: 0.025,
     coordShare: 0.6,
     streakStart: 2,
-    streakStep: 1.5,
+    streakRate: 2,
     hotSeatFlat: 160,
     hotSeatPct: 0.16,
     lowFlat: 80,
@@ -365,9 +365,12 @@ export function assessPrestige(prev: PrestigeLedger | null, snapshot: Snapshot, 
               detail: `Lost to ${winTag} as ${selfTag}${bits.length ? ', ' + bits.join(', ') : ''}${upset >= 1 ? ' — an upset' : ''}`
             });
           }
+          // Losses compound on a skid: the whole loss charge is multiplied by
+          // rate^n, n = games at or past the threshold, and the extra over the
+          // plain loss is booked as its own line so the ledger shows the compounding.
           if (streakAfter >= spec.streakStart) {
-            const extraW = spec.streakStep * (streakAfter - spec.streakStart + 1);
-            const spts = charge(spec, o, extraW, spec.lossBase, spec.lossPct);
+            const mult = Math.pow(spec.streakRate, streakAfter - spec.streakStart + 1);
+            const spts = charge(spec, o, weight * (mult - 1), spec.lossBase, spec.lossPct);
             if (spts > 0) {
               entries.push({
                 id: `${key}-${o.row}-streak`,
@@ -380,7 +383,7 @@ export function assessPrestige(prev: PrestigeLedger | null, snapshot: Snapshot, 
                 user: o.user,
                 cause: 'streak',
                 points: spts,
-                detail: `${streakAfter} straight losses`
+                detail: `${streakAfter} straight losses — the loss compounds ×${mult.toFixed(2)}`
               });
             }
           }

@@ -261,7 +261,11 @@ function PrestigeLedgerPanel({
               is the larger of a flat amount and a share of the coach’s own score, so a 6,000-point
               coach feels it too and nothing is ever clamped.
             </InfoRow>
-            <InfoRow term="Skid">Escalates with every game once a losing streak reaches the tier’s threshold.</InfoRow>
+            <InfoRow term="Skid">
+              Losses compound on a losing streak: once the skid reaches the tier’s threshold, each further
+              loss multiplies its charge again (×1.5 per game on Balanced, ×2 on Ruthless). The extra over
+              the plain loss is booked on this line.
+            </InfoRow>
             <InfoRow term="Year end">A season closed on the hot seat, or on low security, is charged once.</InfoRow>
             <InfoRow term="Fired">Charged once when the carousel names the coach as fired.</InfoRow>
             <InfoRow term="Re-applied">
