@@ -284,7 +284,9 @@ export function assessPrestige(prev: PrestigeLedger | null, snapshot: Snapshot, 
     expectationsDone: prev?.expectationsDone ?? [],
     firedKeys: prev?.firedKeys ?? [],
     entries: prev?.entries ?? [],
-    written: prev?.written ?? {}
+    written: prev?.written ?? {},
+    writtenHash: prev?.writtenHash,
+    lastReview: prev?.lastReview
   };
   if (inSeason) for (const o of Object.values(obs)) next.seasonSecurity[o.row] = o;
 

@@ -127,13 +127,16 @@ export async function reviewPrestige(
     log.warn('prestige', 'review write skipped', { message: result.message, count: deductions.length });
     return none;
   }
-  const byRow = new Map((result.applied ?? []).map((a) => [a.coachRow, a]));
+  // Each entry shows its own step of the coach's running score, in ledger order,
+  // so a coach charged twice in one write reads 665 → 662 → 659, not 665 → 659 twice.
+  const running = new Map((result.applied ?? []).map((a) => [a.coachRow, a.before]));
   let total = 0;
   for (const e of entries) {
-    const a = byRow.get(e.coachRow);
-    if (a) {
-      e.before = a.before;
-      e.after = a.after;
+    const cur = running.get(e.coachRow);
+    if (cur !== undefined) {
+      e.before = cur;
+      e.after = Math.max(0, cur - e.points);
+      running.set(e.coachRow, e.after);
     }
     total += e.points;
   }
@@ -168,7 +171,12 @@ export async function reviewPrestige(
 /** What the renderer shows for the current dynasty. */
 export function prestigeView(dynastyId: string | null, tier: PrestigeTier, seasonYear: number | null): PrestigeView {
   const ledger = loadLedger(dynastyId);
-  const entries = [...(ledger?.entries ?? [])].reverse().slice(0, 240);
+  // Newest week first, but ledger order inside a week — a skid line follows the loss it compounds.
+  const entries = (ledger?.entries ?? [])
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => b.e.seasonYear - a.e.seasonYear || b.e.week - a.e.week || a.i - b.i)
+    .map((x) => x.e)
+    .slice(0, 240);
   return {
     tier,
     seasonYear,
