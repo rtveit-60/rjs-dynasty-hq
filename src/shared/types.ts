@@ -24,6 +24,13 @@ export interface Settings {
   /** Scale the UI with window width (uiScale becomes a bias on the fit). */
   uiFit: boolean;
   windowBounds?: { x: number; y: number; width: number; height: number };
+  /**
+   * Coach prestige regression tier (see src/shared/prestige.ts). 'off' (the
+   * default) leaves the game's behavior alone and writes nothing; any other
+   * tier lets the app deduct prestige on each sync that brings a new week,
+   * writing only the save's protected `_RJ` copy.
+   */
+  prestigeTier?: 'off' | 'lenient' | 'balanced' | 'demanding' | 'ruthless';
 }
 
 export interface GameDirStatus {
@@ -109,6 +116,9 @@ export interface CarouselEntry {
   /** Normalized ContractStatus: Signed | Expiring | PendingFire | PendingNFL | PendingRenewal | PendingRetire | PendingHire | FreeAgent. */
   contractStatus: string;
   isUser: boolean;
+  /** Coach.CoachPrestigeScore (0–10000) and the save's own letter (LetterGrade member, e.g. "Bminus"). */
+  prestigeScore?: number;
+  prestigeLetter?: string;
 }
 
 export interface GameInfo {

@@ -15,7 +15,8 @@ const DEFAULTS: Settings = {
   gameDir: null,
   autoUpdate: true,
   uiScale: 1,
-  uiFit: true
+  uiFit: true,
+  prestigeTier: 'off'
 };
 
 let current: Settings | null = null;

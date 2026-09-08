@@ -50,7 +50,13 @@ import {
   buildResourceForm,
   buildTargetForm
 } from './editor.ts';
-import { applyCoachEdit, buildCoachEditForm } from './coach-editor.ts';
+import {
+  applyCoachEdit,
+  applyPrestigeAdjustments,
+  buildCoachEditForm,
+  type PrestigeApplied,
+  type PrestigeDeduction
+} from './coach-editor.ts';
 import { applyInstantCommit, applyCommitSwap, applyMassCommit, buildMassCommitForm } from './editor.ts';
 import { applyGradesEdit, buildGradesForm } from './grades-editor.ts';
 import { applyDynastySettings, buildDynastySettingsForm } from './dynasty-settings.ts';
@@ -566,6 +572,32 @@ export class Pipeline {
         message: `${moved} transfer${moved === 1 ? '' : 's'} saved to ${basename(editedPath)}: ${summary}.`
       };
     });
+  }
+
+  /** Content hash of the save as last parsed (the prestige review uses it to tell its own write from a game save). */
+  get currentHash(): string {
+    return this.lastHash;
+  }
+
+  /**
+   * Prestige regression: one batched CoachPrestigeScore write. Runs through
+   * the same guarded path as every user edit — busy lock, on-disk hash check,
+   * `_RJ` sibling, verify-on-reload — and reports what each row went from/to.
+   */
+  async adjustPrestige(
+    deductions: PrestigeDeduction[],
+    savePath: string
+  ): Promise<PlayerEditResult & { applied?: PrestigeApplied[] }> {
+    let applied: PrestigeApplied[] = [];
+    const result = await this.guardedEdit(savePath, async () => {
+      const out = await applyPrestigeAdjustments(this.franchise, savePath, deductions, app.getPath('userData'));
+      applied = out.applied;
+      return {
+        editedPath: out.editedPath,
+        message: `Prestige review: ${out.applied.length} coach${out.applied.length === 1 ? '' : 'es'} adjusted in ${basename(out.editedPath)}.`
+      };
+    });
+    return result.ok ? { ...result, applied } : result;
   }
 
   async fireCoach(req: CoachFireRequest, savePath: string): Promise<PlayerEditResult> {

@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CarouselEntry } from '../../../shared/types.ts';
+import {
+  PRESTIGE_TIER_SPECS,
+  prestigeLetterForScore,
+  prestigeLetterLabel,
+  type PrestigeEntry,
+  type PrestigeView
+} from '../../../shared/prestige.ts';
 import { useHQ } from '../store.ts';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
+import { PrestigeTierControl } from './Setup.tsx';
 import TeamLogo from './TeamLogo.tsx';
 
 const STATUS: Record<string, { label: string; color: string }> = {
@@ -19,6 +27,7 @@ type SortKey =
   | 'role'
   | 'age'
   | 'rec'
+  | 'prestige'
   | 'security'
   | 'seat'
   | 'contract'
@@ -109,6 +118,176 @@ function Flame({ size = 14 }: { size?: number }) {
 const ROLE_ORDER: Record<string, number> = { HC: 0, OC: 1, DC: 2 };
 const PAGE_SIZE = 60;
 
+const CAUSE_LABEL: Record<PrestigeEntry['cause'], string> = {
+  loss: 'LOSS',
+  streak: 'SKID',
+  expectations: 'YEAR END',
+  fired: 'FIRED',
+  reapply: 'RE-APPLIED'
+};
+
+/** Letter + score, with the season's deductions as a red chip. */
+function PrestigeCell({ c, deducted }: { c: CarouselEntry; deducted: number }) {
+  if (c.prestigeScore === undefined) return <span style={{ color: 'var(--ink-3)' }}>—</span>;
+  const letter = c.prestigeLetter ? prestigeLetterLabel(c.prestigeLetter) : prestigeLetterForScore(c.prestigeScore);
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, whiteSpace: 'nowrap' }}>
+      <b style={{ minWidth: 22 }}>{letter}</b>
+      <span className="num" style={{ color: 'var(--ink-2)', fontVariantNumeric: 'tabular-nums' }}>
+        {c.prestigeScore.toLocaleString('en-US')}
+      </span>
+      {deducted > 0 && (
+        <span
+          className="tag"
+          title="Prestige deducted this season by the regression tier"
+          style={{ color: 'var(--bad)', borderColor: 'var(--bad)', fontVariantNumeric: 'tabular-nums' }}
+        >
+          −{deducted.toLocaleString('en-US')}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The ledger: tier control, last review, and the recent charges week by week. */
+function PrestigeDesk({
+  view,
+  teams
+}: {
+  view: PrestigeView | null;
+  teams: Map<number, { longName: string }>;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const tier = view?.tier ?? 'off';
+  const spec = tier === 'off' ? null : PRESTIGE_TIER_SPECS[tier];
+  const entries = view?.entries ?? [];
+  const shown = showAll ? entries : entries.slice(0, 24);
+  const groups: { key: string; label: string; items: PrestigeEntry[] }[] = [];
+  for (const e of shown) {
+    const key = `${e.seasonYear}-${e.week}-${e.cause === 'expectations' ? 'y' : 'w'}`;
+    let g = groups.find((x) => x.key === key);
+    if (!g) {
+      g = {
+        key,
+        label: e.cause === 'expectations' ? `${e.seasonYear} season review` : `${e.seasonYear} · Week ${e.week}`,
+        items: []
+      };
+      groups.push(g);
+    }
+    g.items.push(e);
+  }
+  const status = (() => {
+    if (!view) return null;
+    if (tier === 'off') return 'Off. The game keeps its own prestige math and nothing is written.';
+    if (view.lastReview) {
+      const r = view.lastReview;
+      return `Last review: ${r.seasonYear} week ${r.week}, ${r.count} charge${r.count === 1 ? '' : 's'} for ${r.points.toLocaleString('en-US')} points.`;
+    }
+    if (view.baselineOnly) return 'Baseline set. Charges start with the next week the game writes.';
+    return 'Waiting for the first sync.';
+  })();
+  return (
+    <div className="panel" style={{ marginTop: 16 }}>
+      <div className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span>Prestige Desk</span>
+        <span style={{ marginLeft: 'auto', display: 'inline-flex' }}>
+          <InfoDot title="Prestige Desk">
+            <p>
+              The app’s coach prestige regression. The game pays every win and takes a single point per
+              loss; nothing else ever lowers a coach. A tier adds the missing side of the ledger, on
+              each sync that brings a new week, written only to the save’s protected _RJ copy.
+            </p>
+            <InfoRow term="Loss">
+              Weighed by rank gap and record gap between the two teams (an upset costs several times
+              an even game), then by stakes — postseason, rivalry, at home — and margin. Each charge
+              is the larger of a flat amount and a share of the coach’s own score, so a 6,000-point
+              coach feels it too and nothing is ever clamped.
+            </InfoRow>
+            <InfoRow term="Skid">Escalates with every game once a losing streak reaches the tier’s threshold.</InfoRow>
+            <InfoRow term="Year end">A season closed on the hot seat, or on low security, is charged once.</InfoRow>
+            <InfoRow term="Fired">Charged once when the carousel names the coach as fired.</InfoRow>
+            <InfoRow term="Re-applied">
+              The game saved over an earlier deduction (the _RJ file was not the one loaded), so it was
+              taken again.
+            </InfoRow>
+            <p>
+              Coordinators pay a share of the head coach’s charge. Rankings are read as of the sync, so
+              a week played several syncs ago is weighed by the poll at the time it was seen. The
+              letter is the game’s; it re-grades from the score on its own schedule.
+            </p>
+          </InfoDot>
+        </span>
+      </div>
+      <PrestigeTierControl compact />
+      <div style={{ fontSize: 12.5, color: 'var(--ink-2)', margin: '6px 0 2px' }}>
+        {spec ? <span>{spec.blurb} </span> : null}
+        <span style={{ color: 'var(--ink-3)' }}>{status}</span>
+      </div>
+      {groups.map((g) => (
+        <div key={g.key} style={{ marginTop: 10 }}>
+          <div className="kicker" style={{ fontSize: 11, color: 'var(--ink-3)', letterSpacing: '.08em' }}>
+            {g.label.toUpperCase()}
+          </div>
+          {g.items.map((e) => (
+            <div
+              key={e.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'auto minmax(0, 1fr) auto auto',
+                alignItems: 'baseline',
+                gap: 10,
+                padding: '5px 0',
+                borderBottom: '1px solid var(--line-soft)',
+                fontSize: 12.5,
+                background: e.user ? 'color-mix(in srgb, var(--team) 7%, transparent)' : undefined
+              }}
+            >
+              <span
+                className="tag"
+                style={
+                  e.cause === 'fired' || e.cause === 'expectations'
+                    ? { color: 'var(--bad)', borderColor: 'var(--bad)' }
+                    : undefined
+                }
+              >
+                {CAUSE_LABEL[e.cause]}
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <b>
+                  <NameLink req={{ kind: 'coach', row: e.coachRow }}>{e.coach}</NameLink>
+                </b>
+                <span style={{ color: 'var(--ink-3)' }}>
+                  {' '}
+                  · {e.role} · {teams.get(e.teamRow)?.longName ?? `Team ${e.teamRow}`}
+                </span>
+                <div style={{ color: 'var(--ink-2)', fontSize: 12 }}>{e.detail}</div>
+              </span>
+              <b className="num" style={{ color: 'var(--bad)', fontVariantNumeric: 'tabular-nums' }}>
+                −{e.points.toLocaleString('en-US')}
+              </b>
+              <span className="num" style={{ color: 'var(--ink-3)', fontVariantNumeric: 'tabular-nums', minWidth: 96, textAlign: 'right' }}>
+                {e.before !== undefined && e.after !== undefined
+                  ? `${e.before.toLocaleString('en-US')} → ${e.after.toLocaleString('en-US')}`
+                  : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      ))}
+      {entries.length > shown.length && (
+        <div style={{ marginTop: 8 }}>
+          <button className="btn" onClick={() => setShowAll(true)}>
+            Show all {entries.length}
+          </button>
+        </div>
+      )}
+      {tier !== 'off' && view && !entries.length && !view.baselineOnly && !view.lastReview && (
+        <div style={{ color: 'var(--ink-3)', fontSize: 12.5, marginTop: 6 }}>No charges yet.</div>
+      )}
+    </div>
+  );
+}
+
 export default function CarouselView() {
   const snapshot = useHQ((s) => s.snapshot);
   const [role, setRole] = useState<RoleFilter>('HC');
@@ -118,6 +297,17 @@ export default function CarouselView() {
   const [fireTarget, setFireTarget] = useState<CarouselEntry | null>(null);
   const carousel = snapshot?.carousel ?? [];
   const teams = useMemo(() => new Map((snapshot?.teams ?? []).map((t) => [t.row, t])), [snapshot]);
+  const prestigeTier = useHQ((s) => s.settings?.prestigeTier ?? 'off');
+  const [prestige, setPrestige] = useState<PrestigeView | null>(null);
+  // The ledger changes with every parse (and with the tier), so refetch on both.
+  useEffect(() => {
+    let live = true;
+    void window.hq.getPrestigeState().then((v) => live && setPrestige(v));
+    return () => {
+      live = false;
+    };
+  }, [snapshot, prestigeTier]);
+  const deducted = prestige?.seasonTotals ?? {};
 
   /** Current-season W–L per team row, straight from the schedule. */
   const records = useMemo(() => {
@@ -160,6 +350,8 @@ export default function CarouselView() {
           const wb = b.rec ? b.rec.w - b.rec.l : -99;
           return dir * (wa - wb) || bySecurity(a, b);
         }
+        case 'prestige':
+          return dir * ((a.c.prestigeScore ?? -1) - (b.c.prestigeScore ?? -1)) || bySecurity(a, b);
         case 'seat':
           return (
             dir *
@@ -302,6 +494,8 @@ export default function CarouselView() {
         </div>
       )}
 
+      <PrestigeDesk view={prestige} teams={teams} />
+
       <div className="filters" style={{ marginTop: 16 }}>
         {(['HC', 'OC', 'DC', 'ALL'] as RoleFilter[]).map((r) => (
           <button key={r} className={`filter ${role === r ? 'active' : ''}`} onClick={() => setRole(r)}>
@@ -336,6 +530,7 @@ export default function CarouselView() {
               {th('Role', 'role')}
               {th('Age', 'age', { num: true })}
               {th('Rec', 'rec', { num: true, defaultAsc: false })}
+              {th('Prestige', 'prestige', { defaultAsc: false })}
               {th('Security', 'security')}
               {th('Seat', 'seat', { defaultAsc: false })}
               {th('Contract', 'contract')}
@@ -364,6 +559,9 @@ export default function CarouselView() {
                 <td>{c.role}</td>
                 <td className="num">{c.age ?? '—'}</td>
                 <td className="num">{rec ? `${rec.w}–${rec.l}` : '—'}</td>
+                <td>
+                  <PrestigeCell c={c} deducted={deducted[c.coachRow] ?? 0} />
+                </td>
                 <td>
                   <SecurityCell pct={c.securityPct} status={c.securityStatus} />
                 </td>

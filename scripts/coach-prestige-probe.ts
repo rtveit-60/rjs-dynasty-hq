@@ -61,7 +61,10 @@ async function probeSave(save: string): Promise<Row[]> {
   };
   const si = (await readTable(mainTable(fr, 'SeasonInfo'))).records[0];
   console.log(`\n=== ${save}  season=${val(si, 'CurrentSeasonYear')} wk${val(si, 'CurrentWeek')} stage=${val(si, 'CurrentStage')}`);
-  const teams = (await readTable(mainTable(fr, 'Team'))).records as any[];
+  // Coach.TeamIndex is the engine's team id, not the Team table row — map it.
+  const teamRecs = (await readTable(mainTable(fr, 'Team'))).records as any[];
+  const teams: Record<number, any> = {};
+  for (const t of teamRecs) if (!t.isEmpty) teams[Number(val(t, 'TeamIndex'))] = t;
   const coachTable = mainTable(fr, 'Coach');
   if (!(await ensureCoachSchema(fr, coachTable))) throw new Error('Coach schema unreadable');
   const ct = await readTable(coachTable);
