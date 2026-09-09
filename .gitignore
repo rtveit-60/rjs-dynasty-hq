@@ -27,3 +27,6 @@ resources/game-icons/*
 # Design-detector local state (shared config.json is committed)
 .impeccable/hook.cache.json
 .impeccable/config.local.json
+
+# Working research notes: personal dynasty details, kept local
+docs/RESEARCH.md
