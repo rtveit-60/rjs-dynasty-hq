@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ClassRecruit } from '../../../shared/types.ts';
+import { pipelineLabel } from '../../../shared/pipeline-tiers.ts';
 import {
   RATING_BY_FIELD,
   formatRatingValue,
@@ -450,7 +451,7 @@ export default function ScoutingView({
                       </td>
                       <td className="num">{r.nationalRank || '—'}</td>
                       <td className="cell-clip" style={{ color: 'var(--ink-2)' }}>
-                        {spaceOut(r.pipeline)}
+                        {pipelineLabel(r.pipeline)}
                       </td>
                     </tr>
                     {openRow === r.row && <RecruitCardRow playerRow={r.playerRow} span={COLS} />}

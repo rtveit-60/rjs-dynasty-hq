@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { ClassRecruit } from '../../../shared/types.ts';
 import { SCHEME_FITS, schemeFitImportance } from '../../../shared/scheme-fits.ts';
+import { pipelineLabel } from '../../../shared/pipeline-tiers.ts';
 import {
   RECRUIT_POS_OPTIONS,
   STAGE_LABELS,
@@ -135,7 +136,7 @@ function PipelinePicker({
             {options.map((o) => (
               <label key={o.pipeline} className={`pipe-opt ${selected.has(o.pipeline) ? 'on' : ''}`} role="option" aria-selected={selected.has(o.pipeline)}>
                 <input type="checkbox" checked={selected.has(o.pipeline)} onChange={() => toggle(o.pipeline)} />
-                <span className="pipe-name">{spaceOut(o.pipeline)}</span>
+                <span className="pipe-name">{pipelineLabel(o.pipeline)}</span>
                 {o.tier && <span className="pipe-tier">{o.tier}</span>}
                 <span className="pipe-count">{o.count}</span>
               </label>
@@ -228,7 +229,7 @@ export default function RecruitingView() {
       if (boardOnly && !r.onBoard) return false;
       if (needle) {
         const hay =
-          `${r.name} ${recruitPos(r.position)} ${recruitPosPool(r.position)} ${spaceOut(r.homeState)} ${spaceOut(r.pipeline)}`.toLowerCase();
+          `${r.name} ${recruitPos(r.position)} ${recruitPosPool(r.position)} ${spaceOut(r.homeState)} ${pipelineLabel(r.pipeline)}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
@@ -587,8 +588,8 @@ export default function RecruitingView() {
                       <td>
                         <span className={devClass(r.devTrait)}>{devLabel(r.devTrait)}</span>
                       </td>
-                      <td className="cell-clip" style={{ color: 'var(--ink-2)' }} title={spaceOut(r.pipeline)}>
-                        {spaceOut(r.pipeline)}
+                      <td className="cell-clip" style={{ color: 'var(--ink-2)' }} title={pipelineLabel(r.pipeline)}>
+                        {pipelineLabel(r.pipeline)}
                       </td>
                       <td className="cell-clip" title={r.committedTo ?? undefined}>
                         {statusCell(r)}

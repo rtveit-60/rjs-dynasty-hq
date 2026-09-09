@@ -17,6 +17,7 @@ import path from 'node:path';
 import { applyGradesEdit, buildGradesForm } from '../src/main/grades-editor.ts';
 import { applyDynastySettings, buildDynastySettingsForm } from '../src/main/dynasty-settings.ts';
 import { applyFacilitiesEdit, buildFacilitiesForm } from '../src/main/facilities-editor.ts';
+import { applyPipelinesEdit, buildPipelinesForm } from '../src/main/pipelines-editor.ts';
 import {
   applyBoardEdit,
   applyCoachFire,
@@ -1667,6 +1668,109 @@ check('form: skill points within the field ceiling',
       applyMassCommit(frM, editedPath, { teamRow: userRow, flipOthers: false }, dir));
   }
   check('source still untouched after mass commit', sha(work) === sourceHash);
+}
+
+// --- 15. pipelines: form truth, add / re-grade / remove in one write, rejections ---
+{
+  const teamRowOf = async (f: any): Promise<number> => {
+    const t = mainTable(f, 'Team');
+    await t.readRecords(['ProgramPointBudget']);
+    for (let i = 0; i < t.records.length; i++) {
+      const r = t.records[i];
+      if (!r.isEmpty && Number(val(r, 'ProgramPointBudget')) > 0) return i;
+    }
+    return -1;
+  };
+  // A school with no list at all (FCS filler rows carry a null ref) for the refusal check.
+  const bareRowOf = async (f: any): Promise<number> => {
+    const t = mainTable(f, 'Team');
+    await t.readRecords(['SchoolPipelineInfluenceList']);
+    for (let i = 0; i < t.records.length; i++) {
+      const r = t.records[i];
+      if (r.isEmpty) continue;
+      const ref = refFromRecord(r, 'SchoolPipelineInfluenceList');
+      if (!ref || (ref.tableId === 0 && ref.row === 0)) return i;
+    }
+    return -1;
+  };
+  const neighbourOf = async (f: any, from: number): Promise<{ row: number; entries: string } | null> => {
+    for (let row = from + 1; row < from + 12; row++) {
+      try {
+        const nf = await buildPipelinesForm(f, row, editedPath);
+        return { row, entries: JSON.stringify(nf.entries) };
+      } catch {
+        // no list on that row; keep looking
+      }
+    }
+    return null;
+  };
+  const frP = await loadFranchise(editedPath);
+  const teamRow = await teamRowOf(frP);
+  const pform = await buildPipelinesForm(frP, teamRow, editedPath);
+  check('pipelines form: game-named vocabulary (International shows as National), six-tier ladder, 42-slot list',
+    pform.options.length === 43 && pform.options.some((o) => o.pipeline === 'International' && o.label === 'National') &&
+    pform.options.some((o) => o.pipeline === 'BigSky' && /Dakota/.test(o.region)) &&
+    pform.levels.length === 6 && pform.levels[5].level === 'CulturalPillar' && pform.levels[5].label === 'Cultural Pillar' &&
+    pform.capacity === 42 && pform.valueMax === 1000,
+    `${pform.school}: ${pform.entries.length} pipelines, ${pform.freeRows} free rows`);
+  check('pipelines form: entries carry a 0–5 tier and sort strongest first',
+    pform.entries.length > 1 && pform.entries.every((e) => e.tier >= 0 && e.tier <= 5) &&
+    pform.entries.every((e, i) => i === 0 || pform.entries[i - 1].tier >= e.tier),
+    pform.entries.slice(0, 3).map((e) => `${e.label} ${e.tier}/${e.value}`).join(', '));
+  const neighbourBefore = await neighbourOf(frP, teamRow);
+  const onList = new Set(pform.entries.map((e) => e.pipeline));
+  const newcomer = pform.options.find((o) => !onList.has(o.pipeline))!;
+  const regrade = pform.entries[pform.entries.length - 1]; // the weakest, lifted to the Pillar floor
+  const dropped = pform.entries[0];
+  const pillar = pform.levels[5].floor;
+  const res = await applyPipelinesEdit(
+    frP,
+    editedPath,
+    { teamRow, set: [{ pipeline: newcomer.pipeline, value: 90 }, { pipeline: regrade.pipeline, value: pillar }], remove: [dropped.pipeline] },
+    dir
+  );
+  check('pipelines: one write adds, re-grades and removes', res.added === 1 && res.updated === 1 && res.removed === 1 && res.editedPath === editedPath,
+    `+${newcomer.label}, ${regrade.label} -> ${pillar}, −${dropped.label}`);
+  const frP1 = await loadFranchise(editedPath);
+  const pform2 = await buildPipelinesForm(frP1, teamRow, editedPath);
+  const addedE = pform2.entries.find((e) => e.pipeline === newcomer.pipeline);
+  const regradedE = pform2.entries.find((e) => e.pipeline === regrade.pipeline);
+  check('pipelines: added pipeline reads back at 90 / Popular / tier 3',
+    !!addedE && addedE.value === 90 && addedE.level === 'Popular' && addedE.tier === 3, newcomer.label);
+  check('pipelines: re-graded pipeline reads back at the Pillar floor with the tier following the value',
+    !!regradedE && regradedE.value === pillar && regradedE.level === 'CulturalPillar' && regradedE.tier === 5,
+    `${regrade.label} ${regrade.value}/${regrade.level} -> ${regradedE?.value}/${regradedE?.level}`);
+  check('pipelines: removed pipeline is gone and the count moved by the net (+1 −1)',
+    !pform2.entries.some((e) => e.pipeline === dropped.pipeline) && pform2.entries.length === pform.entries.length, dropped.label);
+  check('pipelines: the removal freed its entry row', pform2.freeRows === pform.freeRows, `${pform.freeRows} -> ${pform2.freeRows}`);
+  const neighbourAfter = neighbourBefore ? await neighbourOf(frP1, teamRow) : null;
+  check('pipelines: a neighbouring school reads back unchanged',
+    !!neighbourBefore && !!neighbourAfter && neighbourBefore.row === neighbourAfter.row && neighbourBefore.entries === neighbourAfter.entries,
+    neighbourBefore ? `row ${neighbourBefore.row}` : 'no neighbour with a list');
+  const frP2 = await loadFranchise(editedPath);
+  const before = sha(editedPath);
+  await rejects('pipelines reject: unknown pipeline', async () =>
+    applyPipelinesEdit(frP2, editedPath, { teamRow, set: [{ pipeline: 'Narnia', value: 50 }] }, dir));
+  await rejects('pipelines reject: influence past the schema', async () =>
+    applyPipelinesEdit(frP2, editedPath, { teamRow, set: [{ pipeline: regrade.pipeline, value: 1001 }] }, dir));
+  await rejects('pipelines reject: negative influence', async () =>
+    applyPipelinesEdit(frP2, editedPath, { teamRow, set: [{ pipeline: regrade.pipeline, value: -1 }] }, dir));
+  await rejects('pipelines reject: fractional influence', async () =>
+    applyPipelinesEdit(frP2, editedPath, { teamRow, set: [{ pipeline: regrade.pipeline, value: 50.5 }] }, dir));
+  await rejects('pipelines reject: removing a pipeline not on the list', async () =>
+    applyPipelinesEdit(frP2, editedPath, { teamRow, remove: [dropped.pipeline] }, dir));
+  await rejects('pipelines reject: the same pipeline set and removed', async () =>
+    applyPipelinesEdit(frP2, editedPath, { teamRow, set: [{ pipeline: regrade.pipeline, value: 50 }], remove: [regrade.pipeline] }, dir));
+  await rejects('pipelines reject: a pipeline twice in one batch', async () =>
+    applyPipelinesEdit(frP2, editedPath, { teamRow, set: [{ pipeline: regrade.pipeline, value: 50 }, { pipeline: regrade.pipeline, value: 60 }] }, dir));
+  await rejects('pipelines reject: nothing to change', async () => applyPipelinesEdit(frP2, editedPath, { teamRow }, dir));
+  const bareRow = await bareRowOf(frP2);
+  if (bareRow >= 0) {
+    await rejects('pipelines reject: a school the game keeps no list for', async () =>
+      applyPipelinesEdit(frP2, editedPath, { teamRow: bareRow, set: [{ pipeline: 'Ohio', value: 50 }] }, dir));
+  }
+  check('pipeline rejections left the edited file unchanged', sha(editedPath) === before);
+  check('source still untouched after pipeline edits', sha(work) === sourceHash);
 }
 
 console.log(failures === 0 ? '\nedit-check: ALL PASS' : `\nedit-check: ${failures} FAILURE(S)`);

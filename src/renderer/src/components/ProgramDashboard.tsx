@@ -5,6 +5,7 @@ import { spaceOut } from '../lib/format.ts';
 import BowlIcon, { BowlMarkGroup, CfpMarkGroup } from './BowlIcon.tsx';
 import ContractPanel from './ContractPanel.tsx';
 import EditGradesModal from './EditGradesModal.tsx';
+import EditPipelinesModal from './EditPipelinesModal.tsx';
 import FieldGraphic from './FieldGraphic.tsx';
 import { useHQ } from '../store.ts';
 
@@ -247,6 +248,7 @@ export default function ProgramDashboard({
   const seasons = school.seasonHistory ?? [];
   const browsing = useHQ((s) => s.browseRow) !== null;
   const [editingGrades, setEditingGrades] = useState(false);
+  const [editingPipelines, setEditingPipelines] = useState(false);
   if (!rc && !seasons.length && !school.contract) {
     return <div className="empty">Reading your dynasty save…</div>;
   }
@@ -295,7 +297,17 @@ export default function ProgramDashboard({
       </div>
       {school.contract && <ContractPanel contract={school.contract} />}
       <div className="panel">
-        <div className="panel-title">Your Pipelines</div>
+        <div className="panel-title grade-title">
+          <span>Your Pipelines</span>
+          {!browsing && (
+            <button type="button" className="pf-btn grade-edit" onClick={() => setEditingPipelines(true)}>
+              ✎ EDIT
+            </button>
+          )}
+        </div>
+        {editingPipelines && !browsing &&
+          // Portaled like the grades dialog: the stage's backdrop filter would contain the overlay.
+          createPortal(<EditPipelinesModal onClose={() => setEditingPipelines(false)} />, document.body)}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {(rc?.pipelines ?? []).map((p) => (
             <span

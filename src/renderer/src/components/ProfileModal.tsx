@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { abilityDesc } from '../../../shared/ability-descs.ts';
+import { pipelineLabel } from '../../../shared/pipeline-tiers.ts';
 import { useDialog } from '../lib/dialog.ts';
 import type {
   CoachProfile,
@@ -746,7 +747,7 @@ function CoachBody({ c }: { c: CoachProfile }) {
         )}
         {c.pipeline && (
           <span className="chip">
-            <span className="k">PIPELINE</span>&nbsp;{spaceOut(c.pipeline)}
+            <span className="k">PIPELINE</span>&nbsp;{pipelineLabel(c.pipeline)}
           </span>
         )}
       </div>

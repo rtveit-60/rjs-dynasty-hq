@@ -12,6 +12,7 @@ import type {
   TeamHistoryData,
   TeamInfo
 } from '../../shared/types.ts';
+import { levelLabel, pipelineLabel } from '../../shared/pipeline-tiers.ts';
 import { COACH_GOAL_LABELS } from '../data/coach-goals.ts';
 import { SCHOOL_LOCATIONS } from '../data/school-locations.ts';
 import { ensureCoachSchema } from './coach-schema.ts';
@@ -1182,8 +1183,8 @@ async function extractRecruiting(
     const pipelines: import('../../shared/types.ts').PipelineStrength[] = [...(own?.pipelines ?? new Map()).entries()]
       .map(([pipeline, p]) => ({
         pipeline,
-        label: wordSpace(pipeline),
-        level: wordSpace(p.level),
+        label: pipelineLabel(pipeline),
+        level: levelLabel(p.level),
         tier: p.tier,
         value: p.value
       }))
