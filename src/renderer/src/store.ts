@@ -48,6 +48,7 @@ interface HQStore {
   setUiScale: (scale: number) => Promise<void>;
   setUiFit: (on: boolean) => Promise<void>;
   setAutoUpdate: (enabled: boolean) => Promise<void>;
+  setPrestigeTier: (tier: import('../../shared/prestige.ts').PrestigeTier) => Promise<void>;
 }
 
 let initialized = false;
@@ -143,6 +144,11 @@ export const useHQ = create<HQStore>((set, get) => ({
 
   setAutoUpdate: async (enabled) => {
     const settings = await window.hq.setAutoUpdate(enabled);
+    set({ settings });
+  },
+
+  setPrestigeTier: async (tier) => {
+    const settings = await window.hq.setPrestigeTier(tier);
     set({ settings });
   }
 }));

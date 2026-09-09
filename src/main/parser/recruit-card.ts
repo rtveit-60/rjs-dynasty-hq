@@ -208,6 +208,23 @@ export const GLANCE: Record<string, [string, string][]> = {
 /** Position → glance list key. Same shape as GROUP_OF except TE stands alone. */
 const GLANCE_OF: Record<string, string> = { ...GROUP_OF, TE: 'TE' };
 
+/**
+ * The body ratings every recruit carries — the At a Glance card's Physical
+ * row, in this order. Everything else on the card is Positional.
+ */
+export const PHYSICAL: [string, string][] = [
+  ['SpeedRating', 'SPD'],
+  ['AccelerationRating', 'ACC'],
+  ['AgilityRating', 'AGI'],
+  ['ChangeOfDirectionRating', 'COD'],
+  ['StrengthRating', 'STR'],
+  ['JumpingRating', 'JMP'],
+  ['StaminaRating', 'STA'],
+  ['ToughnessRating', 'TGH'],
+  ['InjuryRating', 'INJ']
+];
+const PHYSICAL_FIELDS = new Set(PHYSICAL.map(([f]) => f));
+
 export const CARD_FIELDS = [
   'FirstName',
   'LastName',
@@ -225,7 +242,9 @@ export const CARD_FIELDS = [
   'MentalAbilityRank1', 'MentalAbilityRank2', 'MentalAbilityRank3',
   'PhysicalAbility1', 'PhysicalAbility2', 'PhysicalAbility3', 'PhysicalAbility4', 'PhysicalAbility5',
   ...new Set(
-    [...COMMON, ...Object.values(BY_GROUP).flat(), ...Object.values(GLANCE).flat()].map(([f]) => f)
+    [...COMMON, ...PHYSICAL, ...Object.values(BY_GROUP).flat(), ...Object.values(GLANCE).flat()].map(
+      ([f]) => f
+    )
   )
 ];
 
@@ -244,16 +263,34 @@ export function ratingsFromRecord(rec: any): { label: string; value: number }[] 
     .filter((r) => r.value > 0);
 }
 
-/** The at-a-glance skills for the record's position, display-ordered. */
-export function glanceFromRecord(rec: any): { label: string; value: number }[] {
+/**
+ * The at-a-glance ratings for the record's position, split into the two rows
+ * the card shows: Physical (the body ratings, fixed order) and Positional
+ * (the position's glance picks first, then the rest of its sheet, awareness
+ * leading — with the physical fields kept out so nothing shows twice).
+ */
+export function glanceFromRecord(rec: any): {
+  physical: { label: string; value: number }[];
+  positional: { label: string; value: number }[];
+} {
   const position = String(val(rec, 'Position') ?? '');
-  const spec = GLANCE[GLANCE_OF[position]] ?? COMMON;
-  return spec
-    .map(([field, label]) => {
-      const v = Number(val(rec, field));
-      return { label, value: Number.isFinite(v) ? v : 0 };
-    })
-    .filter((r) => r.value > 0);
+  const read = (spec: [string, string][]) =>
+    spec
+      .map(([field, label]) => {
+        const v = Number(val(rec, field));
+        return { label, value: Number.isFinite(v) ? v : 0 };
+      })
+      .filter((r) => r.value > 0);
+  const group = GROUP_OF[position];
+  const all: [string, string][] = [
+    ['AwarenessRating', 'AWR'],
+    ...(GLANCE[GLANCE_OF[position]] ?? []),
+    ...(group ? (BY_GROUP[group] ?? []) : [])
+  ];
+  const skills = all.filter(
+    ([field], i) => !PHYSICAL_FIELDS.has(field) && all.findIndex(([f]) => f === field) === i
+  );
+  return { physical: read(PHYSICAL), positional: read(skills) };
 }
 
 /** Mental + physical ability slots from an already-read Player record. */
@@ -311,7 +348,8 @@ export async function extractRecruitCard(franchise: any, playerRow: number): Pro
         const p = String(val(rec, 'IdealRecruitingPitch') ?? '');
         return /^Invalid/.test(p) || p === 'undefined' ? '' : p;
       })(),
-      glance,
+      glancePhysical: glance.physical,
+      glancePositional: glance.positional,
       mental,
       physical
     };

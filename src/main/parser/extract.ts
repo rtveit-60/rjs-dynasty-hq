@@ -83,6 +83,7 @@ const COACH_FIELDS = [
   'IsUserControlled',
   'Age',
   'CoachPrestige',
+  'CoachPrestigeScore',
   'COACH_OFFTENDENCYRUNPASS',
   'COACH_DEFTENDENCYRUNPASS',
   'COACH_OFFTENDENCYAGGRESSCONSERV',
@@ -443,7 +444,11 @@ async function extractCarousel(
         yearsRemaining: Number(val(rec, 'ContractYearsRemaining') ?? 0),
         contractLength: Number(val(rec, 'ContractLength') ?? 0),
         contractStatus: CONTRACT_ALIAS[rawContract] ?? rawContract,
-        isUser: val(rec, 'IsUserControlled') === true
+        isUser: val(rec, 'IsUserControlled') === true,
+        prestigeScore: Number.isFinite(Number(val(rec, 'CoachPrestigeScore')))
+          ? Number(val(rec, 'CoachPrestigeScore'))
+          : undefined,
+        prestigeLetter: enumOrNull(val(rec, 'CoachPrestige')) ?? undefined
       });
     }
     out.sort((a, b) => a.securityPct - b.securityPct);

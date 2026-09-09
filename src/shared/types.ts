@@ -24,6 +24,13 @@ export interface Settings {
   /** Scale the UI with window width (uiScale becomes a bias on the fit). */
   uiFit: boolean;
   windowBounds?: { x: number; y: number; width: number; height: number };
+  /**
+   * Coach prestige regression tier (see src/shared/prestige.ts). 'off' (the
+   * default) leaves the game's behavior alone and writes nothing; any other
+   * tier lets the app deduct prestige on each sync that brings a new week,
+   * writing only the save's protected `_RJ` copy.
+   */
+  prestigeTier?: 'off' | 'lenient' | 'balanced' | 'demanding' | 'ruthless';
 }
 
 export interface GameDirStatus {
@@ -109,6 +116,9 @@ export interface CarouselEntry {
   /** Normalized ContractStatus: Signed | Expiring | PendingFire | PendingNFL | PendingRenewal | PendingRetire | PendingHire | FreeAgent. */
   contractStatus: string;
   isUser: boolean;
+  /** Coach.CoachPrestigeScore (0–10000) and the save's own letter (LetterGrade member, e.g. "Bminus"). */
+  prestigeScore?: number;
+  prestigeLetter?: string;
 }
 
 export interface GameInfo {
@@ -492,8 +502,10 @@ export interface RecruitCard {
   homeState: string;
   /** IdealRecruitingPitch enum key (ItsGameTime…); '' when none. Display data in shared/pitches. */
   idealPitch: string;
-  /** The skills the position lives on, ordered for the At a Glance card. */
-  glance: { label: string; value: number }[];
+  /** Body ratings (speed, strength…) for the At a Glance card's Physical row. */
+  glancePhysical: { label: string; value: number }[];
+  /** The skills the position lives on, for the card's Positional row. */
+  glancePositional: { label: string; value: number }[];
   mental: AbilitySlot[];
   physical: AbilitySlot[];
 }

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { SAVE_NAME_MAX, type GameDirStatus } from '../../../shared/types.ts';
 import { useHQ } from '../store.ts';
 import InfoDot from './InfoDot.tsx';
+import { PRESTIGE_TIERS, PRESTIGE_TIER_SPECS, prestigeTierSpec } from '../../../shared/prestige.ts';
+import PrestigeTierTable, { PrestigeWeightNotes } from './PrestigeTierTable.tsx';
 import ScaleControl from './ScaleControl.tsx';
 import ThemeToggle from './ThemeToggle.tsx';
 
@@ -118,6 +120,36 @@ export default function Setup() {
         <div className="rule" />
       </div>
       <AutoUpdateToggle />
+
+      <div className="section-h">
+        <h3>Coach prestige regression</h3>
+        <InfoDot title="Coach prestige regression">
+          <p>
+            The game raises coach prestige for every win but takes back a single point per loss, and
+            nothing for a firing or a missed expectation. Switch a tier on and the app deducts
+            prestige for what actually happens: losses weighed by how badly they read (a ranked
+            unbeaten falling to a 1–7 team costs far more than two heavyweights trading a game),
+            losing streaks, seasons that end on the hot seat, and firings. Coordinators pay a share
+            of the head coach's charge. CPU and human coaches alike.
+          </p>
+          <p>
+            It runs on each sync that brings a new week and writes only the save's protected
+            <b> _RJ</b> copy, so play the _RJ file in the game to keep the two in step. The Coaching
+            Carousel shows every deduction and its reason. Off leaves the game as it is and writes
+            nothing.
+          </p>
+          <p style={{ marginBottom: 2 }}>
+            <b>How a loss is weighed</b>
+          </p>
+          <PrestigeWeightNotes />
+          <p style={{ marginBottom: 2 }}>
+            <b>What each tier charges</b>
+          </p>
+          <PrestigeTierTable />
+        </InfoDot>
+        <div className="rule" />
+      </div>
+      <PrestigeTierControl />
 
       <DiagnosticsSection />
     </div>
@@ -270,6 +302,34 @@ function DiagnosticsSection() {
           Open log folder
         </button>
       </div>
+    </>
+  );
+}
+
+export function PrestigeTierControl({ compact = false }: { compact?: boolean }) {
+  const tier = useHQ((s) => s.settings?.prestigeTier ?? 'off');
+  const setPrestigeTier = useHQ((s) => s.setPrestigeTier);
+  const spec = prestigeTierSpec(tier);
+  return (
+    <>
+      <div className="set-actions" role="radiogroup" aria-label="Coach prestige regression tier">
+        {PRESTIGE_TIERS.map((t) => (
+          <button
+            key={t}
+            className={`filter ${tier === t ? 'active' : ''}`}
+            role="radio"
+            aria-checked={tier === t}
+            onClick={() => void setPrestigeTier(t)}
+          >
+            {t === 'off' ? 'Off' : PRESTIGE_TIER_SPECS[t].label}
+          </button>
+        ))}
+      </div>
+      {!compact && (
+        <p className="set-value">
+          {spec ? spec.blurb : 'The game’s own behavior. Nothing is written.'}
+        </p>
+      )}
     </>
   );
 }
