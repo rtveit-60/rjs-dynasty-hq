@@ -56,6 +56,8 @@ interface HQStore {
   setUiScale: (scale: number) => Promise<void>;
   setUiFit: (on: boolean) => Promise<void>;
   setAutoUpdate: (enabled: boolean) => Promise<void>;
+  /** Scouting veil: hide unscouted recruits' ratings/dev/abilities (Setup). */
+  setHideUnscouted: (on: boolean) => Promise<void>;
   setPrestigeTier: (tier: PrestigeTier) => Promise<void>;
 }
 
@@ -154,6 +156,11 @@ export const useHQ = create<HQStore>((set, get) => ({
 
   setAutoUpdate: async (enabled) => {
     const settings = await window.hq.setAutoUpdate(enabled);
+    set({ settings });
+  },
+
+  setHideUnscouted: async (on) => {
+    const settings = await window.hq.setHideUnscouted(on);
     set({ settings });
   },
 

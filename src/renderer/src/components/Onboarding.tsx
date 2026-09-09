@@ -7,6 +7,8 @@ export default function Onboarding() {
   const refreshDetected = useHQ((s) => s.refreshDetected);
   const useSave = useHQ((s) => s.useSave);
   const pickSave = useHQ((s) => s.pickSave);
+  const veilOn = useHQ((s) => s.settings?.hideUnscouted === true);
+  const setHideUnscouted = useHQ((s) => s.setHideUnscouted);
 
   useEffect(() => {
     void refreshDetected();
@@ -26,6 +28,24 @@ export default function Onboarding() {
           Pick a College Football 27 dynasty save. The dashboard follows it from then on,
           refreshing every time the game writes.
         </p>
+
+        {/* First-run choice; the same switch lives in Setup > Scouting veil. Off by default. */}
+        <div className="hero-opt">
+          <div className="hero-opt-k">Scouting veil</div>
+          <p className="hero-opt-p">
+            The save holds every recruit's true ratings. Show them all, or keep a recruit's
+            overall, dev trait, gem/bust and attributes hidden until your program has fully scouted
+            them, the way the game does. Change it any time in Setup.
+          </p>
+          <div className="set-actions">
+            <button className={`filter ${!veilOn ? 'active' : ''}`} onClick={() => void setHideUnscouted(false)}>
+              Show everything
+            </button>
+            <button className={`filter ${veilOn ? 'active' : ''}`} onClick={() => void setHideUnscouted(true)}>
+              Hide until scouted
+            </button>
+          </div>
+        </div>
 
         {detected.length > 0 && (
           <div className="save-list">

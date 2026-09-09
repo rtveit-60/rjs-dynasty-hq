@@ -122,6 +122,27 @@ export default function Setup() {
       <AutoUpdateToggle />
 
       <div className="section-h">
+        <h3>Scouting veil</h3>
+        <InfoDot title="Scouting veil">
+          <p>
+            The save holds every recruit's true ratings, and by default the app shows them. For a
+            dynasty played the way the game presents it, switch the veil on: a high-school
+            recruit's overall, dev trait, gem/bust flag, attributes and abilities stay hidden
+            on every board, card and profile until your program has run all five scouting
+            passes on them, and Scouting Reports list only fully scouted recruits.
+          </p>
+          <p>
+            Scouting progress comes from your own board's intel, so what you see is what your
+            staff has actually uncovered. Portal transfers are open in the game and stay open
+            here. Sorting by a hidden column keeps the unknowns together rather than ordering
+            them by the hidden value. The player editor is unaffected.
+          </p>
+        </InfoDot>
+        <div className="rule" />
+      </div>
+      <ScoutingVeilToggle />
+
+      <div className="section-h">
         <h3>Coach prestige regression</h3>
         <InfoDot title="Coach prestige regression">
           <p>
@@ -331,6 +352,21 @@ export function PrestigeTierControl({ compact = false }: { compact?: boolean }) 
         </p>
       )}
     </>
+  );
+}
+
+function ScoutingVeilToggle() {
+  const on = useHQ((s) => s.settings?.hideUnscouted === true);
+  const setHideUnscouted = useHQ((s) => s.setHideUnscouted);
+  return (
+    <div className="set-actions">
+      <button className={`filter ${!on ? 'active' : ''}`} onClick={() => void setHideUnscouted(false)}>
+        Show everything
+      </button>
+      <button className={`filter ${on ? 'active' : ''}`} onClick={() => void setHideUnscouted(true)}>
+        Hide until scouted
+      </button>
+    </div>
   );
 }
 

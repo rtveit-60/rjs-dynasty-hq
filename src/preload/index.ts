@@ -67,6 +67,7 @@ export interface HQBridge {
   onZoom: (cb: (effective: number) => void) => () => void;
   getZoom: () => number;
   setAutoUpdate: (enabled: boolean) => Promise<Settings>;
+  setHideUnscouted: (on: boolean) => Promise<Settings>;
   setPrestigeTier: (tier: PrestigeTier) => Promise<Settings>;
   getPrestigeState: () => Promise<PrestigeView | null>;
   installUpdate: () => Promise<void>;
@@ -140,6 +141,7 @@ const bridge: HQBridge = {
   onZoom: subscribe<number>('ui:zoom'),
   getZoom: () => webFrame.getZoomFactor(),
   setAutoUpdate: (enabled) => ipcRenderer.invoke('autoupdate:set', enabled),
+  setHideUnscouted: (on) => ipcRenderer.invoke('scoutveil:set', on),
   setPrestigeTier: (tier) => ipcRenderer.invoke('prestige:tier', tier),
   getPrestigeState: () => ipcRenderer.invoke('prestige:state'),
   installUpdate: () => ipcRenderer.invoke('update:install'),

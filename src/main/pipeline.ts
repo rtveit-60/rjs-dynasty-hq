@@ -120,6 +120,12 @@ export class Pipeline {
    * departure+arrival — that one refresh rebaselines state without stories.
    */
   private suppressMediaOnce = false;
+  /**
+   * Scouting veil (Settings.hideUnscouted), mirrored here so the media engine
+   * keeps a gem note out of a commit story until the user has scouted the
+   * recruit. Set by main on boot and whenever the toggle moves.
+   */
+  hideUnscouted = false;
 
   constructor(events: PipelineEvents) {
     this.events = events;
@@ -718,7 +724,7 @@ export class Pipeline {
         const nowYear = snapshot.season.seasonYear;
         log = log.filter((e) => e.seasonYear <= nowYear);
       }
-      const { state, events } = generateMedia(prev, snapshot, leaders);
+      const { state, events } = generateMedia(prev, snapshot, leaders, { hideUnscouted: this.hideUnscouted });
       // An app-written save diffs against itself (a rename reads as roster
       // churn): rebaseline the state, publish nothing.
       const suppressed = this.suppressMediaOnce;

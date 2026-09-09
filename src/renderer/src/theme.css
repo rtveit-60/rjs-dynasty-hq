@@ -1119,6 +1119,31 @@ table.tbl {
   color: var(--ink-3);
 }
 
+/* First-run option block on the hero card (scouting veil). */
+.hero-opt {
+  margin: 18px 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--hot);
+  border-radius: 3px;
+}
+
+.hero-opt-k {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.hero-opt-p {
+  margin: 6px 0 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
 /* ——— School picker ——— */
 
 .school-grid {
@@ -6154,6 +6179,58 @@ table.tbl.tbl-wide {
 
 .ta-field.locked {
   opacity: 0.45;
+}
+
+/* ——— Scouting veil (Setup) ———
+   The stand-in for a value hidden until the recruit is fully scouted: a dashed
+   plate in the muted ink, reading "n/5" in cells and "Unscouted · n/5" in
+   headers. Deliberately quiet — it marks an absence, never a grade. */
+.veil {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px dashed color-mix(in srgb, var(--ink-3) 60%, transparent);
+  color: var(--ink-3);
+  white-space: nowrap;
+  cursor: help;
+}
+
+.veil.compact {
+  min-width: 30px;
+  padding: 1px 5px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.veil.pf-ovr {
+  font-size: 13px;
+  padding: 11px 12px;
+}
+
+.rc-veil,
+.veil-note {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.rc-veil {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-left: 2px dashed color-mix(in srgb, var(--ink-3) 60%, transparent);
+}
+
+.veil-note {
+  margin: 12px 0 4px;
 }
 
 /* ————————————————————————————————————————————————

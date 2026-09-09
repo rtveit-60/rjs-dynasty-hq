@@ -90,6 +90,8 @@ Three boards over the national class, under the same Team Needs seats as the off
 - **Transfer Portal.** The same board for portal transfers, which fills once your save reaches the offseason window. **Manual Transfers** sits beside it: pick any two schools, see both rosters side by side (sortable by position, name, class or overall), and click players across in either direction. The write follows the game's own sign-player steps, roster lists and depth charts included, and neither school can end above the game's 85-man limit.
 - **Scouting Reports.** Search the class by attribute. *Receivers with 92+ speed. Quarterbacks with 94+ throw power. Tackles over 6'6" and 300 pounds.* Stack as many thresholds as you like, and each becomes its own sortable column. Every hit carries the same + control as the boards, so a find goes straight onto your board.
 
+**Scouting veil.** By default every board shows what the save holds, true overall included. For a dynasty played the way the game presents it, the first-run screen (and **Setup → Scouting veil**) offers **Hide until scouted**: a high-school recruit's overall, dev trait, gem/bust flag, attributes and abilities stay hidden on every board, card and profile until your program has run all five scouting passes on them, the Scouting Reports list only fully scouted recruits, and the press keeps gem intel to recruits your staff has seen. Progress comes from your own board's intel bits, so what you see is what your scouts have actually uncovered; portal transfers stay open, as they are in the game. Off by default and purely presentation, so switching it never touches a save.
+
 ![Recruiting board](docs/screenshots/recruiting-board.png)
 
 ![Scouting Reports](docs/screenshots/scouting-reports.png)
@@ -211,6 +213,7 @@ node scripts/profile-check.ts    # regression suite over the profile extractor
 node scripts/media-check.ts      # run the media engine against a save and audit its output
 node --max-old-space-size=16384 scripts/edit-check.ts   # regression suite over every editor's save writes
 node --max-old-space-size=8192 scripts/prestige-check.ts # prestige regression rules + the batched write, on a save pair
+node scripts/scouting-veil-check.ts                       # scouting veil: intel bits, the hide rule, board/class agreement, the press gate
 node --max-old-space-size=8192 scripts/coach-prestige-probe.ts <save> [--tuning]  # how the game itself moves prestige
 node scripts/bc-check.ts         # prove the built-in texture decoder byte-exact against a reference
 node scripts/extract-awards.ts   # regenerate award names from the installed game

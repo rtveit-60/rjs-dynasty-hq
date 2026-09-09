@@ -118,6 +118,12 @@ export interface MediaContext {
   seasonYear: number;
   week: number;
   weekType: string;
+  /** Scouting veil on: stories keep gem/bust intel to recruits the user has scouted. */
+  hideUnscouted: boolean;
+}
+
+export interface MediaOptions {
+  hideUnscouted?: boolean;
 }
 
 function interestScore(g: GameInfo, ctx: MediaContext): number {
@@ -138,7 +144,8 @@ function interestScore(g: GameInfo, ctx: MediaContext): number {
 export function diffMedia(
   prev: MediaState | null,
   snapshot: Snapshot,
-  leaders: LeagueLeaders | null = null
+  leaders: LeagueLeaders | null = null,
+  options: MediaOptions = {}
 ): RawEvent[] {
   const school = snapshot.school;
   const season = snapshot.season;
@@ -150,7 +157,8 @@ export function diffMedia(
     userName: school.team.longName,
     seasonYear: season.seasonYear,
     week: season.week,
-    weekType: season.weekType
+    weekType: season.weekType,
+    hideUnscouted: options.hideUnscouted === true
   };
 
   const baseline =
@@ -473,13 +481,14 @@ export function diffMedia(
 export function generateMedia(
   prev: MediaState | null,
   snapshot: Snapshot,
-  leaders: LeagueLeaders | null = null
+  leaders: LeagueLeaders | null = null,
+  options: MediaOptions = {}
 ): { state: MediaState | null; events: MediaEvent[] } {
   const state = buildMediaState(snapshot, leaders);
   if (!state) return { state: null, events: [] };
   // One ledger per season cycle: no headline or post template repeats inside it.
   const ledger: VarietyLedger = makeLedger(prev?.variety, state.seasonYear);
-  const raw = diffMedia(prev, snapshot, leaders);
+  const raw = diffMedia(prev, snapshot, leaders, options);
   const events = raw
     .map((r) => writeArticle(r, ledger))
     .filter((e): e is MediaEvent => !!e);

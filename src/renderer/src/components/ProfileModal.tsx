@@ -29,6 +29,7 @@ import {
   yearAbbrev
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import { Veiled, useRecruitScout, useVeilOn, veiled } from '../lib/veil.tsx';
 import BoardMark from './BoardMark.tsx';
 import BoardSaveBar from './BoardSaveBar.tsx';
 import EditPlayerModal from './EditPlayerModal.tsx';
@@ -513,6 +514,10 @@ function BoardLine({ playerRow }: { playerRow: number }) {
 function PlayerBody({ p }: { p: PlayerProfile }) {
   const colors = useTeamColors(p.teamRow);
   const hurt = p.injury && p.injury !== 'Uninjured';
+  // Scouting veil (Setup): a prospect's sheet stays closed until fully scouted.
+  const veilOn = useVeilOn();
+  const scout = useRecruitScout(p.row);
+  const hid = p.recruit !== null && scout !== null && veiled(veilOn, scout);
   return (
     <div className="pf-body">
       <div className="pf-head">
@@ -543,12 +548,20 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
               <NameLink req={p.teamRow !== null ? { kind: 'school', row: p.teamRow } : null}>{p.teamName}</NameLink>
             )}
             {p.yearsWithTeam > 0 && <span>Year {p.yearsWithTeam}</span>}
-            <span className={devClass(p.devTrait)}>{devLabel(p.devTrait)}</span>
+            {hid && scout ? (
+              <Veiled r={scout} />
+            ) : (
+              <span className={devClass(p.devTrait)}>{devLabel(p.devTrait)}</span>
+            )}
             {hurt && <span className="pf-hurt">{spaceOut(p.injury)}</span>}
             {p.awards > 0 && <span>{p.awards} award{p.awards > 1 ? 's' : ''}</span>}
           </div>
         </div>
-        <span className={`ovr ${ovrTier(p.overall)} pf-ovr`}>{p.overall}</span>
+        {hid && scout ? (
+          <Veiled r={scout} compact className="pf-ovr" />
+        ) : (
+          <span className={`ovr ${ovrTier(p.overall)} pf-ovr`}>{p.overall}</span>
+        )}
       </div>
       <AccentRule {...colors} />
 
@@ -623,7 +636,14 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
         <div className="pf-none">No game action recorded yet.</div>
       )}
 
-      {p.ratings.length > 0 && (
+      {hid && scout && (
+        <div className="pf-none">
+          Ratings and abilities stay hidden until your program has fully scouted this recruit
+          ({scout.scoutsDone} of 5 passes done).
+        </div>
+      )}
+
+      {!hid && p.ratings.length > 0 && (
         <>
           <SectionTitle>Ratings</SectionTitle>
           <div className="pf-ratings">
@@ -637,7 +657,7 @@ function PlayerBody({ p }: { p: PlayerProfile }) {
         </>
       )}
 
-      {(p.mental.length > 0 || p.physical.length > 0) && (
+      {!hid && (p.mental.length > 0 || p.physical.length > 0) && (
         <>
           <SectionTitle>Abilities</SectionTitle>
           <div className="pf-abilities">

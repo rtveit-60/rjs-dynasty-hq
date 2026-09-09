@@ -351,7 +351,8 @@ function commitStory(r: Extract<RawEvent, { kind: 'commit' }>, ledger: VarietyLe
   const { recruit: rec, ctx } = r;
   const school = rec.committedTo ?? 'a program';
   const isUser = school === ctx.userName;
-  const gem = rec.quality === 'GEM';
+  // With the scouting veil on, the press only knows what your scouts know.
+  const gem = rec.quality === 'GEM' && (!ctx.hideUnscouted || rec.scouted || rec.isTransfer);
   const rivals = rec.race.filter((s) => s.name !== school).map((s) => s.name);
   const classCount = (ctx.snapshot.school?.recruiting?.recruits ?? []).filter(
     (x) => x.committedTo === school

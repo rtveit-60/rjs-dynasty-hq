@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import type { RecruitTargetEntry, Snapshot } from '../../../shared/types.ts';
 import { STAGE_LABELS, spaceOut, stars } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import { Veiled, useVeilOn, veiled } from '../lib/veil.tsx';
 import InfoDot, { InfoRow } from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
@@ -96,6 +97,9 @@ const DEAL_LABELS: Record<string, string> = {
 export default function TargetsView({ school, browsing = false }: { school: School; browsing?: boolean }) {
   const board = school.board;
   const currentWeek = useHQ((s) => s.snapshot?.season?.week ?? 0);
+  // Scouting veil (Setup): gem/bust stays unknown until the prospect is fully scouted.
+  const veilOn = useVeilOn();
+  const hid = (t: RecruitTargetEntry) => veiled(veilOn, t);
   const [sortKey, setSortKey] = useState<SortKey>('stars');
   const [asc, setAsc] = useState(false);
   const [openRow, setOpenRow] = useState<number | null>(null);
@@ -113,6 +117,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
     if (!board) return [];
     const dir = asc ? 1 : -1;
     const list = [...board.targets];
+    const gemOf = (t: RecruitTargetEntry) => (hid(t) ? 1 : (GEM_ORDER[t.quality] ?? 1));
     list.sort((a, b) => {
       switch (sortKey) {
         case 'name':
@@ -120,7 +125,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
         case 'pos':
           return dir * a.position.localeCompare(b.position) || b.stars - a.stars;
         case 'gem':
-          return dir * ((GEM_ORDER[a.quality] ?? 1) - (GEM_ORDER[b.quality] ?? 1)) || b.stars - a.stars;
+          return dir * (gemOf(a) - gemOf(b)) || b.stars - a.stars;
         case 'status':
           return (
             dir * ((STAGE_ORDER[a.stage] ?? 9) - (STAGE_ORDER[b.stage] ?? 9)) || b.influence - a.influence
@@ -146,7 +151,7 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
       }
     });
     return list;
-  }, [board, sortKey, asc, conflicts]);
+  }, [board, sortKey, asc, conflicts, veilOn]);
 
   if (!board || !board.targets.length) {
     return (
@@ -156,8 +161,8 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
       </>
     );
   }
-  const gems = board.targets.filter((t) => t.quality === 'GEM').length;
-  const busts = board.targets.filter((t) => t.quality === 'BUST').length;
+  const gems = board.targets.filter((t) => t.quality === 'GEM' && !hid(t)).length;
+  const busts = board.targets.filter((t) => t.quality === 'BUST' && !hid(t)).length;
   const committed = board.targets.filter((t) => t.stage.includes('Committed')).length;
 
   const sortBy = (key: SortKey, defaultAsc = false) => {
@@ -350,9 +355,15 @@ export default function TargetsView({ school, browsing = false }: { school: Scho
                   </span>
                 </td>
                 <td>
-                  {t.quality === 'GEM' && <span className="q gem">GEM</span>}
-                  {t.quality === 'BUST' && <span className="q bust">BUST</span>}
-                  {t.quality !== 'GEM' && t.quality !== 'BUST' && '—'}
+                  {hid(t) ? (
+                    <Veiled r={t} compact />
+                  ) : (
+                    <>
+                      {t.quality === 'GEM' && <span className="q gem">GEM</span>}
+                      {t.quality === 'BUST' && <span className="q bust">BUST</span>}
+                      {t.quality !== 'GEM' && t.quality !== 'BUST' && '—'}
+                    </>
+                  )}
                 </td>
                 <td>{statusCell(t)}</td>
                 <td title={t.visitActivity ? spaceOut(t.visitActivity) : undefined}>

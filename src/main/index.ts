@@ -295,6 +295,14 @@ function registerIpc(): void {
 
   handle('update:install', () => installUpdate());
 
+  // Scouting veil (Setup > Immersion). Pure presentation in the renderer; the
+  // pipeline mirror keeps the media engine from spilling a gem note early.
+  handle('scoutveil:set', (_e, on: unknown) => {
+    const settings = updateSettings({ hideUnscouted: on === true });
+    pipeline.hideUnscouted = settings.hideUnscouted === true;
+    return settings;
+  });
+
   // Coach prestige regression tier. Switching a tier on runs a review of the
   // current snapshot right away (it baselines if the ledger is new — nothing
   // played before the switch is ever charged).
@@ -1286,7 +1294,8 @@ if (!gotLock) {
     started = true;
     clearTimeout(startupWatchdog);
     startUpdateCheck();
-    const { savePath, schoolTeamRow } = getSettings();
+    const { savePath, schoolTeamRow, hideUnscouted } = getSettings();
+    pipeline.hideUnscouted = hideUnscouted === true;
     if (savePath && existsSync(savePath)) {
       startWatching(savePath);
       void pipeline.refresh(savePath, schoolTeamRow);

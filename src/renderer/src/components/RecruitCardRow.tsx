@@ -4,6 +4,7 @@ import type { RecruitCard } from '../../../shared/types.ts';
 import { PITCHES } from '../../../shared/pitches.ts';
 import { RATINGS } from '../../../shared/ratings.ts';
 import { archetypeLabel, devClass, devLabel, heightFt, medalColor, ovrTier, recruitPos, spaceOut } from '../lib/format.ts';
+import { Veiled, useRecruitScout, useVeilOn, veiled } from '../lib/veil.tsx';
 
 
 /** "SPD" → "Speed", for the tile tooltips. */
@@ -18,6 +19,10 @@ const SKILL_NAME = new Map(RATINGS.map((r) => [r.label, r.name]));
 export default function RecruitCardRow({ playerRow, span }: { playerRow: number; span: number }) {
   const [card, setCard] = useState<RecruitCard | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'empty'>('loading');
+  // Scouting veil (Setup): the sheet stays closed until your scouts finish.
+  const veilOn = useVeilOn();
+  const scout = useRecruitScout(playerRow);
+  const hid = veiled(veilOn, scout);
 
   useEffect(() => {
     let alive = true;
@@ -48,7 +53,11 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
               <div className="rc-kicker">At a Glance</div>
               <div className="rc-head">
                 <div className="rc-ovr">
-                  <span className={`ovr ${ovrTier(card.overall)}`}>{card.overall}</span>
+                  {hid && scout ? (
+                    <Veiled r={scout} compact />
+                  ) : (
+                    <span className={`ovr ${ovrTier(card.overall)}`}>{card.overall}</span>
+                  )}
                   <span className="rc-ovr-k">OVR</span>
                 </div>
                 <div>
@@ -61,7 +70,11 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                     <span>{recruitPos(card.position)}</span>
                     <span>{heightFt(card.heightIn)}</span>
                     <span>{card.weightLb} lb</span>
-                    <span className={devClass(card.devTrait)}>{devLabel(card.devTrait)}</span>
+                    {hid && scout ? (
+                      <Veiled r={scout} />
+                    ) : (
+                      <span className={devClass(card.devTrait)}>{devLabel(card.devTrait)}</span>
+                    )}
                     {card.homeTown && (
                       <span>
                         {card.homeTown}, {spaceOut(card.homeState)}
@@ -71,7 +84,15 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                 </div>
               </div>
 
-              {(
+              {hid && scout && (
+                <div className="rc-veil">
+                  Attributes and abilities stay hidden until your program has fully scouted this
+                  recruit ({scout.scoutsDone} of 5 passes done). Scout them from the Weekly Plan in
+                  the Recruiting Office.
+                </div>
+              )}
+
+              {!hid && (
                 [
                   ['Physical', card.glancePhysical],
                   [`Positional · ${recruitPos(card.position)}`, card.glancePositional]
@@ -93,7 +114,7 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                   )
               )}
 
-              {(card.mental.length > 0 || card.physical.length > 0) && (
+              {!hid && (card.mental.length > 0 || card.physical.length > 0) && (
                 <div className="rc-abilities">
                   {card.mental.length > 0 && (
                     <div>
