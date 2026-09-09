@@ -43,6 +43,7 @@ import type {
 } from '../shared/types.ts';
 import type { ScoutCriterion, ScoutHit } from '../shared/ratings.ts';
 import type { CfpBracket } from '../shared/cfp-bracket.ts';
+import type { PrestigeTier, PrestigeView } from '../shared/prestige.ts';
 
 const subscribe = <T>(channel: string) => {
   return (cb: (data: T) => void): (() => void) => {
@@ -64,6 +65,8 @@ export interface HQBridge {
   onZoom: (cb: (effective: number) => void) => () => void;
   getZoom: () => number;
   setAutoUpdate: (enabled: boolean) => Promise<Settings>;
+  setPrestigeTier: (tier: PrestigeTier) => Promise<Settings>;
+  getPrestigeState: () => Promise<PrestigeView | null>;
   installUpdate: () => Promise<void>;
   onUpdateReady: (cb: (version: string) => void) => () => void;
   revealSave: () => Promise<void>;
@@ -116,6 +119,8 @@ export interface HQBridge {
   onSettings: (cb: (s: Settings) => void) => () => void;
   onStatus: (cb: (s: WatchStatus) => void) => () => void;
   onMedia: (cb: (events: MediaEvent[]) => void) => () => void;
+  /** A prestige review just wrote the save; payload = number of charges. */
+  onPrestige: (cb: (count: number) => void) => () => void;
   onSystemTheme: (cb: (t: 'light' | 'dark') => void) => () => void;
 }
 
@@ -131,6 +136,8 @@ const bridge: HQBridge = {
   onZoom: subscribe<number>('ui:zoom'),
   getZoom: () => webFrame.getZoomFactor(),
   setAutoUpdate: (enabled) => ipcRenderer.invoke('autoupdate:set', enabled),
+  setPrestigeTier: (tier) => ipcRenderer.invoke('prestige:tier', tier),
+  getPrestigeState: () => ipcRenderer.invoke('prestige:state'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateReady: subscribe<string>('update:ready'),
   revealSave: () => ipcRenderer.invoke('save:reveal'),
@@ -180,6 +187,7 @@ const bridge: HQBridge = {
   onSettings: subscribe<Settings>('settings'),
   onStatus: subscribe<WatchStatus>('status'),
   onMedia: subscribe<MediaEvent[]>('media'),
+  onPrestige: subscribe<number>('prestige'),
   onSystemTheme: subscribe<'light' | 'dark'>('system-theme')
 };
 

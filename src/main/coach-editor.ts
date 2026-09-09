@@ -465,3 +465,62 @@ export async function applyCoachEdit(
   });
   return { editedPath, coachName };
 }
+
+// --- Prestige regression: one batched CoachPrestigeScore write -----------------
+
+export interface PrestigeDeduction {
+  coachRow: number;
+  /** Points to take off the coach's current score (floored at 0). */
+  points: number;
+}
+
+export interface PrestigeApplied {
+  coachRow: number;
+  before: number;
+  after: number;
+}
+
+/**
+ * Deduct prestige from several coaches in ONE write of the `_RJ` copy. Reads
+ * each coach's live score from the parse (never trusts the caller's idea of
+ * it), floors at zero, writes, and verifies every row on a cold reload. The
+ * letter (CoachPrestige) is left to the game's own re-grade, as the coach
+ * editor does. Rows that are not coaches, duplicate rows and non-positive
+ * amounts are rejected before anything is applied.
+ */
+export async function applyPrestigeAdjustments(
+  franchise: any,
+  savePath: string,
+  deductions: PrestigeDeduction[],
+  backupDir: string
+): Promise<{ editedPath: string; applied: PrestigeApplied[] }> {
+  if (!Array.isArray(deductions) || !deductions.length) throw new Error('Nothing to deduct.');
+  const table = await coachTable(franchise);
+  const seen = new Set<number>();
+  const applied: PrestigeApplied[] = [];
+  for (const d of deductions) {
+    if (!Number.isInteger(d.coachRow) || d.coachRow < 0) throw new Error('Bad coach row.');
+    if (!Number.isFinite(d.points) || d.points <= 0) throw new Error('A prestige deduction must be a positive number of points.');
+    if (seen.has(d.coachRow)) throw new Error('A coach appears twice in one prestige write.');
+    seen.add(d.coachRow);
+    const rec = coachRecord(table, d.coachRow);
+    const before = Number(val(rec, 'CoachPrestigeScore'));
+    if (!Number.isFinite(before)) throw new Error(`${fullName(rec)} has no readable prestige score.`);
+    const after = Math.max(0, Math.round(before - d.points));
+    applied.push({ coachRow: d.coachRow, before, after });
+  }
+  for (const a of applied) table.records[a.coachRow].CoachPrestigeScore = a.after;
+
+  const { editedPath } = await writeEditedSave(franchise, savePath, backupDir, async (check) => {
+    const t = mainTable(check, 'Coach');
+    if (!(await ensureCoachSchema(check, t))) throw new Error('Verify reload failed.');
+    await t.readRecords();
+    for (const a of applied) {
+      const w = t.records?.[a.coachRow];
+      if (!w || Number(val(w, 'CoachPrestigeScore')) !== a.after) {
+        throw new Error(`The written save did not read back with the prestige change (row ${a.coachRow}).`);
+      }
+    }
+  });
+  return { editedPath, applied };
+}

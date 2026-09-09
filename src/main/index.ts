@@ -17,6 +17,8 @@ import { initLog, log, logPath, reportError, tailLog } from './log.ts';
 import { slugName } from './logos.ts';
 import { resolvePlaybook } from './playbooks.ts';
 import { Pipeline } from './pipeline.ts';
+import { prestigeView, reviewPrestige } from './prestige.ts';
+import { PRESTIGE_TIERS, type PrestigeTier } from '../shared/prestige.ts';
 import { getSettings, updateSettings } from './settings.ts';
 import { checkForUpdates, installUpdate } from './updater.ts';
 import { watchSaveFile } from './watcher.ts';
@@ -58,6 +60,9 @@ const pipeline = new Pipeline({
     win?.webContents.send('media', events);
   },
   onParsed: (s) => {
+    // Coach prestige regression: charge whatever this parse brought (tier-gated
+    // inside; Off only advances the ledger). Deferred so the refresh settles first.
+    setImmediate(() => void runPrestigeReview(s));
     const userRows = userTeamRows(s);
     const prev = lastUserRows;
     lastUserRows = userRows;
@@ -80,6 +85,26 @@ function userTeamRows(s: Snapshot): number[] {
 
 function sameRows(a: number[], b: number[]): boolean {
   return a.length === b.length && a.every((row, i) => row === b[i]);
+}
+
+/**
+ * Prestige review after a parse. Only the save currently selected is reviewed
+ * (a stale snapshot from a just-replaced file is ignored); a write follows the
+ * edited copy exactly as a user edit does.
+ */
+async function runPrestigeReview(s: Snapshot): Promise<void> {
+  const { savePath, prestigeTier } = getSettings();
+  if (!savePath || s.fileName !== basename(savePath)) return;
+  try {
+    const r = await reviewPrestige(s, savePath, prestigeTier ?? 'off', pipeline);
+    if (r.editedPath) {
+      if (r.editedPath !== savePath) followEditedSave(r.editedPath);
+      else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
+      win?.webContents.send('prestige', r.entries.length);
+    }
+  } catch (err) {
+    reportError('prestige', err);
+  }
 }
 
 /** Settings changed outside a renderer request (auto-scope) — push, don't wait to be asked. */
@@ -238,6 +263,19 @@ function registerIpc(): void {
   });
 
   handle('update:install', () => installUpdate());
+
+  // Coach prestige regression tier. Switching a tier on runs a review of the
+  // current snapshot right away (it baselines if the ledger is new — nothing
+  // played before the switch is ever charged).
+  handle('prestige:tier', (_e, tier: unknown) => {
+    const t = PRESTIGE_TIERS.includes(tier as PrestigeTier) ? (tier as PrestigeTier) : 'off';
+    const settings = updateSettings({ prestigeTier: t });
+    if (snapshot) setImmediate(() => void runPrestigeReview(snapshot!));
+    return settings;
+  });
+  handle('prestige:state', () =>
+    prestigeView(snapshot?.dynastyId ?? null, getSettings().prestigeTier ?? 'off', snapshot?.season?.seasonYear ?? null)
+  );
 
   handle('saves:scan', () => scanSaves());
 
