@@ -63,7 +63,7 @@ import { applyInstantCommit, applyCommitSwap, applyMassCommit, buildMassCommitFo
 import { applyGradesEdit, buildGradesForm } from './grades-editor.ts';
 import { applyDynastySettings, buildDynastySettingsForm } from './dynasty-settings.ts';
 import { applyFacilitiesEdit, buildFacilitiesForm } from './facilities-editor.ts';
-import { applyPipelinesEdit, buildPipelinesForm } from './pipelines-editor.ts';
+import { NoPipelinesError, applyPipelinesEdit, buildPipelinesForm } from './pipelines-editor.ts';
 import { log, reportError } from './log.ts';
 import { applyRosterTransfers } from './transfers.ts';
 import { extractLeagueLeaders } from './parser/league.ts';
@@ -120,6 +120,12 @@ export class Pipeline {
    * departure+arrival — that one refresh rebaselines state without stories.
    */
   private suppressMediaOnce = false;
+  /**
+   * Scouting veil (Settings.hideUnscouted), mirrored here so the media engine
+   * keeps a gem note out of a commit story until the user has scouted the
+   * recruit. Set by main on boot and whenever the toggle moves.
+   */
+  hideUnscouted = false;
 
   constructor(events: PipelineEvents) {
     this.events = events;
@@ -236,9 +242,20 @@ export class Pipeline {
   /** Current values + options for the edit dialog, from the cached parse. */
   async editForm(playerRow: number, savePath: string, portraitsDir?: string | null): Promise<PlayerEditForm | null> {
     if (!this.franchise || !savePath) return null;
+    return this.form('edit-form', () => buildEditForm(this.franchise, playerRow, savePath, portraitsDir));
+  }
+
+  /**
+   * Every dialog's read side goes through here: a form that cannot be built
+   * (a save layout the reader does not expect, a row that vanished) logs the
+   * failure with its stack under a stable code and the dialog gets null,
+   * instead of the reason evaporating in a silent catch.
+   */
+  private async form<T>(area: string, build: () => Promise<T>): Promise<T | null> {
     try {
-      return await buildEditForm(this.franchise, playerRow, savePath, portraitsDir);
-    } catch {
+      return await build();
+    } catch (err) {
+      reportError(area, err);
       return null;
     }
   }
@@ -264,6 +281,7 @@ export class Pipeline {
     try {
       const onDisk = createHash('sha1').update(readFileSync(savePath)).digest('hex');
       if (onDisk !== this.lastHash) {
+        log.warn('edit-write', `${basename(savePath)} changed on disk since it was read — edit refused, refreshing`);
         this.queuedArgs = { savePath, schoolTeamRow: this.lastSchoolRow };
         return {
           ok: false,
@@ -275,6 +293,8 @@ export class Pipeline {
       // content, so the follow-up refresh of the edited save skips the reload
       // and just re-extracts.
       this.lastHash = createHash('sha1').update(readFileSync(editedPath)).digest('hex');
+      // Every save write leaves one line in the log: which file, and what it was.
+      log.info('edit-write', `wrote ${basename(editedPath)}`, { hash: this.lastHash.slice(0, 8), message });
       this.lastUpdate = Date.now();
       this.suppressMediaOnce = true;
       return {
@@ -310,11 +330,8 @@ export class Pipeline {
   /** Current budget/hours for the Fundraising and Hire Recruiters dialogs. */
   async resourceForm(savePath: string): Promise<ResourceForm | null> {
     if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
-    try {
-      return await buildResourceForm(this.franchise, this.lastSchoolRow, savePath);
-    } catch {
-      return null;
-    }
+    const teamRow = this.lastSchoolRow;
+    return this.form('resource-form', () => buildResourceForm(this.franchise, teamRow, savePath));
   }
 
   /** Fundraising / recruiter hours, via the same guarded write shell. */
@@ -360,11 +377,7 @@ export class Pipeline {
   /** Options + caps for the Create Recruit dialog. */
   async createForm(savePath: string, portraitsDir?: string | null): Promise<CreateRecruitForm | null> {
     if (!this.franchise || !savePath) return null;
-    try {
-      return await buildCreateForm(this.franchise, savePath, portraitsDir);
-    } catch {
-      return null;
-    }
+    return this.form('create-form', () => buildCreateForm(this.franchise, savePath, portraitsDir));
   }
 
   /** Create a brand-new class recruit, via the guarded shell. */
@@ -381,11 +394,8 @@ export class Pipeline {
   /** Current weekly-action state for one board target. */
   async targetForm(recruitRow: number, savePath: string): Promise<TargetActionForm | null> {
     if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
-    try {
-      return await buildTargetForm(this.franchise, this.lastSchoolRow, recruitRow, savePath);
-    } catch {
-      return null;
-    }
+    const teamRow = this.lastSchoolRow;
+    return this.form('target-form', () => buildTargetForm(this.franchise, teamRow, recruitRow, savePath));
   }
 
   /** One target's weekly plan, via the guarded shell. */
@@ -422,11 +432,8 @@ export class Pipeline {
   /** The user school's program letters + star prestige, for the dashboard's EDIT dialog. */
   async gradesForm(savePath: string): Promise<GradesEditForm | null> {
     if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
-    try {
-      return await buildGradesForm(this.franchise, this.lastSchoolRow, savePath);
-    } catch {
-      return null;
-    }
+    const teamRow = this.lastSchoolRow;
+    return this.form('grades-form', () => buildGradesForm(this.franchise, teamRow, savePath));
   }
 
   /** Program grades / prestige, via the guarded shell. */
@@ -458,11 +465,8 @@ export class Pipeline {
   /** What a mass commit of the board would do right now. */
   async massCommitForm(savePath: string): Promise<MassCommitForm | null> {
     if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
-    try {
-      return await buildMassCommitForm(this.franchise, this.lastSchoolRow, savePath);
-    } catch {
-      return null;
-    }
+    const teamRow = this.lastSchoolRow;
+    return this.form('mass-commit-form', () => buildMassCommitForm(this.franchise, teamRow, savePath));
   }
 
   /** Commit every eligible board target in one write, via the guarded shell. */
@@ -497,11 +501,8 @@ export class Pipeline {
   /** The dynasty's gameplay / XP / league settings as the save stores them. */
   async settingsForm(savePath: string): Promise<DynastySettingsForm | null> {
     if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
-    try {
-      return await buildDynastySettingsForm(this.franchise, this.lastSchoolRow, savePath);
-    } catch {
-      return null;
-    }
+    const teamRow = this.lastSchoolRow;
+    return this.form('settings-form', () => buildDynastySettingsForm(this.franchise, teamRow, savePath));
   }
 
   /** Dynasty settings, via the guarded shell. */
@@ -522,11 +523,8 @@ export class Pipeline {
   /** The school's facility level, catalog and owned equipment, for the NIL & Budget dialog. */
   async facilitiesForm(savePath: string): Promise<FacilitiesForm | null> {
     if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
-    try {
-      return await buildFacilitiesForm(this.franchise, this.lastSchoolRow, savePath);
-    } catch {
-      return null;
-    }
+    const teamRow = this.lastSchoolRow;
+    return this.form('facilities-form', () => buildFacilitiesForm(this.franchise, teamRow, savePath));
   }
 
   /** Facility level, via the guarded shell. */
@@ -544,8 +542,11 @@ export class Pipeline {
     if (!this.franchise || !savePath || this.lastSchoolRow === null) return null;
     try {
       return await buildPipelinesForm(this.franchise, this.lastSchoolRow, savePath);
-    } catch {
-      return null;
+    } catch (err) {
+      // No list on this school is the expected empty case (the dialog says so);
+      // anything else is a real read failure and reaches the dialog with its code.
+      if (err instanceof NoPipelinesError) return null;
+      throw err;
     }
   }
 
@@ -571,12 +572,7 @@ export class Pipeline {
   /** Mark a CPU coach PendingFire (or restore Signed), via the guarded shell. */
   async coachEditForm(coachRow: number, savePath: string): Promise<CoachEditForm | null> {
     if (!this.franchise || !savePath) return null;
-    try {
-      return await buildCoachEditForm(this.franchise, coachRow, savePath);
-    } catch (err) {
-      reportError('coach-editform', err);
-      return null;
-    }
+    return this.form('coach-edit-form', () => buildCoachEditForm(this.franchise, coachRow, savePath));
   }
 
   async editCoach(changes: CoachEditChanges, savePath: string): Promise<PlayerEditResult> {
@@ -728,7 +724,7 @@ export class Pipeline {
         const nowYear = snapshot.season.seasonYear;
         log = log.filter((e) => e.seasonYear <= nowYear);
       }
-      const { state, events } = generateMedia(prev, snapshot, leaders);
+      const { state, events } = generateMedia(prev, snapshot, leaders, { hideUnscouted: this.hideUnscouted });
       // An app-written save diffs against itself (a rename reads as roster
       // churn): rebaseline the state, publish nothing.
       const suppressed = this.suppressMediaOnce;

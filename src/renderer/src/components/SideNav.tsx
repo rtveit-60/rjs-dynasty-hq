@@ -30,6 +30,30 @@ function UpdateBanner() {
   );
 }
 
+/**
+ * The automatic prestige review is the one write the user does not trigger,
+ * so when it fails the rail says so, with the code from the log, until
+ * dismissed. A later review that lands clears it on its own.
+ */
+function PrestigeNoticeBanner() {
+  const notice = useHQ((s) => s.prestigeNotice);
+  const dismiss = useHQ((s) => s.dismissPrestigeNotice);
+  if (!notice || notice.ok) return null;
+  const detail = `${notice.message}${notice.code ? ` [${notice.code}]` : ''}`;
+  return (
+    <button
+      type="button"
+      className="rail-alert"
+      role="alert"
+      title={`Prestige review did not write the save. ${detail} — the next sync retries. Click to dismiss.`}
+      onClick={dismiss}
+    >
+      <span className="up-full">Prestige review failed{notice.code ? ` · ${notice.code}` : ''}</span>
+      <span className="up-abbr">!</span>
+    </button>
+  );
+}
+
 export default function SideNav() {
   const nav = useHQ((s) => s.nav);
   const setNav = useHQ((s) => s.setNav);
@@ -86,6 +110,7 @@ export default function SideNav() {
         {team && <TeamLogo row={team.row} size={170} fallback={null} />}
       </div>
       <div className="rail-foot">
+        <PrestigeNoticeBanner />
         <UpdateBanner />
         <div className="rail-controls">
           <ThemeToggle />

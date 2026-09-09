@@ -32,6 +32,7 @@ import { SAVE_NAME_MAX } from '../shared/types.ts';
 import { BODY_TYPES, DEFAULT_MASKS, GEAR_ITEMS, HELMET_MASKS } from '../shared/gear.ts';
 import { ACTION_HOURS } from '../shared/recruiting-actions.ts';
 import { RECRUITING_TUNABLES } from '../shared/recruiting-tunables.ts';
+import { INTEL_BITS, SCOUTS_MAX, popcount, scoutsDoneFor } from '../shared/scouting.ts';
 import { POSITION_TO_GROUP, POS_GROUP_NAMES } from '../shared/talent-groups.ts';
 import { MENTAL_ABILITIES } from '../shared/mental-abilities.ts';
 import { PHYSICAL_ABILITY_SLOTS } from '../shared/physical-abilities.ts';
@@ -1698,24 +1699,8 @@ export async function prospectHourBudget(
   return { base, bonusTotal: slots[group] ?? 0, groupName: POS_GROUP_NAMES[group] ?? '' };
 }
 
-const INTEL_BITS = 14;
-const SCOUTS_MAX = RECRUITING_TUNABLES.maxTimesScouted;
-
-const popcount = (n: number): number => {
-  let c = 0;
-  while (n) {
-    c += n & 1;
-    n >>>= 1;
-  }
-  return c;
-};
-
-/** How many of the game's scouting passes this intel level represents. */
-export function scoutsDoneFor(intel: number): number {
-  const unlocked = popcount(intel & 0x3fff);
-  if (unlocked >= INTEL_BITS) return SCOUTS_MAX;
-  return Math.min(SCOUTS_MAX - 1, Math.floor((unlocked * SCOUTS_MAX) / INTEL_BITS));
-}
+/** Re-exported for the pipeline and harnesses that read scouting state through the editor. */
+export { scoutsDoneFor } from '../shared/scouting.ts';
 
 /** Deterministic per-target PRNG so scout reveals verify on reload. */
 const mulberry32 = (seed: number) => (): number => {

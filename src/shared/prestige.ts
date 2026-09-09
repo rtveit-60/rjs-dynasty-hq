@@ -215,6 +215,14 @@ export interface PrestigeView {
   baselineOnly: boolean;
 }
 
+/**
+ * What main pushes after each automatic review: a write that landed, or a
+ * failure with its diagnostics code so the rail can show something reportable.
+ */
+export type PrestigeNotice =
+  | { ok: true; count: number; file: string; at: number }
+  | { ok: false; code: string | null; message: string; at: number };
+
 export const PRESTIGE_ENTRY_CAP = 800;
 
 export const gameKeyOf = (seasonYear: number, g: GameInfo) => `g${seasonYear}w${g.week}-${g.homeRow}-${g.awayRow}`;

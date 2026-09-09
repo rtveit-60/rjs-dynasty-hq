@@ -17,8 +17,8 @@ import { initLog, log, logPath, reportError, tailLog } from './log.ts';
 import { slugName } from './logos.ts';
 import { resolvePlaybook } from './playbooks.ts';
 import { Pipeline } from './pipeline.ts';
-import { prestigeView, reviewPrestige } from './prestige.ts';
-import { PRESTIGE_TIERS, type PrestigeTier } from '../shared/prestige.ts';
+import { PrestigeWriteError, loadLedger, prestigeView, reviewPrestige } from './prestige.ts';
+import { PRESTIGE_TIERS, type PrestigeNotice, type PrestigeTier } from '../shared/prestige.ts';
 import { getSettings, updateSettings } from './settings.ts';
 import { checkForUpdates, installUpdate } from './updater.ts';
 import { watchSaveFile } from './watcher.ts';
@@ -90,7 +90,9 @@ function sameRows(a: number[], b: number[]): boolean {
 /**
  * Prestige review after a parse. Only the save currently selected is reviewed
  * (a stale snapshot from a just-replaced file is ignored); a write follows the
- * edited copy exactly as a user edit does.
+ * edited copy exactly as a user edit does. This is the app's one automatic
+ * writer, so its outcome is never silent: a write that landed and a write
+ * that failed both reach the renderer as a notice, the failure with its code.
  */
 async function runPrestigeReview(s: Snapshot): Promise<void> {
   const { savePath, prestigeTier } = getSettings();
@@ -100,11 +102,23 @@ async function runPrestigeReview(s: Snapshot): Promise<void> {
     if (r.editedPath) {
       if (r.editedPath !== savePath) followEditedSave(r.editedPath);
       else void pipeline.refresh(savePath, getSettings().schoolTeamRow);
-      win?.webContents.send('prestige', r.entries.length);
+      notifyPrestige({ ok: true, count: r.entries.length, file: basename(r.editedPath), at: Date.now() });
     }
   } catch (err) {
-    reportError('prestige', err);
+    // A guarded-write failure was already logged with its code inside the
+    // pipeline; anything else (a rule that threw on an odd save) is logged here.
+    const code = err instanceof PrestigeWriteError ? err.code : reportError('prestige', err, { file: basename(savePath) });
+    notifyPrestige({
+      ok: false,
+      code,
+      message: err instanceof Error ? err.message : String(err),
+      at: Date.now()
+    });
   }
+}
+
+function notifyPrestige(notice: PrestigeNotice): void {
+  win?.webContents.send('prestige', notice);
 }
 
 /** Settings changed outside a renderer request (auto-scope) — push, don't wait to be asked. */
@@ -235,6 +249,19 @@ function gameDirStatus(rejected?: string): GameDirStatus {
   };
 }
 
+/** The prestige tier and what its ledger last did — the one automatic writer, so it belongs in a report. */
+function prestigeLine(): string {
+  const tier = getSettings().prestigeTier ?? 'off';
+  if (!snapshot) return tier;
+  const ledger = loadLedger(snapshot.dynastyId);
+  if (!ledger) return `${tier} · no ledger yet`;
+  const last = ledger.lastReview;
+  const review = last
+    ? `last write ${last.seasonYear} week ${last.week}: ${last.count} charge${last.count === 1 ? '' : 's'}, ${last.points} pts`
+    : 'no write yet';
+  return `${tier} · ledger at ${ledger.seasonYear} week ${ledger.week}, ${ledger.entries.length} entries · ${review}`;
+}
+
 /** The copyable report behind Setup's diagnostics: environment + recent log. */
 function diagnosticsText(): string {
   const s = getSettings();
@@ -247,6 +274,10 @@ function diagnosticsText(): string {
       g.settingInvalid ? ' — configured folder is not a CFB 27 install' : ''
     }`,
     `Watcher: ${status.kind}${status.kind === 'error' ? ` — ${status.message}` : ''}`,
+    `Dynasty: ${snapshot?.dynastyId ?? 'none parsed'}${
+      snapshot?.season ? ` · ${snapshot.season.seasonYear} week ${snapshot.season.week}` : ''
+    }`,
+    `Prestige regression: ${prestigeLine()}`,
     '',
     '--- recent log ---',
     tailLog(3000).trimEnd()
@@ -264,12 +295,25 @@ function registerIpc(): void {
 
   handle('update:install', () => installUpdate());
 
+  // Scouting veil (Setup > Immersion). Pure presentation in the renderer; the
+  // pipeline mirror keeps the media engine from spilling a gem note early.
+  handle('scoutveil:set', (_e, on: unknown) => {
+    const settings = updateSettings({ hideUnscouted: on === true });
+    pipeline.hideUnscouted = settings.hideUnscouted === true;
+    return settings;
+  });
+
   // Coach prestige regression tier. Switching a tier on runs a review of the
   // current snapshot right away (it baselines if the ledger is new — nothing
   // played before the switch is ever charged).
   handle('prestige:tier', (_e, tier: unknown) => {
-    const t = PRESTIGE_TIERS.includes(tier as PrestigeTier) ? (tier as PrestigeTier) : 'off';
+    const known = PRESTIGE_TIERS.includes(tier as PrestigeTier);
+    if (!known) log.warn('prestige', 'tier not recognized — falling back to off', { tier });
+    const t = known ? (tier as PrestigeTier) : 'off';
+    const was = getSettings().prestigeTier ?? 'off';
     const settings = updateSettings({ prestigeTier: t });
+    // The switch that turns the app's only automatic writer on or off is worth a log line.
+    if (t !== was) log.info('prestige', `tier ${was} → ${t}`, { dynastyId: snapshot?.dynastyId ?? null });
     if (snapshot) setImmediate(() => void runPrestigeReview(snapshot!));
     return settings;
   });
@@ -1250,7 +1294,8 @@ if (!gotLock) {
     started = true;
     clearTimeout(startupWatchdog);
     startUpdateCheck();
-    const { savePath, schoolTeamRow } = getSettings();
+    const { savePath, schoolTeamRow, hideUnscouted } = getSettings();
+    pipeline.hideUnscouted = hideUnscouted === true;
     if (savePath && existsSync(savePath)) {
       startWatching(savePath);
       void pipeline.refresh(savePath, schoolTeamRow);

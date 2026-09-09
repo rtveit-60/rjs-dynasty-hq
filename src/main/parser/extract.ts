@@ -13,6 +13,7 @@ import type {
   TeamInfo
 } from '../../shared/types.ts';
 import { levelLabel, pipelineLabel } from '../../shared/pipeline-tiers.ts';
+import { isFullyScouted, scoutsDoneFor } from '../../shared/scouting.ts';
 import { COACH_GOAL_LABELS } from '../data/coach-goals.ts';
 import { SCHOOL_LOCATIONS } from '../data/school-locations.ts';
 import { ensureCoachSchema } from './coach-schema.ts';
@@ -912,8 +913,14 @@ async function extractBoard(
   teamIndexToName: Map<number, string>,
   ownTeamIndex: number,
   pursuitDeltas: Map<string, number>
-): Promise<{ info: import('../../shared/types.ts').BoardInfo; recruitRows: Set<number> } | null> {
+): Promise<{
+  info: import('../../shared/types.ts').BoardInfo;
+  recruitRows: Set<number>;
+  /** Recruit row → the user's UnlockedIntelBitfield on that target. */
+  intelByRecruitRow: Map<number, number>;
+} | null> {
   const recruitRows = new Set<number>();
+  const intelByRecruitRow = new Map<number, number>();
   try {
     const boardRef = refFromRecord(teamRec, 'RecruitingBoard');
     if (isNullRef(boardRef)) return null;
@@ -939,6 +946,8 @@ async function extractBoard(
         const recruitRec = !isNullRef(recruitRef) ? recruitTable.records?.[recruitRef.row] : null;
         if (!recruitRec) continue;
         recruitRows.add(recruitRef!.row);
+        const intel = Number(val(targetRec, 'UnlockedIntelBitfield') ?? 0);
+        intelByRecruitRow.set(recruitRef!.row, intel);
         const playerRef = refFromRecord(recruitRec, 'Player');
         const playerRec =
           !isNullRef(playerRef) && playerRef.tableId === playerTableId
@@ -990,7 +999,10 @@ async function extractBoard(
           homeState: String(val(playerRec, 'PLYR_HOME_STATE') ?? ''),
           dealbreaker: dealbreakerOf(playerRec),
           idealPitch: idealPitchOf(playerRec),
-          pursuing
+          pursuing,
+          isTransfer: String(val(recruitRec, 'Class') ?? '').startsWith('Transfer'),
+          scoutsDone: scoutsDoneFor(intel),
+          scouted: isFullyScouted(intel)
         });
       }
     }
@@ -1002,7 +1014,8 @@ async function extractBoard(
         hoursAssigned: Number(val(boardRec, 'RecruitingHoursAssigned') ?? 0),
         targets
       },
-      recruitRows
+      recruitRows,
+      intelByRecruitRow
     };
   } catch {
     return null;
@@ -1154,6 +1167,7 @@ async function extractRecruiting(
   schoolAssets: Map<number, SchoolAssets>,
   ownTeamIndex: number,
   boardRecruitRows: Set<number>,
+  boardIntel: Map<number, number>,
   seasonYear: number,
   pursuitDeltas: Map<string, number>
 ): Promise<import('../../shared/types.ts').RecruitingData | null> {
@@ -1319,6 +1333,7 @@ async function extractRecruiting(
           : 'No comparative signal on this recruit';
 
       const classRaw = String(val(rec, 'Class') ?? '');
+      const intel = boardIntel.get(row) ?? 0;
       recruits.push({
         row,
         // The Recruit row and the Player row are different indexes; anything
@@ -1336,6 +1351,8 @@ async function extractRecruiting(
         devTrait: String(val(p, 'TraitDevelopment') ?? ''),
         homeState,
         pipeline,
+        scoutsDone: scoutsDoneFor(intel),
+        scouted: isFullyScouted(intel),
         heightIn: Number(val(p, 'Height') ?? 0),
         weightLb: Number(val(p, 'Weight') ?? 0) + 160,
         nationalRank: Number(val(rec, 'NationalRank') ?? 0),
@@ -1977,6 +1994,7 @@ export async function extractSnapshot(
       schoolAssets,
       ownTeamIndex,
       boardResult?.recruitRows ?? new Set(),
+      boardResult?.intelByRecruitRow ?? new Map(),
       season?.seasonYear ?? 0,
       pursuitDeltas
     );

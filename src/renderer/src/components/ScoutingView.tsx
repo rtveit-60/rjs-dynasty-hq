@@ -22,6 +22,7 @@ import {
   spaceOut,
   stars
 } from '../lib/format.ts';
+import { useVeilOn, veiled } from '../lib/veil.tsx';
 import BoardMark from './BoardMark.tsx';
 import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
 import InfoDot from './InfoDot.tsx';
@@ -69,6 +70,9 @@ export default function ScoutingView({
   const [asc, setAsc] = useState(false);
   const [page, setPage] = useState(0);
   const [openRow, setOpenRow] = useState<number | null>(null);
+  // Scouting veil (Setup): a report on attributes you haven't scouted would
+  // be the leak itself, so unscouted recruits drop out of the results.
+  const veilOn = useVeilOn();
 
   const active = criteria.filter((c) => RATING_BY_FIELD.has(c.field) && Number.isFinite(c.value));
   const key = JSON.stringify(active);
@@ -104,6 +108,7 @@ export default function ScoutingView({
       if (pool === 'portal' && !r.isTransfer) continue;
       if (minStars && r.stars < minStars) continue;
       if (openOnly && r.committedTo) continue;
+      if (veiled(veilOn, r)) continue;
       const allowed = recruitPositionsFor(pos);
       if (allowed.length && !allowed.includes(r.position)) continue;
       if (archetype !== 'ALL' && r.archetype !== archetype) continue;
@@ -119,7 +124,7 @@ export default function ScoutingView({
       return (a.r.nationalRank || 1e9) - (b.r.nationalRank || 1e9);
     });
     return out;
-  }, [hits, byPlayerRow, pool, minStars, openOnly, pos, archetype, sortField, asc, active]);
+  }, [hits, byPlayerRow, pool, minStars, openOnly, pos, archetype, sortField, asc, active, veilOn]);
 
   /** Archetypes actually present for the current position selection. */
   const archetypeOptions = useMemo(() => {
@@ -342,6 +347,12 @@ export default function ScoutingView({
         </div>
       ) : (
         <>
+          {veilOn && (
+            <div className="veil-note">
+              Scouting veil on: reports cover only the recruits your program has fully scouted
+              (portal transfers are always open).
+            </div>
+          )}
           <BoardSaveBar />
           <div className="tbl-wrap tbl-scroll">
             <table className="tbl tbl-wide">

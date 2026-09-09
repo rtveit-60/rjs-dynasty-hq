@@ -31,6 +31,8 @@ Everything about your program in one place, set on your stadium's real field wit
 
 ![Depth chart](docs/screenshots/depth-chart.png)
 
+![Pipelines editor](docs/screenshots/pipelines-editor.png)
+
 ![Playbook](docs/screenshots/playbook.png)
 
 ### Team History
@@ -88,6 +90,10 @@ Three boards over the national class, under the same Team Needs seats as the off
 - **Transfer Portal.** The same board for portal transfers, which fills once your save reaches the offseason window. **Manual Transfers** sits beside it: pick any two schools, see both rosters side by side (sortable by position, name, class or overall), and click players across in either direction. The write follows the game's own sign-player steps, roster lists and depth charts included, and neither school can end above the game's 85-man limit.
 - **Scouting Reports.** Search the class by attribute. *Receivers with 92+ speed. Quarterbacks with 94+ throw power. Tackles over 6'6" and 300 pounds.* Stack as many thresholds as you like, and each becomes its own sortable column. Every hit carries the same + control as the boards, so a find goes straight onto your board.
 
+**Scouting veil.** By default every board shows what the save holds, true overall included. For a dynasty played the way the game presents it, the first-run screen (and **Setup → Scouting veil**) offers **Hide until scouted**: a high-school recruit's overall, dev trait, gem/bust flag, attributes and abilities stay hidden on every board, card and profile until your program has run all five scouting passes on them, the Scouting Reports list only fully scouted recruits, and the press keeps gem intel to recruits your staff has seen. Progress comes from your own board's intel bits, so what you see is what your scouts have actually uncovered; portal transfers stay open, as they are in the game. Off by default and purely presentation, so switching it never touches a save.
+
+![Scouting veil](docs/screenshots/scouting-veil.png)
+
 ![Recruiting board](docs/screenshots/recruiting-board.png)
 
 ![Scouting Reports](docs/screenshots/scouting-reports.png)
@@ -120,6 +126,8 @@ And when a CPU coach has worn out their welcome in your league, there's **Fire C
 
 ![Coaching Carousel](docs/screenshots/carousel.png)
 
+![Prestige Ledger](docs/screenshots/prestige-ledger.png)
+
 ### Dynasty Settings
 
 The game's own settings screens, read from your save and editable in place: **Gameplay** (Player and CPU skill sliders, game options, penalties, tackle mechanics, wear and tear, precipitation, coach mode), **XP** (per-position XP percentages, progression frequency, coach XP and talent speed, respec rules) and **League** (coach firing, roster and transfer limits, recruit flipping, injuries, play-calling limits, and your own program's season settings). Every integer setting has a draggable tick scale under its stepper: drag the knob, click the rail, or use the arrow, Page, Home and End keys, with the stepper kept as the precise control. Every value is validated against the save format before anything is written, and the changes go to the same protected copy as every other editor. Settings the game fixes when a dynasty is created are shown read-only, and Quarter Length is held read-only for now.
@@ -132,7 +140,7 @@ The game's own settings screens, read from your save and editable in place: **Ga
 - **Real branding.** All 138 team logos and every bowl logo ship with the app. No downloads, no setup.
 - **Correct names.** Archetypes, award names, pitch names and ability names all read the way the game shows them, extracted from the game's own data rather than transcribed. The identifiers lie: the save calls the "Gamer" pitch `ItsGameTime`.
 - **Team colors & themes.** The UI accents itself with your school's colors from the save. Light, dark and system themes, an interface scale that fits itself to your window, and it remembers your save, school and window.
-- **Diagnostics you can actually report.** The app keeps a small local log, and every error carries a short stable code (like `HQ-3F2A`). If something misbehaves, **Setup → Copy report** puts your version, environment and recent log on the clipboard, ready to paste into a bug report.
+- **Diagnostics you can actually report.** The app keeps a small local log, and every error carries a short stable code (like `HQ-3F2A`). Every save write leaves a line there too, and so does each prestige review, whether it wrote, waited or failed. If something misbehaves, **Setup → Copy report** puts your version, environment, dynasty, prestige tier and recent log on the clipboard, ready to paste into a bug report. Because prestige regression is the one write you don't trigger by hand, a review that fails shows up in the side rail with its code until you dismiss it, and the next sync tries again.
 
 Everything works fully offline. Articles come from a deterministic template engine, with no accounts, no API keys and no network calls. The only exception is an optional launch-time update check, which you can switch off.
 
@@ -205,10 +213,14 @@ Developer tools worth knowing about:
 node scripts/filter-check.ts     # assert the recruiting filters and scouting queries hold
 node scripts/profile-check.ts    # regression suite over the profile extractor
 node scripts/media-check.ts      # run the media engine against a save and audit its output
-node --max-old-space-size=16384 scripts/edit-check.ts   # regression suite over the player editor's save writes
+node --max-old-space-size=16384 scripts/edit-check.ts   # regression suite over every editor's save writes
+node --max-old-space-size=8192 scripts/prestige-check.ts # prestige regression rules + the batched write, on a save pair
+node scripts/scouting-veil-check.ts                       # scouting veil: intel bits, the hide rule, board/class agreement, the press gate
+node --max-old-space-size=8192 scripts/coach-prestige-probe.ts <save> [--tuning]  # how the game itself moves prestige
 node scripts/bc-check.ts         # prove the built-in texture decoder byte-exact against a reference
 node scripts/extract-awards.ts   # regenerate award names from the installed game
 node scripts/extract-pitches.ts  # regenerate pitch names + motivations from the installed game
+node scripts/extract-pipelines.ts # regenerate pipeline names, regions and tier names from the installed game
 ```
 
 ## Credits

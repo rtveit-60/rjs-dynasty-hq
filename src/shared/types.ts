@@ -31,6 +31,12 @@ export interface Settings {
    * writing only the save's protected `_RJ` copy.
    */
   prestigeTier?: 'off' | 'lenient' | 'balanced' | 'demanding' | 'ruthless';
+  /**
+   * Scouting veil: hide a high-school recruit's ratings, overall, dev trait,
+   * abilities and gem/bust flag until your program has fully scouted them,
+   * the way the game does. Off (the default) shows everything the save holds.
+   */
+  hideUnscouted?: boolean;
 }
 
 export interface GameDirStatus {
@@ -416,6 +422,12 @@ export interface RecruitTargetEntry {
   /** IdealRecruitingPitch enum key (ItsGameTime…); '' when none. Display data in shared/pitches. */
   idealPitch: string;
   pursuing: TargetSchool[];
+  /** Portal transfer (Recruit.Class starts with Transfer); their sheet is open in the game. */
+  isTransfer: boolean;
+  /** Scouting passes your program has run on this prospect (0–5, from the target's intel bits). */
+  scoutsDone: number;
+  /** All 14 intel bits set — the game shows the whole sheet. */
+  scouted: boolean;
 }
 
 export interface BoardInfo {
@@ -457,6 +469,10 @@ export interface ClassRecruit {
   devTrait: string;
   homeState: string;
   pipeline: string;
+  /** Scouting passes your program has run (0–5); 0 when the prospect isn't on your board. */
+  scoutsDone: number;
+  /** All 14 intel bits set on your target row — the game shows the whole sheet. */
+  scouted: boolean;
   heightIn: number;
   weightLb: number;
   nationalRank: number;

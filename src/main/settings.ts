@@ -16,7 +16,8 @@ const DEFAULTS: Settings = {
   autoUpdate: true,
   uiScale: 1,
   uiFit: true,
-  prestigeTier: 'off'
+  prestigeTier: 'off',
+  hideUnscouted: false
 };
 
 let current: Settings | null = null;

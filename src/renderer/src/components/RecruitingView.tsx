@@ -19,6 +19,7 @@ import {
   stars
 } from '../lib/format.ts';
 import { useHQ } from '../store.ts';
+import { Veiled, useVeilOn, veiled } from '../lib/veil.tsx';
 import BoardMark from './BoardMark.tsx';
 import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
 import SwapCommitModal, { type SwapCommitSubject } from './SwapCommitModal.tsx';
@@ -236,11 +237,18 @@ export default function RecruitingView() {
     });
   }, [pool, q, pos, pipes, minStars, edgeOnly, openOnly, boardOnly]);
 
+  // Scouting veil (Setup): an unscouted recruit's sheet is unknown, so it
+  // sorts as one value and never leaks through the order of the column.
+  const veilOn = useVeilOn();
+  const hid = (r: ClassRecruit) => veiled(veilOn, r);
+
   const sorted = useMemo(() => {
     const dir = asc ? 1 : -1;
     const list = [...filtered];
     const rank = (n: number) => (n > 0 ? n : BIG);
     const byName = (a: ClassRecruit, b: ClassRecruit) => a.name.localeCompare(b.name);
+    const devOf = (r: ClassRecruit) => (hid(r) ? -1 : (DEV_ORDER[r.devTrait] ?? 0));
+    const ovrOf = (r: ClassRecruit) => (hid(r) ? -1 : r.overall);
     list.sort((a, b) => {
       switch (sortKey) {
         case 'rating':
@@ -260,7 +268,7 @@ export default function RecruitingView() {
         case 'wt':
           return (a.weightLb - b.weightLb) * dir || byName(a, b);
         case 'dev':
-          return ((DEV_ORDER[a.devTrait] ?? 0) - (DEV_ORDER[b.devTrait] ?? 0)) * dir || byName(a, b);
+          return (devOf(a) - devOf(b)) * dir || byName(a, b);
         case 'pipeline':
           return a.pipeline.localeCompare(b.pipeline) * dir || byName(a, b);
         case 'status': {
@@ -269,7 +277,7 @@ export default function RecruitingView() {
           return (s(a) - s(b)) * dir || byName(a, b);
         }
         case 'ovr':
-          return (a.overall - b.overall) * dir || rank(a.nationalRank) - rank(b.nationalRank);
+          return (ovrOf(a) - ovrOf(b)) * dir || rank(a.nationalRank) - rank(b.nationalRank);
         case 'posrk':
           return (rank(a.positionRank) - rank(b.positionRank)) * dir;
         case 'natlrk':
@@ -283,7 +291,8 @@ export default function RecruitingView() {
       }
     });
     return list;
-  }, [filtered, sortKey, asc]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, sortKey, asc, veilOn]);
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -304,7 +313,7 @@ export default function RecruitingView() {
   }
 
   const myCommits = pool.filter((r) => r.committedTo === teamName).length;
-  const gems = pool.filter((r) => r.quality === 'GEM').length;
+  const gems = pool.filter((r) => r.quality === 'GEM' && !hid(r)).length;
   const portalCount = (rc.recruits ?? []).filter((r) => r.isTransfer).length;
 
   const sortBy = (key: SortKey, defaultAsc: boolean) => {
@@ -367,7 +376,10 @@ export default function RecruitingView() {
           <InfoRow term="Gem / Bust">
             The save's own quality flag. Gems outplay their stars; busts fall short of them.
           </InfoRow>
-          <InfoRow term="Ovr">True overall. The game hides it until you scout.</InfoRow>
+          <InfoRow term="Ovr">
+            True overall. The game hides it until you scout; with the scouting veil on (Setup),
+            so does this board, along with dev trait, gem/bust, attributes and abilities.
+          </InfoRow>
           <InfoRow term="Fit">
             The recruit's archetype held against your current scheme, using the game's own
             per-scheme preferences: a filled dot means your scheme starts that archetype at
@@ -558,8 +570,8 @@ export default function RecruitingView() {
                             <BoardToggle recruitRow={r.row} onBoard={r.onBoard} />
                           )}
                         </span>
-                        {r.quality === 'GEM' && <span className="btag gem">Gem</span>}
-                        {r.quality === 'BUST' && <span className="btag bust">Bust</span>}
+                        {!hid(r) && r.quality === 'GEM' && <span className="btag gem">Gem</span>}
+                        {!hid(r) && r.quality === 'BUST' && <span className="btag bust">Bust</span>}
                       </td>
                       <td className="num">{heightFt(r.heightIn)}</td>
                       <td className="num">{r.weightLb}</td>
@@ -583,10 +595,14 @@ export default function RecruitingView() {
                         </span>
                       </td>
                       <td>
-                        <span className={ovrTier(r.overall)}>{r.overall}</span>
+                        {hid(r) ? <Veiled r={r} compact /> : <span className={ovrTier(r.overall)}>{r.overall}</span>}
                       </td>
                       <td>
-                        <span className={devClass(r.devTrait)}>{devLabel(r.devTrait)}</span>
+                        {hid(r) ? (
+                          <Veiled r={r} />
+                        ) : (
+                          <span className={devClass(r.devTrait)}>{devLabel(r.devTrait)}</span>
+                        )}
                       </td>
                       <td className="cell-clip" style={{ color: 'var(--ink-2)' }} title={pipelineLabel(r.pipeline)}>
                         {pipelineLabel(r.pipeline)}

@@ -38,21 +38,44 @@ function ledgerPath(dynastyId: string | null): string {
 }
 
 export function loadLedger(dynastyId: string | null): PrestigeLedger | null {
+  const p = ledgerPath(dynastyId);
   try {
-    const p = ledgerPath(dynastyId);
     if (!existsSync(p)) return null;
     const raw = JSON.parse(readFileSync(p, 'utf8').replace(/^﻿/, '')) as PrestigeLedger;
-    return raw && raw.version === 1 ? raw : null;
-  } catch {
+    if (raw && raw.version === 1) return raw;
+    // A ledger from a format this build does not read: starting over means
+    // re-baselining (nothing already charged is charged twice — the save
+    // carries the deductions), but the history view loses its entries, so say so.
+    log.warn('prestige', 'ledger version not recognized — starting a new ledger', { file: p, version: raw?.version });
+    return null;
+  } catch (err) {
+    log.warn('prestige', 'ledger unreadable — starting a new ledger', {
+      file: p,
+      message: err instanceof Error ? err.message : String(err)
+    });
     return null;
   }
 }
 
 function saveLedger(dynastyId: string | null, ledger: PrestigeLedger): void {
+  const p = ledgerPath(dynastyId);
   try {
-    writeFileSync(ledgerPath(dynastyId), JSON.stringify(ledger), 'utf8');
+    writeFileSync(p, JSON.stringify(ledger), 'utf8');
   } catch (err) {
-    log.warn('prestige', 'ledger not saved', { message: err instanceof Error ? err.message : String(err) });
+    // The next parse re-derives the same charges from the save, so a lost
+    // ledger write costs history, not correctness — but it must be visible.
+    log.error('prestige', 'ledger not saved', { file: p, message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/** A review write that failed inside the guarded path — carries the log code. */
+export class PrestigeWriteError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string
+  ) {
+    super(message);
+    this.name = 'PrestigeWriteError';
   }
 }
 
@@ -65,8 +88,9 @@ export interface PrestigeReviewResult {
 /**
  * Advance the ledger to this snapshot and, when the tier is on and something
  * is owed, write the deductions in one batch. Called after every completed
- * parse. Never throws — a failed write leaves the ledger where it was so the
- * next parse retries.
+ * parse. A failed write leaves the ledger where it was so the next parse
+ * retries; a routine skip (pipeline busy, save moved on disk) returns quietly,
+ * while a real write error surfaces as a PrestigeWriteError carrying its code.
  */
 export async function reviewPrestige(
   snapshot: Snapshot,
@@ -81,13 +105,29 @@ export async function reviewPrestige(
   if (!assessment) return none;
   const { next } = assessment;
   const entries = [...assessment.entries];
+  if (!prev) {
+    log.info('prestige', 'ledger baselined', {
+      dynastyId: snapshot.dynastyId,
+      seasonYear: next.seasonYear,
+      week: next.week,
+      coaches: Object.keys(next.coaches).length,
+      tier
+    });
+  }
 
   // Deductions the game's own save overwrote. Skipped when this parse is of
   // the file the app itself wrote — the check belongs to the first game save after it.
   const ownFile = !!prev?.writtenHash && prev.writtenHash === pipeline.currentHash;
   if (prev && !ownFile && Object.keys(prev.written).length) {
     if (spec) {
-      for (const lost of lostWrites(prev, snapshot)) {
+      const losses = lostWrites(prev, snapshot);
+      if (losses.length) {
+        log.info('prestige', 'earlier deductions were saved over by the game — re-applying', {
+          coaches: losses.length,
+          points: losses.reduce((n, l) => n + l.points, 0)
+        });
+      }
+      for (const lost of losses) {
         entries.push({
           id: `reapply-${snapshot.season?.seasonYear ?? 0}w${snapshot.season?.week ?? 0}-${lost.coachRow}`,
           seasonYear: snapshot.season?.seasonYear ?? 0,
@@ -124,7 +164,16 @@ export async function reviewPrestige(
 
   const result = await pipeline.adjustPrestige(deductions, savePath);
   if (!result.ok || !result.editedPath) {
-    log.warn('prestige', 'review write skipped', { message: result.message, count: deductions.length });
+    // The ledger is left where it was, so the next parse charges the same
+    // games again. A busy pipeline or a save that moved on disk is routine;
+    // a coded failure is a real write error and is surfaced to the user.
+    log.warn('prestige', 'review write skipped — will retry on the next parse', {
+      message: result.message,
+      code: result.code ?? null,
+      coaches: deductions.length,
+      points: deductions.reduce((n, d) => n + d.points, 0)
+    });
+    if (result.code) throw new PrestigeWriteError(result.message, result.code);
     return none;
   }
   // Each entry shows its own step of the coach's running score, in ledger order,
