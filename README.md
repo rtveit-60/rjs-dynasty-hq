@@ -92,6 +92,8 @@ Three boards over the national class, under the same Team Needs seats as the off
 
 **Scouting veil.** By default every board shows what the save holds, true overall included. For a dynasty played the way the game presents it, the first-run screen (and **Setup → Scouting veil**) offers **Hide until scouted**: a high-school recruit's overall, dev trait, gem/bust flag, attributes and abilities stay hidden on every board, card and profile until your program has run all five scouting passes on them, the Scouting Reports list only fully scouted recruits, and the press keeps gem intel to recruits your staff has seen. Progress comes from your own board's intel bits, so what you see is what your scouts have actually uncovered; portal transfers stay open, as they are in the game. Off by default and purely presentation, so switching it never touches a save.
 
+![Scouting veil](docs/screenshots/scouting-veil.png)
+
 ![Recruiting board](docs/screenshots/recruiting-board.png)
 
 ![Scouting Reports](docs/screenshots/scouting-reports.png)
