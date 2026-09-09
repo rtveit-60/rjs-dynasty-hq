@@ -7,7 +7,7 @@
  * Field map and talent-tree mechanics: RESEARCH "Coach editor field map" and
  * "Coach talent trees". Notable conventions the save imposes:
  *   - Coach.Weight is pounds − 150 (schema minimum 150; players use −160).
- *   - Name is a denormalized display string ("R. Tveit") the app rebuilds on a rename.
+ *   - Name is a denormalized display string ("J. Smith") the app rebuilds on a rename.
  *   - Prestige is edited as CoachPrestigeScore; the game re-grades the letter.
  *   - Job-security status follows the percentage using this save's own bands.
  *   - A role change swaps with the same staff's holder of the target role; a
@@ -51,7 +51,7 @@ function fullName(rec: any): string {
   return `${String(val(rec, 'FirstName') ?? '').trim()} ${String(val(rec, 'LastName') ?? '').trim()}`.trim();
 }
 
-/** The game's own display form: first initial, last name ("R. Tveit"). */
+/** The game's own display form: first initial, last name ("J. Smith"). */
 function displayName(first: string, last: string, cap: number): string {
   const s = `${first.trim().charAt(0)}. ${last.trim()}`;
   return s.length > cap ? s.slice(0, cap) : s;

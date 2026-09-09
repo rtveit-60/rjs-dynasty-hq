@@ -48,7 +48,7 @@ function scoreRecords(records: any[]): number {
     if (age >= 22 && age <= 90) score++;
     const pos = String(fieldVal(r, 'Position') ?? '');
     if (/Coach|Coordinator/.test(pos)) score++;
-    // Past the insertion: the display name ("R. Tveit") and a career length.
+    // Past the insertion: the display name ("J. Smith") and a career length.
     if (looksLikeName(fieldVal(r, 'Name'))) score++;
     const yrs = Number(fieldVal(r, 'YearsCoaching'));
     if (Number.isInteger(yrs) && yrs >= 0 && yrs <= 60) score++;
