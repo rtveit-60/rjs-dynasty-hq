@@ -184,11 +184,6 @@ export default function ScoutingView({
               attribute you filter on becomes a sortable column.
             </p>
             <p>
-              The attribute menu lists Physical ratings first (measurables, speed, strength and
-              the rest of the body ratings), then the Positional skills scouted for the chosen
-              position.
-            </p>
-            <p>
               Searches the whole class, and the portal once it opens. Click a row for the
               at-a-glance card; the full ratings sheet is in the profile. The + beside a name
               stages that recruit for your board; Save to Copy writes every staged change at once.

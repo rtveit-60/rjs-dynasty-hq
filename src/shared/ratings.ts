@@ -13,11 +13,6 @@ export interface RatingDef {
   /** Position groups this is commonly scouted for; empty = every position. */
   groups: string[];
   /**
-   * A body rating (measurables, speed, strength…) rather than a football
-   * skill. The scouting menu splits on this: Physical vs Positional.
-   */
-  physical?: boolean;
-  /**
    * Added to the raw save value to get the real one. Weight is stored as
    * pounds - 160, so comparing raw would be off by 160.
    */
@@ -35,21 +30,19 @@ const ALL: string[] = [];
 export const RATINGS: RatingDef[] = [
   // Measurables first — they apply to every position and are the most common
   // thing to screen on before looking at a single rating.
-  { field: 'Height', label: 'HT', name: 'Height (inches)', groups: ALL, physical: true, kind: 'height', min: 58, max: 86, dflt: 74 },
-  { field: 'Weight', label: 'WT', name: 'Weight (lb)', groups: ALL, physical: true, kind: 'weight', offset: 160, min: 150, max: 400, dflt: 250 },
+  { field: 'Height', label: 'HT', name: 'Height (inches)', groups: ALL, kind: 'height', min: 58, max: 86, dflt: 74 },
+  { field: 'Weight', label: 'WT', name: 'Weight (lb)', groups: ALL, kind: 'weight', offset: 160, min: 150, max: 400, dflt: 250 },
 
-  { field: 'SpeedRating', label: 'SPD', name: 'Speed', groups: ALL, physical: true },
-  { field: 'AccelerationRating', label: 'ACC', name: 'Acceleration', groups: ALL, physical: true },
-  { field: 'AgilityRating', label: 'AGI', name: 'Agility', groups: ALL, physical: true },
-  { field: 'ChangeOfDirectionRating', label: 'COD', name: 'Change of Direction', groups: ALL, physical: true },
-  { field: 'StrengthRating', label: 'STR', name: 'Strength', groups: ALL, physical: true },
-  { field: 'JumpingRating', label: 'JMP', name: 'Jumping', groups: ALL, physical: true },
-  { field: 'StaminaRating', label: 'STA', name: 'Stamina', groups: ALL, physical: true },
-  { field: 'ToughnessRating', label: 'TGH', name: 'Toughness', groups: ALL, physical: true },
-  { field: 'InjuryRating', label: 'INJ', name: 'Injury', groups: ALL, physical: true },
-  // Awareness is the one every-position rating that is a football skill, not
-  // a body one, so it lists under Positional for whichever position is picked.
+  { field: 'SpeedRating', label: 'SPD', name: 'Speed', groups: ALL },
+  { field: 'AccelerationRating', label: 'ACC', name: 'Acceleration', groups: ALL },
+  { field: 'AgilityRating', label: 'AGI', name: 'Agility', groups: ALL },
+  { field: 'ChangeOfDirectionRating', label: 'COD', name: 'Change of Direction', groups: ALL },
+  { field: 'StrengthRating', label: 'STR', name: 'Strength', groups: ALL },
   { field: 'AwarenessRating', label: 'AWR', name: 'Awareness', groups: ALL },
+  { field: 'JumpingRating', label: 'JMP', name: 'Jumping', groups: ALL },
+  { field: 'StaminaRating', label: 'STA', name: 'Stamina', groups: ALL },
+  { field: 'InjuryRating', label: 'INJ', name: 'Injury', groups: ALL },
+  { field: 'ToughnessRating', label: 'TGH', name: 'Toughness', groups: ALL },
 
   { field: 'ThrowPowerRating', label: 'THP', name: 'Throw Power', groups: ['QB'] },
   { field: 'ThrowAccuracyShortRating', label: 'SAC', name: 'Short Accuracy', groups: ['QB'] },
@@ -126,29 +119,19 @@ export function ratingsFor(group: string): RatingDef[] {
 }
 
 /**
- * The same list split into two types for a <select>: Physical (measurables
- * and the body ratings, in catalog order so Speed leads) and Positional (the
- * football skills scouted for the chosen position, alphabetical). With a
- * position picked, the skills of other positions trail in a third section so
- * an athlete can still be screened on any rating. `displayAs` names the
- * position in the caller's vocabulary (e.g. "EDGE" while the catalog groups it
- * under DL).
+ * The same list split into labelled sections for a <select>. Alphabetical
+ * inside each section — a flat A-Z over 56 ratings buries Speed under S.
+ * `displayAs` names the section in the caller's vocabulary (e.g. "EDGE"
+ * while the catalog groups it under DL).
  */
 export function ratingGroupsFor(group: string, displayAs?: string): { label: string; items: RatingDef[] }[] {
-  const physical = RATINGS.filter((r) => r.physical);
-  const skills = RATINGS.filter((r) => !r.physical);
-  if (!group || group === 'ALL') {
-    return [
-      { label: 'Physical', items: physical },
-      { label: 'Positional', items: [...skills].sort(byName) }
-    ];
-  }
-  const own = skills.filter((r) => tierFor(r, group) < 2).sort(byName);
-  const others = skills.filter((r) => tierFor(r, group) === 2).sort(byName);
+  if (!group || group === 'ALL') return [{ label: '', items: [...RATINGS].sort(byName) }];
+  const tiers: RatingDef[][] = [[], [], []];
+  for (const r of RATINGS) tiers[tierFor(r, group)].push(r);
   return [
-    { label: 'Physical', items: physical },
-    { label: `Positional · ${displayAs ?? group}`, items: own },
-    { label: 'Other positions', items: others }
+    { label: `Scouted for ${displayAs ?? group}`, items: tiers[0].sort(byName) },
+    { label: 'Measurables & athleticism', items: tiers[1].sort(byName) },
+    { label: 'Other positions', items: tiers[2].sort(byName) }
   ].filter((t) => t.items.length);
 }
 
