@@ -502,8 +502,10 @@ export interface RecruitCard {
   homeState: string;
   /** IdealRecruitingPitch enum key (ItsGameTime…); '' when none. Display data in shared/pitches. */
   idealPitch: string;
-  /** The skills the position lives on, ordered for the At a Glance card. */
-  glance: { label: string; value: number }[];
+  /** Body ratings (speed, strength…) for the At a Glance card's Physical row. */
+  glancePhysical: { label: string; value: number }[];
+  /** The skills the position lives on, for the card's Positional row. */
+  glancePositional: { label: string; value: number }[];
   mental: AbilitySlot[];
   physical: AbilitySlot[];
 }

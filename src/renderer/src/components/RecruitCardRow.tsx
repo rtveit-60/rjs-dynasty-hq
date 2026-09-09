@@ -71,20 +71,33 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                 </div>
               </div>
 
-              <div className="rc-glance">
-                {card.glance.map((g) => (
-                  <div key={g.label} className="rc-skill" title={SKILL_NAME.get(g.label) ?? g.label}>
-                    <span className="rc-skill-k">{g.label}</span>
-                    <span className={`rc-skill-v ${ovrTier(g.value).split(' ')[1]}`}>{g.value}</span>
-                  </div>
-                ))}
-              </div>
+              {(
+                [
+                  ['Physical', card.glancePhysical],
+                  [`Positional · ${recruitPos(card.position)}`, card.glancePositional]
+                ] as const
+              ).map(
+                ([title, tiles]) =>
+                  tiles.length > 0 && (
+                    <div key={title} className="rc-glance-sec">
+                      <div className="rc-sub">{title}</div>
+                      <div className="rc-glance">
+                        {tiles.map((g) => (
+                          <div key={g.label} className="rc-skill" title={SKILL_NAME.get(g.label) ?? g.label}>
+                            <span className="rc-skill-k">{g.label}</span>
+                            <span className={`rc-skill-v ${ovrTier(g.value).split(' ')[1]}`}>{g.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+              )}
 
               {(card.mental.length > 0 || card.physical.length > 0) && (
                 <div className="rc-abilities">
                   {card.mental.length > 0 && (
                     <div>
-                      <div className="rc-sub">Mental</div>
+                      <div className="rc-sub">Mental abilities</div>
                       {card.mental.map((a) => (
                         <span key={a.name} className="chip" title={abilityDesc(a.name) ?? undefined}>
                           {spaceOut(a.name)}
@@ -100,7 +113,7 @@ export default function RecruitCardRow({ playerRow, span }: { playerRow: number;
                   )}
                   {card.physical.length > 0 && (
                     <div>
-                      <div className="rc-sub">Physical</div>
+                      <div className="rc-sub">Physical abilities</div>
                       {card.physical.map((a, i) => (
                         <span key={i} className="chip" title={abilityDesc(a.name) ?? undefined}>
                           {a.name || `Slot ${i + 1}`}&nbsp;

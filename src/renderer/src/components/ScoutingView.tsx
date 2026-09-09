@@ -22,6 +22,7 @@ import {
   stars
 } from '../lib/format.ts';
 import BoardMark from './BoardMark.tsx';
+import BoardSaveBar, { BoardToggle } from './BoardSaveBar.tsx';
 import InfoDot from './InfoDot.tsx';
 import { NameLink } from './ProfileModal.tsx';
 import RecruitCardRow from './RecruitCardRow.tsx';
@@ -184,7 +185,8 @@ export default function ScoutingView({
             </p>
             <p>
               Searches the whole class, and the portal once it opens. Click a row for the
-              at-a-glance card; the full ratings sheet is in the profile.
+              at-a-glance card; the full ratings sheet is in the profile. The + beside a name
+              stages that recruit for your board; Save to Copy writes every staged change at once.
             </p>
           </InfoDot>
         </div>
@@ -339,6 +341,7 @@ export default function ScoutingView({
         </div>
       ) : (
         <>
+          <BoardSaveBar />
           <div className="tbl-wrap tbl-scroll">
             <table className="tbl tbl-wide">
               <thead>
@@ -412,6 +415,12 @@ export default function ScoutingView({
                           {r.isTransfer ? ` · ${r.classType}` : ''}
                         </span>
                         {r.onBoard && <BoardMark />}
+                        {/* Committed recruits are the game's to move; no board edits on them. */}
+                        {!r.committedTo && (
+                          <span className="bd-actions">
+                            <BoardToggle recruitRow={r.row} onBoard={r.onBoard} />
+                          </span>
+                        )}
                       </td>
                       <td>
                         <span className="pos-tag">{recruitPos(r.position)}</span>
