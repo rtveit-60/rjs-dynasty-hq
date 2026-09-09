@@ -3497,6 +3497,27 @@ table.tbl.tbl-wide {
   display: none;
 }
 
+/* The rail's failure line for the automatic prestige review: same footprint as
+   the update button, in the warning color, dismissed with a click. */
+.rail-alert {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--bad) 55%, transparent);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  color: var(--bad);
+  font: 700 11px/1.2 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  cursor: pointer;
+}
+.rail-alert:hover {
+  background: color-mix(in srgb, var(--bad) 20%, transparent);
+}
+.rail-alert .up-abbr {
+  display: none;
+}
+
 /* ————————————————————————————————————————————————
    Compact shell — the app tucked into a corner of a
    second monitor keeps working; the rail narrows to
@@ -3553,6 +3574,12 @@ table.tbl.tbl-wide {
     display: none;
   }
 
+  .rail-alert .up-full {
+    display: none;
+  }
+  .rail-alert .up-abbr {
+    display: inline;
+  }
   .update-btn .up-abbr {
     display: inline;
   }

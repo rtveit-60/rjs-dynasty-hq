@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { PrestigeNotice, PrestigeTier } from '../../shared/prestige.ts';
 import type {
   DetectedSave,
   MediaEvent,
@@ -29,8 +30,15 @@ interface HQStore {
   browseRow: number | null;
   /** Staged board membership changes, recruit row -> action, shared by both boards. */
   boardPending: Record<number, 'add' | 'remove'>;
+  /**
+   * The last thing the automatic prestige review did. Only a failure is
+   * shown (in the rail, until dismissed); a landed write clears it, since the
+   * ledger itself is the record of what was charged.
+   */
+  prestigeNotice: PrestigeNotice | null;
 
   init: () => Promise<void>;
+  dismissPrestigeNotice: () => void;
   setNav: (nav: NavKey) => void;
   /** Open another school's Team HQ (view-only); null returns to your own. */
   browseHQ: (row: number | null) => void;
@@ -48,7 +56,7 @@ interface HQStore {
   setUiScale: (scale: number) => Promise<void>;
   setUiFit: (on: boolean) => Promise<void>;
   setAutoUpdate: (enabled: boolean) => Promise<void>;
-  setPrestigeTier: (tier: import('../../shared/prestige.ts').PrestigeTier) => Promise<void>;
+  setPrestigeTier: (tier: PrestigeTier) => Promise<void>;
 }
 
 let initialized = false;
@@ -67,6 +75,7 @@ export const useHQ = create<HQStore>((set, get) => ({
   profileStack: [],
   browseRow: null,
   boardPending: {},
+  prestigeNotice: null,
 
   init: async () => {
     if (initialized) return;
@@ -78,6 +87,7 @@ export const useHQ = create<HQStore>((set, get) => ({
     window.hq.onStatus((status) => set({ status }));
     window.hq.onMedia((media) => set({ media }));
     window.hq.onUpdateReady((updateReady) => set({ updateReady }));
+    window.hq.onPrestige((notice) => set({ prestigeNotice: notice.ok ? null : notice }));
     window.hq.onSystemTheme((t) => set({ systemDark: t === 'dark' }));
     window.hq.onZoom((effectiveZoom) => set({ effectiveZoom }));
     const state = await window.hq.getState();
@@ -148,9 +158,17 @@ export const useHQ = create<HQStore>((set, get) => ({
   },
 
   setPrestigeTier: async (tier) => {
-    const settings = await window.hq.setPrestigeTier(tier);
-    set({ settings });
-  }
+    try {
+      const settings = await window.hq.setPrestigeTier(tier);
+      set({ settings });
+    } catch (err) {
+      // The IPC error already carries its log code in the message.
+      set({
+        prestigeNotice: { ok: false, code: null, message: err instanceof Error ? err.message : String(err), at: Date.now() }
+      });
+    }
+  },
+  dismissPrestigeNotice: () => set({ prestigeNotice: null })
 }));
 
 export function useEffectiveTheme(): 'light' | 'dark' {

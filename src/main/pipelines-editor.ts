@@ -29,6 +29,14 @@ import { editedPathFor, enumMembers, fieldMax, firstEmptyRow, refString, writeEd
 import { isNullRef, mainTable, refFromRecord, tableById, val } from './parser/franchise.ts';
 
 const ARRAY_FIELD = 'SchoolPipelineInfluence';
+
+/** The one expected way the form comes up empty: an FCS filler school with no list. */
+export class NoPipelinesError extends Error {
+  constructor() {
+    super('The game keeps no pipelines for this school.');
+    this.name = 'NoPipelinesError';
+  }
+}
 const ZERO_REF = '0'.repeat(32);
 
 interface Handles {
@@ -54,7 +62,7 @@ async function handles(franchise: any, teamRow: number): Promise<Handles> {
   if (!team || team.isEmpty) throw new Error('No school at that row in the save.');
   const ref = refFromRecord(team, 'SchoolPipelineInfluenceList');
   // FCS filler schools carry no list — nothing to edit.
-  if (isNullRef(ref)) throw new Error('The game keeps no pipelines for this school.');
+  if (isNullRef(ref)) throw new NoPipelinesError();
   const arrTable = await tableById(franchise, ref.tableId);
   const arr = arrTable?.records?.[ref.row];
   if (!arr) throw new Error('The pipeline list is missing from the save.');

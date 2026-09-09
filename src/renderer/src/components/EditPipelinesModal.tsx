@@ -27,7 +27,7 @@ type Row = {
  */
 export default function EditPipelinesModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<PipelinesForm | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'writing' | 'saved'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'missing' | 'failed' | 'writing' | 'saved'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
@@ -48,7 +48,12 @@ export default function EditPipelinesModal({ onClose }: { onClose: () => void })
         setRows(f.entries.map((e) => ({ pipeline: e.pipeline, label: e.label, region: e.region, value: e.value, original: e.value })));
         setState('ready');
       })
-      .catch(() => alive && setState('missing'));
+      .catch((err: unknown) => {
+        // A real read failure (not the no-list case) arrives with its log code in the message.
+        if (!alive) return;
+        setError(err instanceof Error ? err.message : String(err));
+        setState('failed');
+      });
     return () => {
       alive = false;
     };
@@ -164,6 +169,11 @@ export default function EditPipelinesModal({ onClose }: { onClose: () => void })
 
         {state === 'loading' && <div className="pf-wait">Reading the save…</div>}
         {state === 'missing' && <div className="pf-wait">The game keeps no pipelines for this school.</div>}
+        {state === 'failed' && (
+          <div className="ed-error" role="alert">
+            The pipelines could not be read from the save. {error}
+          </div>
+        )}
         {state === 'saved' && <div className="ed-saved" role="status">{savedNote}</div>}
 
         {form && (state === 'ready' || state === 'writing') && (
